@@ -1,0 +1,42 @@
+
+body {
+   background-color: #F5F5F5;
+}
+
+#content {
+   display: none;
+}
+
+#panel {
+   background-color: #FFF;
+   border: 1px solid #EAEAEA;
+   margin: 20px;
+   padding: 20px;
+   position: relative;
+}
+
+#inner-panel {
+   position: relative;
+   margin: 20px;
+   padding: 20px;
+   border: 1px solid #999;
+   background-color: #F5F5F5;
+}
+
+#target {
+   margin-top: 100px;
+   margin-left: 30%;
+   max-width: 350px;
+   height: 100px;
+   border: 1px solid red;
+}
+
+.msg {
+   width: 200px;
+   background-color: #eee;
+   padding: 10px;
+}
+
+a.active {
+   border: 1px solid blue;
+}

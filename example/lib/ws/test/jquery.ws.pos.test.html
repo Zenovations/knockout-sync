@@ -1,0 +1,260 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+   <html>
+      <head>
+          <link rel="stylesheet" href="../../qunit/qunit.css" type="text/css" media="screen" />
+          <style type="text/css">
+              #toybox {
+                  position: relative;
+                  height: 150px;
+                  padding: 5px;
+                  background-color: black;
+              }
+
+              #bookcase {
+                  position: relative;
+                  top: 50px;
+                  left: 25%;
+                  width: 100px;
+                  height: 50px;
+                  margin: 10px;
+                  border: 1px solid green;
+                  background-color: white;
+              }
+
+              #top-left {
+                  position: absolute;
+                  top: 10px;
+                  left: 10px;
+                  width: 10px;
+                  height: 10px;
+                  margin: 5px;
+                  border: 5px solid black;
+                  background-color: #ffc;
+              }
+
+              #bottom-right {
+                  position: absolute;
+                  bottom: 10px;
+                  right: 10px;
+                  width: 10px;
+                  height: 10px;
+                  background-color: #cfc;
+              }
+
+              #floor {
+                 position: absolute;
+                 bottom: 25%;
+                 right: 25%;
+                 width: 200px;
+                 height: 50px;
+                 background-color: #F5F5F5;
+                 margin: 5px;
+              }
+
+              .toy {
+                 width: 11px;
+                 height: 11px;
+                 margin: 10px;
+                 padding: 1px;
+                 background-color: white;
+                 border: 1px solid red;
+                 position: absolute;
+              }
+
+              #mousepos {
+                  color: white;
+                  position: absolute;
+              }
+          </style>
+
+          <script type="text/javascript" src="../../jquery/jquery-1.7.js"></script>
+          <script type="text/javascript" src="../../qunit/qunit.js"></script>
+          <script type="text/javascript" src="../class.js"></script>
+          <script type="text/javascript" src="../ws.js"></script>
+          <script type="text/javascript" src="../jquery.ws.utils.js"></script>
+          <script type="text/javascript" src="../jquery.ws.pos.js"></script>
+
+
+         <script type="text/javascript">
+         $(document).ready(function(){
+
+//             module("Module B");
+//
+//             test("some other test", function() {
+//                 expect(2);
+//                 ok( true, "This is okay");
+//                 equal( true, false, "failing test" );
+//                 equal( true, true, "passing test" );
+//             });
+
+             module("Instance Tests");
+
+             test('Pos.prototype.base(#toy)', function() {
+                 var key, base = new $.ws.Position('#toy').base,
+                     res = {
+                         box: {
+                             top:    143,
+                             right:   38,
+                             bottom: 158,
+                             left:    23,
+                             height:  15,
+                             width:   15,
+                             xcenter: 23 + 15/2,
+                             ycenter: 143 + 15/2
+                         },
+                         border: {
+                             top:      1,
+                             right:    1,
+                             bottom:   1,
+                             left:     1
+                         },
+                         inner: {
+                             top: 144,
+                             right: 37,
+                             bottom: 157,
+                             left: 24,
+                             height: 13,
+                             width: 13,
+                             xcenter: 24 + 13/2,
+                             ycenter: 144 + 13/2
+                         },
+                         margin: {
+                             top:     10,
+                             right:   10,
+                             bottom:  10,
+                             left:    10
+                         },
+                         padding: {
+                             top:      1,
+                             right:    1,
+                             bottom:   1,
+                             left:     1
+                         },
+                         radius: {
+                             topRight:    0,
+                             bottomRight: 0,
+                             bottomLeft:  0,
+                             topLeft:     0
+                         }
+                     };
+                 for(key in res) {
+                     if( !res.hasOwnProperty(key) ) { throw new Error('WTF IDEA; quite bothering me about this impossible condition!'); }
+                     if( !base.hasOwnProperty(key) ) {
+                         ok(false, 'missing key '+key);
+                     }
+                     else {
+                         deepEqual(base[key], res[key]);
+                     }
+                 }
+             });
+
+             //todo base(#bookcase? something else?)
+
+             test('Pos.prototype.relativeTo(#bookcase)', function() {
+                 var at, off, expect,
+                         toy    = new $.ws.Position('#toy'),
+                         box    = toy.base.box,
+                         target = (new $.ws.Position('#bookcase')).base.box,
+                         tests  = [
+                             {at: 'top left',            expect: {left: target.left,                top: target.top-box.height}},
+                             {at: 'left top inner',      expect: {left: target.left,                top: target.top}},
+                             {at: 'center bottom inner', expect: {left: target.xcenter-box.width/2, top: target.bottom-box.height}},
+                             {at: 'middle bottom',       expect: {left: target.xcenter-box.width/2, top: target.bottom}}, // gets reversed internally to bottom center
+                             {at: 'center center',       expect: {left: target.xcenter-box.width/2, top: target.ycenter-box.height/2}},
+                             {at: 'center+5 center-5',   expect: {left: target.xcenter-box.width/2+5, top: target.ycenter-box.height/2-5}},
+                             {at: 'center top',          expect: {left: target.xcenter-box.width/2, top: target.top-box.height}},
+                             {at: 'left center inner',   expect: {left: target.left,                top: target.ycenter-box.height/2}},
+                             {at: 'right top',           expect: {left: target.right,               top: target.top}},
+                             {at: 'right bottom inner',  expect: {left: target.right-box.width,     top: target.bottom-box.height}},
+                         ],
+                         i = tests.length;
+
+                 while(i--) {
+                     at = tests[i].at;
+                     expect = tests[i].expect;
+                     off = toy.relativeTo(at, '#bookcase');
+                     deepEqual(off, expect, at);
+                 }
+             });
+
+             test('Pos.prototype.relativeTo() with offsets', function() {
+                 var at, off, expect,
+                         toy    = new $.ws.Position('#toy'),
+                         box    = toy.base.box,
+                         target = (new $.ws.Position('#bottom-right')).base.box,
+                         tests  = [
+                             {at: 'left+10 top+10',           expect: {left: target.left-box.width+10,   top: target.top + 10}},
+                             {at: 'left-15 top-15',           expect: {left: target.left-box.width-15,   top: target.top - 15}},
+                             {at: 'left+5 top-5 inner',       expect: {left: target.left+5,              top: target.top-5}},
+                             {at: 'center-1 bottom+0 inner',  expect: {left: target.xcenter-box.width/2-1, top: target.bottom-box.height}},
+                             {at: 'middle-10 bottom-10',      expect: {left: target.xcenter-box.width/2-10, top: target.bottom-10}},
+                             {at: 'right+2 center-1 inner',   expect: {left: target.right-box.width+2,   top: target.ycenter-box.height/2-1}},
+                             {at: 'right-5 bottom+2',         expect: {left: target.right-5,             top: target.bottom-box.height+2}},
+                             {at: 'right+1 top-2',            expect: {left: target.right+1,             top: target.top-2}}
+                         ],
+                         i = tests.length;
+
+                 while(i--) {
+                     at = tests[i].at;
+                     expect = tests[i].expect;
+                     off = toy.relativeTo(at, '#bottom-right');
+                     deepEqual(off, expect, at);
+                 }
+             });
+
+             test('Pos.prototype.center', function() {
+                 var toy    = new $.ws.Position('#top-left'),
+                     box    = toy.base.box,
+                     target = (new $.ws.Position('#floor')).base.box,
+                     expect = {left: target.xcenter - box.width/2, top: target.ycenter - box.height/2},
+                     off = toy.center('#floor');
+                 deepEqual(off, expect);
+             });
+
+             module("Static Tests");
+
+             test('Pos.relativeTo', function() {
+                 var toy    = new $.ws.Position('#toy'),
+                     box    = toy.base.box,
+                     target = (new $.ws.Position('#floor')).base.box,
+                     expect = {left: target.left, top: target.top - box.height},
+                     off    = $.ws.Position.relativeTo('#toy', '#floor', 'top left');
+                 deepEqual(off, expect);
+             });
+
+             test('Pos.center', function() {
+                 var toy    = new $.ws.Position('#toy'),
+                         box    = toy.base.box,
+                         target = (new $.ws.Position('#floor')).base.box,
+                         expect = {left: target.xcenter - box.width/2, top: target.ycenter - box.height/2},
+                         off    = $.ws.Position.center('#toy', '#floor');
+                 deepEqual(off, expect);
+             });
+
+             $(document).on('mousemove', function(e) {
+                $('#mousepos').html(e.pageX + ',' + e.pageY);
+             });
+
+         });
+         </script>
+
+      </head>
+      <body>
+         <h1 id="qunit-header">jQuery.ws.Pos Test</h1>
+         <div id="toybox">
+             <div id="mousepos"></div>
+             <div id="bookcase">
+                 <div id="top-left"></div>
+                 <div id="bottom-right"></div>
+             </div>
+             <div id="floor"></div>
+             <div id="toy" class="toy"></div>
+         </div>
+         <h2 id="qunit-banner"></h2>
+         <div id="qunit-testrunner-toolbar"></div>
+         <h2 id="qunit-userAgent"></h2>
+         <ol id="qunit-tests"></ol>
+         <div id="qunit-fixture">test markup, will be hidden</div>
+      </body>
+   </html>

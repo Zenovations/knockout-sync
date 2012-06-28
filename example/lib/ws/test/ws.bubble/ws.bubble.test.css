@@ -1,0 +1,40 @@
+body {
+   background-color: #eee;
+   position: relative;
+}
+
+.container {
+   width: 250px;
+   position: relative;
+   border: 1px solid black;
+   margin: 10px 30px;
+   padding: 10px;
+   float: left;
+}
+
+.container .box {
+   background-color: #ffc;
+   height: 50px;
+   width: 200px;
+   margin: 30px 15px;
+   padding: 5px;
+   position: relative;
+   font-size: small;
+}
+
+.container .box-small {
+   width: 25px;
+   height: 25px;
+   text-align: center;
+   padding: 5px 0 0;
+   margin: 0;
+}
+
+.positions-box {
+   width: 100px;
+   height: 50px;
+   margin: 20px auto;
+   padding: 5px;
+   font-size: small;
+   background-color: #ffc;
+}

@@ -1,0 +1,21 @@
+
+/* Triangle */
+.ws-bubble-pointer-bg {
+   /*border-width: 12px;*/
+   border-style: solid;
+   border-color: transparent;
+   position: absolute;
+   /*top: 13px;*/
+   /*left: -24px;*/
+   z-index: 2001;
+}
+
+.ws-bubble-pointer-edge {
+   /*border-width: 15px;*/
+   border-style: solid;
+   border-color: transparent;
+   position: absolute;
+   /*top: 10px;*/
+   /*left: -30px;*/
+   z-index: 2000;
+}
