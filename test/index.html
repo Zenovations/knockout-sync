@@ -5,36 +5,34 @@
 
     <!-- LIBS
         ---------------------------------------------------------------->
-    <link rel="stylesheet" href="qunit/qunit.css" type="text/css"/>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
-    <script type="text/javascript" src="qunit/qunit.js"></script>
+    <link rel="stylesheet" href="libs/qunit.css" type="text/css"/>
+    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+    <script type="text/javascript" src="libs/knockout.js"></script>
+    <script type="text/javascript" src="libs/qunit.js"></script>
 
     <!-- FILES TO TEST
         ---------------------------------------------------------------->
+    <script type="text/javascript" src="../src/Promise.js"></script>
     <script type="text/javascript" src="../stores/FirebaseStore.js"></script>
-    <script type="text/javascript" src="../validators/BootstrapValidator.js"></script>
-    <script type="text/javascript" src="../validators/Validator.js"></script>
+    <script type="text/javascript" src="../src/Model.js"></script>
+    <script type="text/javascript" src="../src/Validator.js"></script>
     <script type="text/javascript" src="../src/KnockoutSync.js"></script>
-    <script type="text/javascript" src="../src/KnockoutSyncRecord.js"></script>
-    <script type="text/javascript" src="../src/KnockoutSyncModel.js"></script>
-    <script type="text/javascript" src="../src/KnockoutSyncValidator.js"></script>
 
     <!-- TEST UNITS
         ---------------------------------------------------------------->
+    <script type="text/javascript" src="Promise.test.js"></script>
     <script type="text/javascript" src="FirebaseStore.test.js"></script>
-    <script type="text/javascript" src="Validator.test.js"></script>
-    <script type="text/javascript" src="JqueryValidator.test.js"></script>
-    <script type="text/javascript" src="KnockoutSync.test.js"></script>
-    <script type="text/javascript" src="KnockoutSyncRecord.test.js"></script>
-    <script type="text/javascript" src="KnockoutSyncModel.test.js"></script>
-    <script type="text/javascript" src="KnockoutSyncValidator.test.js"></script>
+    <!--<script type="text/javascript" src="Model.test.js"></script>-->
+    <!--<script type="text/javascript" src="Validator.test.js"></script>-->
+    <!--<script type="text/javascript" src="KnockoutSync.test.js"></script>-->
 
 </head>
 <body>
-<h1 id="qunit-header">Knockout Sync Test Units</h1>
+<h1 id="qunit-header">Knockout Sync Tests</h1>
 <h2 id="qunit-banner"></h2>
+<div id="qunit-testrunner-toolbar"></div>
 <h2 id="qunit-userAgent"></h2>
-<ol id="qunit-tests">
-</ol>
+<ol id="qunit-tests"></ol>
+<div id="qunit-fixture">test markup, will be hidden</div>
 </body>
 </html>

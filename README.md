@@ -12,13 +12,13 @@ Include the following in your html:
     <script type="text/javascript" src="stores/{PICKONE}Store.js"></script>
 ```
 
-If you plan to use the data validator, include that too:
+If you plan to use the data validator, include that too (or grow your own):
 
 ```html
-    <script type="text/javascript" src="validators/Validator.js"></script>
+    <script type="text/javascript" src="src/Validator.js"></script>
 ```
 
-Alternately, you can include the minimized code containing all validators and stores:
+Alternately, if you aren't worried about a few bytes, simply include the minimized code containing everything:
 
 ```html
     <script type="text/javascript" src="knockout-sync.all.min.js"></script>
@@ -30,7 +30,7 @@ Alternately, you can include the minimized code containing all validators and st
 
 ```javascript
     // create a data store
-    var store = new FirebaseStore('http://beta.firebase.com/database_name');
+    var store = new FirebaseStore('http://beta.firebase.com/account_name', 'optional/root/path');
 ```
 
 ### Create a data model
@@ -162,7 +162,8 @@ Why make the same ones everyone else does? Be original!
  - fields which are not observable may be persistent, but they will not trigger autoupdates (we aren't observing them after all)
  - you must call ko.sync.use(...) on a view before assigning any ko.computed properties which will access those fields
  - if you don't set the autoupdate flag to true on the model, remove/create operations are not immediately sent to the server
- - `create()` makes a new record, but if it has an ID, then it's not considered an add operation (it must match an existing record)
+ - `create()` makes a new record, but if it has an ID, then it's not considered an add operation (it is considered an existing record) and the dirty flag is not set
+ - you can create() a record with invalid data, but cannot save it (assuming a validator is active)
 
 # API
 
@@ -208,6 +209,9 @@ Applies the `Crud.Array` methods to an observable Array object. Each element in 
 Record of the type specified by our model. If an item is inserted into the array which is not a compatible Record,
 an exception will be thrown.
 
+If `data` is specified, then it is loaded into the new record using the same behaviors as `Crud.create()` regarding
+the dirty flag. However, autosave will not be run and save() must be called manually to apply any updates.
+
 ```javascript
    // apply the model to an observableArray
    var list = ko.sync.newList( model );
@@ -222,6 +226,9 @@ an exception will be thrown.
 
 Creates an object representing a single Record. This Record is suitable for use as a Knockout.js View or for just
 about anything else an object with observable attributes might be useful for.
+
+If `data` is specified, then it is loaded into the new record using the same behaviors as `Crud.create()` regarding
+the dirty flag. However, autosave will not be run and save() must be called manually to apply any updates.
 
 ```javascript
    // apply the model to a plain object
@@ -264,9 +271,11 @@ Force the isDirty flag to true or false (use this with care!)
 @param {object} fields
 @returns {Promise} fulfilled when the store returns a result
 
-//todo this is probably wrong; create() won't go to server unless autoupdate
+Creates a new Record for the given model. If the record contains an ID, then it assumed to be up to date. If it is
+to be marked dirty, this can be done manually with `record.crud.isDirty(true)`
 
-Creates a new Record for the given model
+When auto-update is true, new records are saved immediately and the promise fufills upon their return. Otherwise, new
+records are marked dirty and the promise fulfills immediately.
 
 ```javascript
    var model = ko.sync.Model({
@@ -312,7 +321,6 @@ Save the record, assuming isDirty() is true. Resolves with the number of fields 
 then still fulfills promise with a count of 0.
 
 ```javascript
-
    function logCount(fieldsChanged) { console.log(fieldsChanged); }
 
    var record = ko.sync.newRecord( model, loadedData );
@@ -355,9 +363,12 @@ some special array functionality.
 @params {Array<object>} records things to put into our array model
 @returns
 
-Load some JavaScript objects into our model. If the objects contain keys that already exist, they are updated.
+Load some JavaScript objects into our model. If the objects contain keys that already exist, they are marked as
+existing and **the dirty flag is not set** (they are assumed to be clean and up-to-date). If auto-update is true,
+new records will be sent immediately. Otherwise, flips the dirty flag on new records.
 
-If auto-update is true, this will be sent immediately. Otherwise, it flips the dirty flag but is not sent to the server.
+When auto-update is true, the promise will be fulfilled after the save operation completes. Otherwise, it will fulfill
+immediately.
 
 #### Crud.Array.load( params )
 
@@ -446,7 +457,7 @@ The initial value to set the field to (must pass validation). If a value is not 
 based on the type:
 
  * boolean: false
- * integer: 0
+ * int:     0
  * float:   0
  * string:  null
  * email:   null
