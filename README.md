@@ -15,8 +15,6 @@ Include the following in your html:
 If you plan to use the data validator, include that too:
 
 ```html
-    <script type="text/javascript" src="knockout-sync.min.js"></script>
-    <script type="text/javascript" src="stores/{PICKONE}Store.js"></script>
     <script type="text/javascript" src="validators/Validator.js"></script>
 ```
 
@@ -57,7 +55,7 @@ Alternately, you can include the minimized code containing all validators and st
     });
 ```
 
-### Apply the model to a view, observableArray, or plain old object
+### Apply the model to a view, observableArray, array, or plain old object
 
 Just call `ko.sync.use(...)` (usually from inside the view model)
 
@@ -67,6 +65,7 @@ Just call `ko.sync.use(...)` (usually from inside the view model)
         var self = this;
 
         // add all the fields from the data model
+        // this view now represents a single Record
         ko.sync.use(this, model);
 
         // add a computed field
@@ -78,12 +77,12 @@ Just call `ko.sync.use(...)` (usually from inside the view model)
     var view = new View(model);
     ko.applyBindings(view);
 
-    // on an observableArray
-    var users = ko.sync.observableArray( model );
+    // on an observableArray, which represents an array of Records
+    var users = ko.sync.newList( model );
     var users = ko.sync.use( ko.observableArray(), model );  // same thing
 
-    // on a plain object
-    var users = ko.sync.newView( model );
+    // on a plain object, which represents a single Record
+    var users = ko.sync.newRecord( model );
     var users = ko.sync.use( {}, model ); // same thing
 ```
 
@@ -94,8 +93,12 @@ Once `ko.sync.use()` is called on a view/object, it has its own CRUD methods:
 ```javascript
       var view = ko.sync.use({}, model);
 
-      // load a user from the data store
-      view.crud.load(userId);
+      // create a user from some json data we got elsewhere
+      // if there is an ID field, then it's an existing record, otherwise it's a new one
+      view.crud.create( {data...} );
+
+      // or get a user from the database
+      view.crud.load userId );
 
       // update the user
       view.saveButtonClick = function() {
@@ -111,7 +114,8 @@ Once `ko.sync.use()` is called on a view/object, it has its own CRUD methods:
                    view.crud.save().then(function() { console.log('saved!'); });
                 },
 
-                function(errors) { /* validation failed */ }
+                // validation failed
+                function(errors) { }
              );
          }
       };
@@ -124,7 +128,7 @@ Once `ko.sync.use()` is called on a view/object, it has its own CRUD methods:
 
 ### Applying a model to observable arrays
 
-Arrays also get special `create()` and `remove()` methods (they are equivalent to ko.mapping create and remove).
+Arrays also get special `create()` and `remove()` methods
 
 Note that there is no need to use destroy() as removed items are automagically tracked by ko.sync.Model.
 
@@ -134,32 +138,37 @@ Note that there is no need to use destroy() as removed items are automagically t
     ko.sync.use(users, model);
 
     // or the shorthand
-    var users = ko.crud.use(ko.observableArray(), model);
+    var users = ko.sync.newList(model);
 
     // create a new user in the array
-    users.push(model.new({name: 'John Smith', ...}));
-    users.crud.create({name: 'John Smith', ...});    // same thing
-    users.mappedCreate({name: 'John Smith', ...});   // same thing
+    users.crud.create({name: 'John Smith', ...});
+    users.push(model.new({name: 'John Smith', ...})); // same thing
 
     // or load some users from the database (all users created in the last hour)
     users.crud.load( {created: {greaterThan: new Date().valueOf() - 3600}} );
 
     // delete a user from the list
-    users.remove(user);
-
-    // or destroy using the user's id
     users.crud.remove( userId );
-    users.mappedRemove( {userId: userId} ); // this works too
+    users.remove(user); // this works too
 
     // now save all of the changes manually
     users.crud.save();
 ```
 
+# Some Mistakes to Avoid
+
+Why make the same ones everyone else does? Be original!
+
+ - fields which are not observable may be persistent, but they will not trigger autoupdates (we aren't observing them after all)
+ - you must call ko.sync.use(...) on a view before assigning any ko.computed properties which will access those fields
+ - if you don't set the autoupdate flag to true on the model, remove/create operations are not immediately sent to the server
+ - `create()` makes a new record, but if it has an ID, then it's not considered an add operation (it must match an existing record)
+
 # API
 
 ## ko.sync
 
-This is the global namespace for KnockoutSync.
+This is the root namespace for KnockoutSync methods
 
 ### ko.sync.use(target, model)
 
@@ -174,9 +183,10 @@ This is the global namespace for KnockoutSync.
    function View(model) {
       ko.sync.use(this, model); // apply model definition
    }
+   ko.applyBindings( new View(model) );
 
    // apply the model to an empty object
-   var obj = ko.sync.use({}, model);
+   var data = ko.sync.use({}, model);
 
    // apply the model to an observableArray
    var list = ko.sync.use( ko.observableArray(), model );
@@ -188,51 +198,179 @@ It also adds the special `crud` member variable, which is a `Crud` instance (see
 
 If it is also an observableArray, then the options listed under `Crud.Array` are also available.
 
+### ko.sync.newList( model [, data] )
+
+@param {Model} model
+@param {Array<object>} [data]
+@returns {object} `ko.observableArray()` instance
+
+Applies the `Crud.Array` methods to an observable Array object. Each element in the observable array represents one
+Record of the type specified by our model. If an item is inserted into the array which is not a compatible Record,
+an exception will be thrown.
+
+```javascript
+   // apply the model to an observableArray
+   var list = ko.sync.newList( model );
+   var list = ko.sync.use( ko.observableArray(), model ); // same thing
+```
+
+### ko.sync.newRecord( model [, data] )
+
+@param {Model} model
+@param {Object} [data]
+@returns {object} with `Crud` methods attached
+
+Creates an object representing a single Record. This Record is suitable for use as a Knockout.js View or for just
+about anything else an object with observable attributes might be useful for.
+
+```javascript
+   // apply the model to a plain object
+   var rec = ko.sync.newRecord( model );
+   var rec = ko.sync.use( {}, model });  // same thing
+```
+
 ## Crud (target.crud)
 
-Obtained by calling ko.sync.use(target)
+Obtained by calling `ko.sync.use()` on an object or `ko.sync.newRecord()`
 
 ### Crud.isDirty()
 
 @returns {boolean}
 
-True if any data has been modified on the record since it was last synchronized with the server
+True if any data has been modified on the record since it was last synchronized with the server.
 
-### Crud.create()
+```javascript
+   var model = ko.sync.Model({
+      dataStore: store,
+      dataTable: table,
+      fields: {counter: 0}
+   });
+
+   var data = ko.sync.use({}, model);
+   data.crud.isDirty(); // false
+   data.counter(1);
+   data.crud.isDirty(); // true
+```
+
+### Crud.isDirty( newValue )
+
+@param {boolean} newValue
+@returns {boolean} old value
+
+Force the isDirty flag to true or false (use this with care!)
+
+### Crud.create(fields)
+
+@param {object} fields
+@returns {Promise} fulfilled when the store returns a result
+
+//todo this is probably wrong; create() won't go to server unless autoupdate
+
+Creates a new Record for the given model
+
+```javascript
+   var model = ko.sync.Model({
+      dataStore: store,
+      dataTable: table,
+      fields: {counter: 0}
+   });
+
+   var data = ko.sync.use({}, model);
+   data.counter(10);
+
+   data.create().then(
+      function(result) { /* runs after the store returns result */ },
+      function(errors) { /* runs if record was not valid */ }
+   );
+```
 
 ### Crud.load()
+
+@param {string} recordId
+@returns {Promise} fulfilled when the store returns a result
+
+```javascript
+   var model = ko.sync.Model({
+      dataStore: store,
+      dataTable: table,
+      primaryKey: 'id',
+      fields: {counter: 0}
+   });
+
+   var data = ko.sync.newRecord(model);
+   data.load( recordId ).then(
+      function(result) { /* runs after the store returns result */ },
+      function(errors) { /* runs if record could not be found */ }
+   );
+```
 
 ### Crud.save()
 
 @returns {Promise} resolved after the data store returns results
 
-Save the record the changes
+Save the record, assuming isDirty() is true. Resolves with the number of fields changed. If isDirty() is false,
+then still fulfills promise with a count of 0.
+
+```javascript
+
+   function logCount(fieldsChanged) { console.log(fieldsChanged); }
+
+   var record = ko.sync.newRecord( model, loadedData );
+   record.crud.save().then(logCount); // 0 - isDirty() == false
+
+   record.counter(10);                // change a field
+   record.favoriteColor('green');     // change another field
+   record.crud.save().then(logCount); // 2
+```
 
 #### Crud.validate()
 
-@returns {Promise} resolved after the data store returns results
+@returns {Promise} which resolves if data is valid or rejects if it is not
+
+```javascript
+   var record = ko.sync.newRecord( model, someData );
+   record.validate().then(
+      function() { /* it is valid */ },
+      function(errors) { /* an object of fields -> (string)error messages */ }
+      );
+```
 
 ## Crud.Array (extends Crud)
 
 When `ko.sync.use()` is applied to `ko.observableArray()`, it creates an extended Crud object which also has
 some special array functionality.
 
-### Crud.Array.create(json)
-
-@param {Object} json a hash containing key/value pairs to be assigned to the new record
-@returns {Promise} resolved after the data store returns results
-
 #### Crud.Array.remove(id)
 
 @param {string} id the id of the record to remove
 @returns {Promise} resolved after the data store returns results
+
+```javascript
+   var list = ko.sync.newList( model, someData );
+   list.crud.remove( deletedRecordId ).then( function() { /* record was deleted */ } );
+```
+
+#### Crud.Array.create( records )
+
+@params {Array<object>} records things to put into our array model
+@returns
+
+Load some JavaScript objects into our model. If the objects contain keys that already exist, they are updated.
+
+If auto-update is true, this will be sent immediately. Otherwise, it flips the dirty flag but is not sent to the server.
 
 #### Crud.Array.load( params )
 
 @param {object} params
 @returns {Promise} resolved after the data store returns results
 
+The params object may contain any of the following keys:
 
+  - limit:  {int=100} number of records to return, use 0 for all
+  - filter: {function} filter returned results (after query) using this function (true=include, false=exclude)
+  - sort:   {array|string} either a field to sort results by or an array of fields
+            (some stores, like Firebase, may choose to sort the results after they return)
+  - desc:   {boolean} return records from beginning instead of the end of the list
 
 ## Model (ko.sync.Model)
 
@@ -260,7 +398,7 @@ representative of a table in a database or bucket in a NoSQL environment.
 {Boolean|Array=false} When true, records are automatically stored each time any value in the record
 changes. When false, the save() method must be called manually.
 
-If set to an array, then records are automatically saved any time a field in the array changes, but not for others.
+For arrays, this applies both to the elements of the array (delete/add operations) as well as the observable fields on each element.
 
 #### options.validator
 
@@ -276,7 +414,8 @@ If set to an array, then records are automatically saved any time a field in the
 
 #### options.defaults
 
-{Object} Override any of the field properties' default values here
+{Object} Override any of the field properties' default values here (e.g. so that we don't have to type required: true
+for every field)
 
 #### options.fields
 
@@ -288,15 +427,31 @@ If set to an array, then records are automatically saved any time a field in the
 
 ##### fields.persist
 
-{Boolean=true} When false, this field is not sent to the data store during save operations.
+{Boolean=true} When false, this field is not sent to the data store during save operations. It is possible to observe
+fields which are not persistent.
 
 ##### fields.observe
 
-{Boolean=true} When false, the field is not wrapped in a Knockout.js observable
+{Boolean=true} When false, the field is not wrapped in a Knockout.js observable. It is important to note than
+fields which are not observed cannot trigger an auto-update (we aren't observing them). They can still be stored
+when a save occurs.
 
 ##### fields.type
 
-{String='string'} The type of field, one of: string, int, float, email, url, date, time
+{String='string'} The type of field, one of: string, int, float, email, date, time
+
+##### fields.default
+
+The initial value to set the field to (must pass validation). If a value is not specified, then the default is
+based on the type:
+
+ * boolean: false
+ * integer: 0
+ * float:   0
+ * string:  null
+ * email:   null
+ * date:    0
+ * time:    '00:00'
 
 ##### fields.minLength
 
@@ -321,3 +476,45 @@ If set to an array, then records are automatically saved any time a field in the
 The new function creates a new record. If a json hash is passed into the method, the attributes are added into the model.
 
 Note that newly created objects are not saved to the data store unless they pass all validation tests!
+
+# Testing
+
+Browse to test/index.html and enjoy the pretty colors
+
+# TODO
+
+## Offline storage
+
+Use HTML5 storage to track changes if the network connection is lost.
+
+## Merge changes
+
+Use http://code.google.com/p/google-diff-match-patch/ and some versioning (when offline), like update counters, to apply changes
+
+## Where clauses for Crud.Array.load()?
+
+```javascript
+   // find the last ten book reviews in the sci-fi genre, sorted by ranking
+   data.crud.load( {limit: 10, desc: true, sort: 'rank', where: {genre: 'sci-fi'}} );
+```
+
+Where clauses contain a list of key/value pairs, where the key is a field name and the value is a string representing
+an exact match, or an object containing one or more of the following:
+
+  - greaterThan: {int|Date}
+  - lessThan:    {int|Date}
+  - contains:    {string}
+  - beginsWith:  {string}
+  - endsWith:    {string}
+  - equals:      {*}
+  - in:          {Array} of possible values
+
+And of course we can do logical negation (i.e. "not")
+
+  - notGreaterThan:   {int|Date}
+  - notLessThan:      {int|Date}
+  - notContaining:    {string}
+  - notBeginningWith: {string}
+  - notEndingWith:    {string}
+  - notEquals:        {*}
+  - notIn:            {Array} of possible values
