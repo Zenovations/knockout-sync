@@ -1,4 +1,10 @@
 
+//todo establish ko.sync namespace
+
+//todo extensions
+
+//todo Promise tool
+
 jQuery(function($) {
 
    module("KnockoutSync");
