@@ -6,17 +6,19 @@
     <!-- LIBS
         ---------------------------------------------------------------->
     <link rel="stylesheet" href="libs/qunit.css" type="text/css"/>
+    <script src="http://static.firebase.com/v0/firebase.js"></script>
     <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+    <script type="text/javascript" src="libs/moment.js"></script>
     <script type="text/javascript" src="libs/knockout.js"></script>
     <script type="text/javascript" src="libs/qunit.js"></script>
 
     <!-- FILES TO TEST
         ---------------------------------------------------------------->
-    <script type="text/javascript" src="../src/Promise.js"></script>
-    <script type="text/javascript" src="../stores/FirebaseStore.js"></script>
-    <script type="text/javascript" src="../src/Model.js"></script>
-    <script type="text/javascript" src="../src/Validator.js"></script>
-    <script type="text/javascript" src="../src/KnockoutSync.js"></script>
+   <script type="text/javascript" src="../src/KnockoutSync.js"></script>
+   <script type="text/javascript" src="../src/Promise.js"></script>
+   <script type="text/javascript" src="../src/Model.js"></script>
+   <script type="text/javascript" src="../src/Validator.js"></script>
+   <script type="text/javascript" src="../stores/FirebaseStore.js"></script>
 
     <!-- TEST UNITS
         ---------------------------------------------------------------->
@@ -25,6 +27,10 @@
     <!--<script type="text/javascript" src="Model.test.js"></script>-->
     <!--<script type="text/javascript" src="Validator.test.js"></script>-->
     <!--<script type="text/javascript" src="KnockoutSync.test.js"></script>-->
+
+   <!-- include this after the test units and it creates a dropdown for running a specific module -->
+   <script type="text/javascript" src="libs/qunit.toolbar.js"></script>
+
 
 </head>
 <body>

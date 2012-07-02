@@ -18,6 +18,8 @@
    };
 
    ko.sync || (ko.sync = {});
+   ko.sync.stores || (ko.sync.stores = []);
+
    ko.sync.use = function() {};
    ko.sync.newList = function() {};
    ko.sync.newRecord = function() {};

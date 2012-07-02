@@ -1,11 +1,10 @@
 
-
 jQuery(function($) {
    var undef;
 
    module("Defer");
-   test("#resolve", function() {
-      expect(6);
+   test("#resolve (synchronous)", function() {
+      expect(3);
       equal('function', typeof(ko.sync.defer), 'ko.sync.defer exists');
       // sync
       ko.sync.defer()
@@ -18,7 +17,10 @@ jQuery(function($) {
         .resolve(true)
         .then(function(v) { strictEqual(v, true, 'sync.then() after resolve gets true'); },
               function() { ok(false, 'sync.then() does not fail'); });
+   });
 
+   test('#resolve (asynchronous)', function() {
+      expect(1);
       // async
       stop();
       var def = ko.sync.defer()
@@ -29,25 +31,28 @@ jQuery(function($) {
                   ok(false, 'async.then() does not fail');
                });
 
-      // resolve with Error
-      ko.sync.defer()
-         .resolve(new Error('resolved'))
-         .then(function() {
-                  ok(false, 'then() should not resolve');
-               },
-               function(e) {
-                  ok(e instanceof Error, 'is an Error');
-                  equal(e.message, 'resolved', 'rejects with "resolved" as error message');
-               });
-
       setTimeout(function() {
          def.resolve('hello');
          setTimeout(start, 10);
-      }, 20);
+      }, 10);
    });
 
-   test("#reject", function() {
-      expect(3);
+   test('#resolve (with Error object)', function() {
+      expect(2);
+      // resolve with Error
+      ko.sync.defer()
+            .resolve(new Error('resolved'))
+            .then(function() {
+               ok(false, 'then() should not resolve');
+            },
+            function(e) {
+               ok(e instanceof Error, 'is an Error');
+               equal(e.message, 'resolved', 'rejects with "resolved" as error message');
+            });
+   });
+
+   test("#reject (synchronously)", function() {
+      expect(2);
       // sync
       ko.sync.defer()
          .then(function() {
@@ -63,7 +68,10 @@ jQuery(function($) {
                function(e) {
                   ok(e, 'no', 'late then() rejects to "no"');
                });
+   });
 
+   test('#reject (async)', function() {
+      expect(1);
       // async
       stop();
       var def = ko.sync.defer()
@@ -111,6 +119,14 @@ jQuery(function($) {
          callback2(new Error('reject'));
          setTimeout(start, 1);
       }, 10);
+   });
+
+   test("chained then() calls", function() {
+      expect(1);
+      //todo
+      //todo
+      //todo
+      ok(false, "It should get tested");
    });
 
    module('Promise');
@@ -353,8 +369,8 @@ jQuery(function($) {
 
    module("Handle");
    test("vanilla", function() {
-      expect(2);
-      stop(2);
+      expect(1);
+      stop();
 
       function _callback(cb) {
          setTimeout(function() {
@@ -363,31 +379,59 @@ jQuery(function($) {
          }, 10);
       }
 
-      function _errback(a, cb, c) {
+      // no placeholder
+      ko.sync.handle(_callback)
+            .done(function(v) {
+               strictEqual(v, 'good', 'resolves with correct value');
+            })
+            .fail(function(e) {
+               ok(false, 'does not fail');
+            });
+
+   });
+
+   test("error and placeholder", function() {
+      expect(1);
+      stop();
+
+      function _callbackError(a, cb, c) {
          setTimeout(function() {
-            cb(new Error('errback'));
+            cb(new Error('callback with error'));
             start();
          }, 10);
       }
 
-      // success
-      ko.sync.handle(_callback)
-         .done(function(v) {
-            strictEqual(v, 'good', 'resolves with correct value');
-         })
-         .fail(function(e) {
-            ok(false, 'does not fail');
-         });
+      // fail, use placeholder
+      ko.sync.handle(_callbackError, 0, ko.sync.handle.CALLBACK, 2)
+            .done(function(v) {
+               ok(false, 'does not resolve');
+            })
+            .fail(function(e) {
+               equal(e.message, 'callback with error', 'rejects with correct value');
+            });
 
-      // fail
-      ko.sync.handle(_errback, 0, ko.sync.handle.CALLBACK, 2)
-         .done(function(v) {
-            ok(false, 'does not resolve');
-         })
-         .fail(function(e) {
-            equal(e.message, 'errback', 'rejects with correct value');
-         });
+   });
 
+   test("errback", function() {
+      expect(2);
+      stop();
+
+      function _errback(cb, a, eb, c) {
+         setTimeout(function() {
+            ok(typeof(cb) === 'function', 'was callback added');
+            eb('nope');
+            start();
+         }, 10);
+      }
+
+      // errback
+      ko.sync.handle(_errback, 0, ko.sync.handle.ERRBACK, 2) // should prepend the callback
+            .done(function() {
+               ok(false, 'should not resolve');
+            })
+            .fail(function(e) {
+               equal(e, 'nope', 'should fail with correct value');
+            });
    });
 
    test("with scope", function() {

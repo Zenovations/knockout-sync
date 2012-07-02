@@ -48,9 +48,6 @@
             case 'date':
                o.default = 0;
                break;
-            case 'time':
-               o.default = '00:00';
-               break;
             case 'string':
             case 'email':
             default:

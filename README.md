@@ -30,7 +30,7 @@ Alternately, if you aren't worried about a few bytes, simply include the minimiz
 
 ```javascript
     // create a data store
-    var store = new FirebaseStore('http://beta.firebase.com/account_name', 'optional/root/path');
+    var store = new ko.sync.stores.FirebaseStore('http://beta.firebase.com/account_name', 'path/to/store');
 ```
 
 ### Create a data model
@@ -236,6 +236,39 @@ the dirty flag. However, autosave will not be run and save() must be called manu
    var rec = ko.sync.use( {}, model });  // same thing
 ```
 
+### ko.sync.defer()
+
+@return {[Defer](#Defer)}
+
+Creates a [Defer](#Defer) object (see below) which follows the [promise pattern][1].
+
+   [1]: http://en.wikipedia.org/wiki/Futures_and_promises
+
+### ko.sync.handle( [scope, ] fx [, args..] )
+
+@param {Object}   [scope] (optional) sets the `this` context while inside of `fx`
+@param {Function} fx      the function to be invoked
+@param {...*}     [args]  any additional arguments to be passed to `fx`
+@return {[Promise](#Promise)}
+
+Runs a possibly asynchronous function which accepts a success callback (and optionally an error callback). Returns a
+[Promise](#Promise) that will fulfill once the asynchronous function completes or throws an error.
+
+See [Handle](#Handle) below for more details.
+
+### ko.sync.when( [scope, ] fx [, args..] )
+
+@param {Object}   [scope] (optional) sets the `this` context while inside of `fx`
+@param {Function} fx      the function to be invoked
+@param {...*}     [args]  any additional arguments to be passed to `fx`
+@return {[Promise](#Promise)}
+
+Wraps a function to be invoked and returns a [Promise](#Promise) that will fulfill once a value is returned. If the
+method returns a promise, then that promise is returned directly. Thus, this is a great way to ensure a method returns
+a Promise when the result is uncertain.
+
+See [When](#When) below for more details.
+
 ## Crud (target.crud)
 
 Obtained by calling `ko.sync.use()` on an object or `ko.sync.newRecord()`
@@ -383,6 +416,7 @@ The params object may contain any of the following keys:
             (some stores, like Firebase, may choose to sort the results after they return)
   - desc:   {boolean} return records from beginning instead of the end of the list
 
+<a id='Model' name='Model'></a>
 ## Model (ko.sync.Model)
 
 The model represents a logical data component which can be shipped between client and the data layer. This is typically
@@ -449,7 +483,15 @@ when a save occurs.
 
 ##### fields.type
 
-{String='string'} The type of field, one of: string, int, float, email, date, time
+{String='string'} The type of field, one of: string, int, float, email, date
+
+Dates can be UTC or local. When they are sent to the store, it will automagically convert them
+to the preferred format for whatever protocol it will communicate them to the server. ISO 8601 dates are usually preferable
+for ensuring concise communication of the date/time.
+
+Emails are strings which must be in the format `address@domain.tld` or '"First Last" <address@domain.tld>'.
+
+For int and float, invalid values will be the responsibility of the store to convert as needed.
 
 ##### fields.default
 
@@ -461,8 +503,7 @@ based on the type:
  * float:   0
  * string:  null
  * email:   null
- * date:    0
- * time:    '00:00'
+ * date:    null
 
 ##### fields.minLength
 
@@ -487,6 +528,77 @@ based on the type:
 The new function creates a new record. If a json hash is passed into the method, the attributes are added into the model.
 
 Note that newly created objects are not saved to the data store unless they pass all validation tests!
+
+<a name='Defer' id='Defer'></a>
+## Defer (ko.sync.defer)
+
+This implementation of the [promise pattern][1] is used to generate a [Promise](#Promise) object for handling
+asynchronous calls.
+
+Primarily, this should be used indirectly via ko.sync.when() and ko.sync.handle().
+
+It can, of course, be used directly:
+
+```javascript
+
+   // a simple asynchronous function
+   function asyncAddition(a, b) {
+      var deferred = ko.sync.defer();
+      setTimeout(function() {
+         // wait 100 milliseconds and then add the values
+         deferred.resolve( a + b );
+      }, 100);
+      return deferred.promise;
+   }
+
+   // run the function and get a promise
+   asyncAdditions(2, 3)
+      .done(function(sum) { console.log(sum); }); // logs 5!
+
+   // this one is rejected
+   function asyncFail() {
+      var deferred = ko.sync.defer();
+      setTimeout(function() {
+         // wait 100 milliseconds and then add the values
+         deferred.reject( 'oops' );
+      }, 100);
+      return deferred.promise;
+   }
+
+   // try the async function
+   asyncFail()
+      .done(callback) // this is not called
+      .fail(callback) // 'oops'
+
+   // now let's chain them together!
+   asyncAdditions(2, 3)
+      .then(function(sum) {
+         return asyncFail();
+      })
+      .done(...) // not called
+      .fail(...) // called when asyncFail resolves
+
+```
+
+   [1]: http://en.wikipedia.org/wiki/Futures_and_promises
+
+### Defer.resolve()
+
+Fulfills the Promise object with a successful status. Any values passed to this method are communicated directly
+through the Promise to the callbacks.
+
+### Defer.reject()
+
+Fulfills the Promise object with an error status. Any values passed to this method are communicated directly
+through the Promise to the callbacks.
+
+### Defer.promise
+
+This is the [Promise](#Promise) pattern which should be returned to replace the asynchronous events and callbacks.
+
+### Defer.then(), Defer.done(), Defer.fail(), Defer.always()
+
+See the [Promise](#Promise) methods with the same name
 
 # Testing
 

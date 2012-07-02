@@ -1,6 +1,17 @@
 
 (function(ko) {
 
+   /**
+    * This implementation of the promise pattern (http://en.wikipedia.org/wiki/Futures_and_promises) is primarily
+    * for use via the When() and Handle() methods (below).
+    *
+    * It returns a deferred pattern that can be resolved, rejected, and from which a Promise pattern can be
+    * extracted as a return value.
+    *
+    * See the README for more details.
+    *
+    * @constructor
+    */
    function Defer() {
       var isDone = false, hasFailed = false, result, fxList = [], errList = [];
 
@@ -58,6 +69,11 @@
                }
             }
          },
+         errback: function() {
+            return function() {
+               self.reject.apply(self, arguments);
+            }
+         },
          resolve: function() {
             if( arguments[0] instanceof Error ) {
                return self.reject.apply(self, arguments);
@@ -96,7 +112,7 @@
 
    /**
     * Run a function that may return a value or a promise object. If a promise object is returned, this method will
-    * wait for it to fulfill and resolve with the results.
+    * wait for it to fulfill and resolve with the results. Otherwise, it resolves immediately with the value.
     *
     * @param [scope]
     * @param fx
@@ -125,6 +141,26 @@
    }
 
    /**
+    * Turn a function with a callback into a deferred promise. Optionally, an error callback may also be specified.
+    *
+    * The position of the callback and errback are specified using a placeholder like so:
+    * <code>
+    *    ko.sync.handle( fxToCall, arg1, ko.sync.handle.CALLBACK, arg3, ko.sync.handle.ERRBACK ).then(...)
+    * </code>
+    *
+    * If there are no arguments, the callback/errback are positions 0 and 1. If the position of the
+    * CALLBACK isn't specified, then it is inserted before the arguments:
+    * <code>
+    *    function add( callback, a, b ) {
+    *        callback( a + b );
+    *    }
+    *
+    *    ko.sync.handle( add, 3, 4 ).then(...) // 7
+    * </code>
+    *
+    * If the position of the errback is not specified, it is not included. It is assumed that the method will either
+    * throw an exception or return an Error if the operation fails.
+    *
     * @param [scope]
     * @param fx
     * @return {Promise}
@@ -142,6 +178,7 @@
       return def.promise;
    }
    Handle.CALLBACK = new Object();
+   Handle.ERRBACK  = new Object();
 
    function _params(arguments, hasPlaceholder, def) {
       var args = _toArray(arguments), fx, scope = null, i = 0;
@@ -158,15 +195,31 @@
       return {fx: fx, scope: scope, args: args};
    }
 
-   function _fillPlaceholder(args, def) {
-      var i = args.length, pos = 0;
-      while(i--) {
-         if( args[i] === Handle.CALLBACK ) {
-            pos = i;
-            break;
+   function _fillPlaceholder(args, defer) {
+      var i = -1, a, len = args.length, hasCallback = false;
+      if( len ) {
+         while(++i < len) {
+            a = args[i];
+            if( a === Handle.CALLBACK ) {
+               hasCallback = true;
+               args[i] = defer.callback();
+            }
+            else if( a === Handle.ERRBACK ) {
+               args[i] = defer.errback();
+            }
+         }
+         if( !hasCallback ) {
+            // if none of the arguments are the CALLBACK placeholder
+            // then it goes first in the list
+            args.unshift(defer.callback());
          }
       }
-      args[pos] = def.callback();
+      else {
+         // if there are no arguments (probably the norm) then just apply callback/errback
+         // to the first two positions as that's all that makes sense
+         args[0] = defer.callback();
+         args[1] = defer.errback();
+      }
    }
 
    function _toArray(args) {
