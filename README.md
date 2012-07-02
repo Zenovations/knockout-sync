@@ -1,27 +1,36 @@
 
 # KnockoutSync
 
-KnockoutSync is a persistence layer that connects Knockout.js with a data Store (a RESTful server, Firebase, etc).
+KnockoutSync is a persistence, validation, and synchronization library that connects Knockout.js with a data Store (a RESTful server, Firebase, etc).
 
 ## Installation
+Download the [production version][min] or the [development version][max].
 
-Include the following in your html:
+[min]: https://raw.github.com/katowulf/knockout-sync/master/dist/knockout-sync.min.js
+[max]: https://raw.github.com/katowulf/knockout-sync/master/dist/knockout-sync.js
 
-```html
-    <script type="text/javascript" src="knockout-sync.min.js"></script>
-    <script type="text/javascript" src="stores/{PICKONE}Store.js"></script>
-```
-
-If you plan to use the data validator, include that too (or grow your own):
+In your web page, you need to have [jQuery][2] and [Knockout.js][3]!
 
 ```html
-    <script type="text/javascript" src="src/Validator.js"></script>
+   <script type="text/javascript" src="jquery.js"></script>
+   <script type="text/javascript" src="knockout.js"></script>
 ```
 
-Alternately, if you aren't worried about a few bytes, simply include the minimized code containing everything:
+Then include knockout-sync:
 
 ```html
     <script type="text/javascript" src="knockout-sync.all.min.js"></script>
+```
+
+Alternately, if you want to include your own data store or validator:
+
+```html
+    <!-- just the basic lib -->
+    <script type="text/javascript" src="knockout-sync.min.js"></script>
+    <!-- my validator -->
+    <script type="text/javascript" src="assets/js/MyValidator.js"></script>
+    <!-- my data store -->
+    <script type="text/javascript" src="stores/{PICKONE}Store.js"></script>
 ```
 
 ## Usage
@@ -159,6 +168,8 @@ Note that there is no need to use destroy() as removed items are automagically t
 
 Why make the same ones everyone else does? Be original!
 
+//todo look these over
+
  - fields which are not observable may be persistent, but they will not trigger autoupdates (we aren't observing them after all)
  - you must call ko.sync.use(...) on a view before assigning any ko.computed properties which will access those fields
  - if you don't set the autoupdate flag to true on the model, remove/create operations are not immediately sent to the server
@@ -236,38 +247,104 @@ the dirty flag. However, autosave will not be run and save() must be called manu
    var rec = ko.sync.use( {}, model });  // same thing
 ```
 
-### ko.sync.defer()
-
-@return {[Defer](#Defer)}
-
-Creates a [Defer](#Defer) object (see below) which follows the [promise pattern][1].
-
-   [1]: http://en.wikipedia.org/wiki/Futures_and_promises
-
 ### ko.sync.handle( [scope, ] fx [, args..] )
 
 @param {Object}   [scope] (optional) sets the `this` context while inside of `fx`
 @param {Function} fx      the function to be invoked
 @param {...*}     [args]  any additional arguments to be passed to `fx`
-@return {[Promise](#Promise)}
+@return {Promise}
 
 Runs a possibly asynchronous function which accepts a success callback (and optionally an error callback). Returns a
 [Promise](#Promise) that will fulfill once the asynchronous function completes or throws an error.
 
-See [Handle](#Handle) below for more details.
+The callback is prepended into position 0 by default. To put the value into another location in the arguments, just
+ use the special ko.sync.handle.CALLBACK placeholder to specify the position.
+
+```javascript
+   // a simply async function with callback
+   function getReply( callback ) {
+      callback('hello');
+   }
+
+   ko.sync
+        .handle( getReply )
+        .then( function(reply) { console.log(reply); }); //hello
+
+   // something a little more convoluted
+   function smartReply( isLeaving, callback ) {
+      var reply = isLeaving? 'goodbye' : hello;
+      callback( reply );
+   }
+
+   ko.sync
+       .handle( smartReply, true, ko.sync.handle.CALLBACK )
+       .then( function(reply) { console.log(reply); }); //goodbye
+
+   // with a scope context
+   function smartAdd( callback, y ) {
+      callback( this.x + y );
+   }
+
+   ko.sync.handle( {x: 3}, smartAdd, 2 )
+          .then(function(sum) { console.log(sum); });  // 5
+```
+
+If the method throws an error or returns an error, it will be caught and the promise is rejected:
+
+```javascript
+    // thrown
+    ko.sync.handle( function() { throw new Error('oops'); } )
+           .then(...) // not called
+           .fail(...) // gets Error('oops');
+
+    // returned
+    ko.sync.handle( function() { return new Error('double-oops'); } )
+           .then(...) // not called
+           .fail(...) // gets Error('double-oops');
+```
+
+Some methods have a success and failure callback (i.e. errback). If no arguments are added, the errback is
+automatically passed after the callback function. Otherwise, simply add the errback placeholder to tell the lib
+where to put it.
+
+```javascript
+   function errorCallback( a, callback, b, errback ) {
+      errback( a + b );
+   }
+
+   // if there are no arguments, then errback function is passed after the callback
+   ko.sync.handle( function(callback, errback) { errback('I work'); } );
+
+   // but if arguments exist, then we must tell the lib where to put the errback (or it assumes we don't want one)
+   ko.sync.handle( errorCallback, 'no', ko.sync.handle.CALLBACK, 'way!', ko.sync.handle.ERRBACK );
+```
 
 ### ko.sync.when( [scope, ] fx [, args..] )
 
 @param {Object}   [scope] (optional) sets the `this` context while inside of `fx`
 @param {Function} fx      the function to be invoked
 @param {...*}     [args]  any additional arguments to be passed to `fx`
-@return {[Promise](#Promise)}
+@return {Promise}
 
-Wraps a function to be invoked and returns a [Promise](#Promise) that will fulfill once a value is returned. If the
-method returns a promise, then that promise is returned directly. Thus, this is a great way to ensure a method returns
-a Promise when the result is uncertain.
+Wraps a function to be invoked and returns a Promise ([jQuery.Deferred.promise][4]) that will fulfill once a value is returned. If the
+method returns a promise, then that promise is returned directly. If the method throws an error, then it will
+be caught and the promise will be rejected. Thus, this is a great way to handle errors, promises, and values synchronously.
 
-See [When](#When) below for more details.
+```javascript
+   ko.sync.when( function() { return 1 } )
+          .then(...);  // 1
+
+   ko.sync.when( function() { return $.Deferred().resolve('hello').promise(); } )
+          .then(...);  // 'hello'
+
+   ko.sync.when( function() { throw new Error('oops'); } )
+          .then(...)  // not called
+          .fail(...); // Error('oops')
+
+   ko.sync.when( function() { return new Error('fail'); } )
+          .then(...)  // not called
+          .fail(...); // Error('fail')
+```
 
 ## Crud (target.crud)
 
@@ -438,6 +515,16 @@ representative of a table in a database or bucket in a NoSQL environment.
 
 {String or Array} Required. Key used to identify records in the database. If a composite ID is to be used, multiple field names may be specified using an array.
 
+#### options.sortField
+
+{String or Array} If provided, records are sorted by the Store according to this field or fields. It is up to the store
+how this is arranged. For instance, SQL databases may retrieve results using an ORDER BY clause.
+
+The FirebaseStore converts the values to an integer equivalent and stores them with a priority to achieve sorting.
+
+Some stores might (theoretically) have to retrieve the results as a whole and sort them manually, assuming they have
+no way to enforce ordered data sets.
+
 #### options.autosave
 
 {Boolean|Array=false} When true, records are automatically stored each time any value in the record
@@ -529,77 +616,6 @@ The new function creates a new record. If a json hash is passed into the method,
 
 Note that newly created objects are not saved to the data store unless they pass all validation tests!
 
-<a name='Defer' id='Defer'></a>
-## Defer (ko.sync.defer)
-
-This implementation of the [promise pattern][1] is used to generate a [Promise](#Promise) object for handling
-asynchronous calls.
-
-Primarily, this should be used indirectly via ko.sync.when() and ko.sync.handle().
-
-It can, of course, be used directly:
-
-```javascript
-
-   // a simple asynchronous function
-   function asyncAddition(a, b) {
-      var deferred = ko.sync.defer();
-      setTimeout(function() {
-         // wait 100 milliseconds and then add the values
-         deferred.resolve( a + b );
-      }, 100);
-      return deferred.promise;
-   }
-
-   // run the function and get a promise
-   asyncAdditions(2, 3)
-      .done(function(sum) { console.log(sum); }); // logs 5!
-
-   // this one is rejected
-   function asyncFail() {
-      var deferred = ko.sync.defer();
-      setTimeout(function() {
-         // wait 100 milliseconds and then add the values
-         deferred.reject( 'oops' );
-      }, 100);
-      return deferred.promise;
-   }
-
-   // try the async function
-   asyncFail()
-      .done(callback) // this is not called
-      .fail(callback) // 'oops'
-
-   // now let's chain them together!
-   asyncAdditions(2, 3)
-      .then(function(sum) {
-         return asyncFail();
-      })
-      .done(...) // not called
-      .fail(...) // called when asyncFail resolves
-
-```
-
-   [1]: http://en.wikipedia.org/wiki/Futures_and_promises
-
-### Defer.resolve()
-
-Fulfills the Promise object with a successful status. Any values passed to this method are communicated directly
-through the Promise to the callbacks.
-
-### Defer.reject()
-
-Fulfills the Promise object with an error status. Any values passed to this method are communicated directly
-through the Promise to the callbacks.
-
-### Defer.promise
-
-This is the [Promise](#Promise) pattern which should be returned to replace the asynchronous events and callbacks.
-
-### Defer.then(), Defer.done(), Defer.fail(), Defer.always()
-
-See the [Promise](#Promise) methods with the same name
-
 # Testing
 
 Browse to test/index.html and enjoy the pretty colors
@@ -641,3 +657,8 @@ And of course we can do logical negation (i.e. "not")
   - notEndingWith:    {string}
   - notEquals:        {*}
   - notIn:            {Array} of possible values
+
+  [1]: http://en.wikipedia.org/wiki/Futures_and_promises
+  [2]: http://docs.jquery.com/Downloading_jQuery
+  [3]: http://knockoutjs.com/documentation/installation.html
+  [4]: http://api.jquery.com/promise/

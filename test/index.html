@@ -5,31 +5,32 @@
 
     <!-- LIBS
         ---------------------------------------------------------------->
-    <link rel="stylesheet" href="libs/qunit.css" type="text/css"/>
-    <script src="http://static.firebase.com/v0/firebase.js"></script>
+    <link rel="stylesheet" href="lib/qunit.css" type="text/css"/>
     <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
-    <script type="text/javascript" src="libs/moment.js"></script>
-    <script type="text/javascript" src="libs/knockout.js"></script>
-    <script type="text/javascript" src="libs/qunit.js"></script>
+    <script type="text/javascript" src="http://static.firebase.com/v0/firebase.js"></script>
+    <script type="text/javascript" src="lib/moment.js"></script>
+    <script type="text/javascript" src="lib/knockout.js"></script>
+    <script type="text/javascript" src="lib/qunit.js"></script>
+    <script type="text/javascript" src="../lib/jquery.sequence.js"></script>
 
     <!-- FILES TO TEST
         ---------------------------------------------------------------->
-   <script type="text/javascript" src="../src/KnockoutSync.js"></script>
-   <script type="text/javascript" src="../src/Promise.js"></script>
-   <script type="text/javascript" src="../src/Model.js"></script>
-   <script type="text/javascript" src="../src/Validator.js"></script>
-   <script type="text/javascript" src="../stores/FirebaseStore.js"></script>
+    <script type="text/javascript" src="../src/knockout-sync.js"></script>
+    <script type="text/javascript" src="../src/Model.js"></script>
+    <script type="text/javascript" src="../src/Validator.js"></script>
+    <script type="text/javascript" src="../src/stores/FirebaseStore.js"></script>
 
     <!-- TEST UNITS
         ---------------------------------------------------------------->
-    <script type="text/javascript" src="Promise.test.js"></script>
-    <script type="text/javascript" src="FirebaseStore.test.js"></script>
-    <!--<script type="text/javascript" src="Model.test.js"></script>-->
-    <!--<script type="text/javascript" src="Validator.test.js"></script>-->
-    <!--<script type="text/javascript" src="KnockoutSync.test.js"></script>-->
+    <script type="text/javascript" src="tests/ko-sync.test.js"></script>
+    <script type="text/javascript" src="tests/ko-sync-when.test.js"></script>
+    <script type="text/javascript" src="tests/ko-sync-handle.test.js"></script>
+    <script type="text/javascript" src="tests/FirebaseStore.test.js"></script>
+    <script type="text/javascript" src="tests/Model.test.js"></script>
+    <script type="text/javascript" src="tests/Validator.test.js"></script>
 
    <!-- include this after the test units and it creates a dropdown for running a specific module -->
-   <script type="text/javascript" src="libs/qunit.toolbar.js"></script>
+   <script type="text/javascript" src="lib/qunit.toolbar.js"></script>
 
 
 </head>

@@ -18,6 +18,7 @@
       this.store     = props.dataStore;
       this.table     = props.dataTable;
       this.key       = props.primaryKey;
+      this.sort      = props.priorityField;
       this.validator = props.validator;
       this.fields    = _processFields(defaults, props.fields);
       this.recordFactory = new RecordFactory(this);
@@ -60,5 +61,7 @@
    RecordFactory.create = function(data) {};
 
    function Record() {} //todo
+   Record.prototype.hasKey = function() {}; //todo
+   Record.prototype.getKey = function() {}; //todo
 
 })(ko);

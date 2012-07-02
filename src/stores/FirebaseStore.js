@@ -8,19 +8,28 @@
 
    FirebaseStore.RECORD_ID = new Object();
 
-   FirebaseStore.prototype.create = function(model, data) {
-      var tableName = model.dataTable, key = model.primaryKey;
-      //todo the key isn't getting used
-      //todo what should it do? what is a keyed record?
+   FirebaseStore.prototype.create = function(model, record) {
       return ko.sync.handle(this, function(cb, eb) { // creates a promise
-         var table = this.base.child(tableName), ref = _buildRecord(table);
-         ref.set(cleanData(model.fields, data), function(success, id) {
+         var table = this.base.child(model.dataTable),
+             key = record.hasKey()? record.getKey() : undef,
+             ref = _buildRecord(table, key);
+         ref.set(cleanData(model.fields, record.getData()), function(success) {
             (success && cb(ref.name())) || eb(ref.name());
          });
       });
    };
 
-   FirebaseStore.prototype.read         = function(model, recOrId) {}; //todo
+   FirebaseStore.prototype.read         = function(model, recOrId) {
+      return ko.sync.handle(this, function(cb) {
+         var table = this.base.child(model.dataTable),
+             key   = _idFor(recOrId),
+             ref   = _buildRecord(table, key);
+         ref.once('value', function(snapshot) {
+            cb(snapshot.val());
+         });
+      });
+   };
+
    FirebaseStore.prototype.update       = function(model, rec) {}; //todo
    FirebaseStore.prototype.delete       = function(model, recOrId) {}; //todo
    FirebaseStore.prototype.query        = function(model, params) {}; //todo
@@ -29,35 +38,30 @@
    FirebaseStore.prototype.onDisconnect = function(callback) {}; //todo
    FirebaseStore.prototype.onConnect    = function(callback) {}; //todo
 
+   /** UTILITIES
+    *****************************************************************************************/
+
    /**
     * Create or load a record to receive data. For new records, data/key are not necessary.
     *
     * @param table
-    * @param [data]
-    * @param [key]
+    * @param {string} [key]
     * @return {Firebase}
     * @private
     */
-   function _buildRecord(table, data, key) {
-      var rec, id = exists(data, key)? data[key] : null;
-      if( id !== null ) {
-         rec = table.child(id);
-      }
-      else {
-         rec = table.push();
-      }
-      return rec;
+   function _buildRecord(table, key) {
+      return key? table.child(key) : table.push();
    }
 
    function exists(data, key) {
-      var val = data && key && data.hasOwnProperty(key)? data[key] : null;
+      var val = data && key && data.hasOwnProperty(key)? data[key] : undef;
       return  val !== null && val !== undef;
    }
 
    function cleanData(fields, data) {
       var k, cleaned = {};
-      for(k in data) {
-         if( data.hasOwnProperty(k) && fields.hasOwnProperty(k) ) {
+      for(k in fields) {
+         if( fields.hasOwnProperty(k) ) {
             cleaned[k] = cleanValue(fields[k].type, data, k);
          }
       }
@@ -108,7 +112,7 @@
    }
 
    function _formatDate(v) {
-      if( typeof(v) === 'obect' ) {
+      if( typeof(v) === 'object' ) {
          if( v.toISOString ) {
             return v.toISOString();
          }
@@ -117,6 +121,15 @@
          }
       }
       return getDefaultValue('date');
+   }
+
+   function _idFor(recOrId) {
+      if( typeof(recOrId) === 'object' && recOrId.getKey ) {
+         return recOrId.getKey();
+      }
+      else {
+         return recOrId;
+      }
    }
 
    if (!Date.prototype.toISOString) {
@@ -142,6 +155,10 @@
 //      return v && typeof(v) === 'string';
 //   }
 
+   /** ADD TO NAMESPACE
+    ******************************************************************************/
+
    ko.sync || (ko.sync = {stores: []});
    ko.sync.stores.FirebaseStore = FirebaseStore;
+
 })(ko);
