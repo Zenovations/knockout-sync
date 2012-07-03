@@ -117,7 +117,7 @@ jQuery(function($) {
          .waitForAdd(modelKeyed.dataTable)
          .check(modelKeyed.fields, data)
          .end()
-         .fail(function(e) { ok(false, 'should not fail: '+e); })
+         .fail(function(e) { ok(false, e.message); })
          .always(start);
 
    });
@@ -141,9 +141,8 @@ jQuery(function($) {
          .waitForAdd(modelUnkeyed.dataTable)
          .check(modelUnkeyed.fields, data)
          .end()
-         .fail(function(e) { ok(false, 'should not fail: '+e); })
+         .fail(function(e) { ok(false, e.message); })
          .always(start);
-
    });
 
    asyncTest("#create (empty record)", function() {
@@ -163,7 +162,7 @@ jQuery(function($) {
    });
 
    asyncTest("#read", function() {
-
+      start();
    });
 
    asyncTest('sorted records', function() {

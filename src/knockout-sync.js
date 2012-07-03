@@ -55,7 +55,7 @@
     * @constructor
     */
    function When(scope, fx) {
-      var def = $.Deferred(), params = _params(arguments);
+      var def = $.Deferred(), params = _params(_toArray(arguments));
       try {
          var res = params.fx.apply(params.scope, params.args);
          if( res instanceof Error ) {
@@ -100,12 +100,15 @@
     * @constructor
     */
    function Handle(scope, fx) {
-      var def = $.Deferred(), params = _params(arguments, true, def);
+      var def = $.Deferred(), params = _params(_toArray(arguments), true, def);
       scope || (scope = null);
       try {
+         console.log('applying fx', params.fx);
          params.fx.apply(params.scope, params.args);
+         console.log('done applying fx', params.fx);
       }
       catch(e) {
+         console.warn('Handle rejected', e);
          def.reject(e);
       }
       return def.promise();
@@ -113,8 +116,8 @@
    Handle.CALLBACK = new Object();
    Handle.ERRBACK  = new Object();
 
-   function _params(arguments, hasPlaceholder, def) {
-      var args = _toArray(arguments), fx, scope = null, i = 0;
+   function _params(args, hasPlaceholder, def) {
+      var fx, scope = null, i = 0;
       while(args.length && !fx && i++ < 2) {
          if( typeof(args[0]) === 'function' ) {
             fx = args.shift();
