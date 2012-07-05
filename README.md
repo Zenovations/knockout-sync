@@ -9,11 +9,12 @@ Download the [production version][min] or the [development version][max].
 [min]: https://raw.github.com/katowulf/knockout-sync/master/dist/knockout-sync.min.js
 [max]: https://raw.github.com/katowulf/knockout-sync/master/dist/knockout-sync.js
 
-In your web page, you need to have [jQuery][2] and [Knockout.js][3]!
+In your web page, you need to have [jQuery][2], [Knockout.js][3], and [Knockout-mapping][5]!
 
 ```html
    <script type="text/javascript" src="jquery.js"></script>
    <script type="text/javascript" src="knockout.js"></script>
+   <script type="text/javascript" src="knockout.mapping.js"></script>
 ```
 
 Then include knockout-sync:
@@ -662,3 +663,4 @@ And of course we can do logical negation (i.e. "not")
   [2]: http://docs.jquery.com/Downloading_jQuery
   [3]: http://knockoutjs.com/documentation/installation.html
   [4]: http://api.jquery.com/promise/
+  [5]: https://github.com/SteveSanderson/knockout.mapping/tree/master/build/output

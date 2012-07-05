@@ -15,7 +15,7 @@ module.exports = function(grunt) {
       concat: {
          dist: {
             src: ['<banner:meta.banner>',
-                  'src/jquery.sequence.js',
+                  'lib/**/*.js',
                   '<file_strip_banner:src/<%= pkg.name %>.js>',
                   'src/Model.js'
             ],
@@ -23,7 +23,8 @@ module.exports = function(grunt) {
          },
          all: {
             src: ['<banner:meta.banner>',
-               'lib/jquery.sequence.js',
+               'lib/**/*.js',
+               'src/Class.js',
                '<file_strip_banner:src/<%= pkg.name %>.js>',
                'src/Model.js',
                'src/Validator.js',

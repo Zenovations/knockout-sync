@@ -13,19 +13,21 @@
    jQuery(function($) { // on dom ready
       var i = -1, len = modules.sort().length, $select = $('<select><option value="">All Test Modules</option></select>');
       while(++i < len) {
-         $select.append('<option>'+modules[i]+'</option>');
+         $select.append('<option value="'+modules[i]+'">'+modules[i]+'</option>');
       }
       $select.on('change', function() {
-          var opt = $(this).find('option:selected').text();
-          if( opt == 'All Test Modules' ) { opt = ""; }
-          else { opt = '?filter='+opt; }
+          var opt = $(this).find('option:selected').val();
+          if( opt ) {
+             opt = '?filter='+encodeURIComponent(opt+':');
+          }
+          else { opt = ''; }
           window.location = window.location.href.replace(/\?.*/, '')+opt;
       });
 
       function setSelection($select) {
-         var m = (window.location.href.match(/\?filter=([^%:]+)/) || [])[1];
+         var m = (window.location.href.match(/\?filter=(.+)(?:%3A|:)/) || [])[1];
          if( m ) {
-            $select.val(m);
+            $select.val(decodeURIComponent(m));
          }
       }
       setSelection($select);

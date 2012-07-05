@@ -1,18 +1,34 @@
-
+/*******************************************
+ * Knockout Sync - v0.1.0 - 2012-07-02
+ * https://github.com/katowulf/knockout-sync
+ * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL
+ *******************************************/
 (function($, ko) {
+   "use strict";
 
    ko.extenders.sync = function(target, startDirty) {
+      //todo replace startDirty with record object; sync this and the record's dirty
+      var cleanValue = ko.observable(ko.mapping.toJSON(target));
+      var dirtyOverride = ko.observable(ko.utils.unwrapObservable(startDirty));
+
       target.crud = {
          /**
           * @param {boolean} [newValue]
           * @return {boolean}
           */
-         isDirty: ko.observable(startDirty)
-      };
+         isDirty: ko.computed(function(){
+            return dirtyOverride() || ko.mapping.toJSON(target) !== cleanValue();
+         }),
 
-      //todo should be checking to see if persist or observe are true
-      //todo and probably simplifying this
-      target.subscribe(function(newValue) { target.crud.isDirty(true); });
+         markClean: function(){
+            cleanValue(ko.mapping.toJSON(target));
+            dirtyOverride(false);
+         },
+
+         markDirty: function(){
+            dirtyOverride(true);
+         }
+      };
 
       return target;
    };
@@ -113,8 +129,8 @@
    Handle.CALLBACK = new Object();
    Handle.ERRBACK  = new Object();
 
-   function _params(arguments, hasPlaceholder, def) {
-      var args = _toArray(arguments), fx, scope = null, i = 0;
+   function _params(argList, hasPlaceholder, def) {
+      var args = _toArray(argList), fx, scope = null, i = 0;
       while(args.length && !fx && i++ < 2) {
          if( typeof(args[0]) === 'function' ) {
             fx = args.shift();

@@ -1,31 +1,73 @@
-
-(function(ko) {
+/*******************************************
+ * FirebaseStore for knockout-sync
+ *******************************************/
+(function(ko, Firebase) {
    var undef;
 
+   /** IDE CLUES
+    **********************/
+   /** @var {jQuery.Deferred}  */ var Promise;
+   /** @var {ko.sync.Model}    */ var Model;
+   /** @var {ko.sync.Record}   */ var Record;
+   /** @var {ko.sync.RecordId} */ var RecordId;
+
+   /**
+    * Creates a new FirebaseStore for use as the dataStore component in models.
+    *
+    * @param {string} url    the Firebase database
+    * @param {string} [base] the child under the Firebase URL which is the root level of our data
+    * @constructor
+    */
    function FirebaseStore(url, base) {
-      this.base = new Firebase(url).child(base);
+      //todo extend Store
+      this.base = _base(new Firebase(url), base);
    }
 
-   FirebaseStore.RECORD_ID = new Object();
-
+   /**
+    * Writes a new record to the database. It does not check to make sure the record doesn't exist, so if it
+    * is keyed and has an ID already in the database, that record will be overwritten.
+    *
+    * The Firebase store accepts both keyed and unkeyed records. For keyed records, models should normally set
+    * the `model.priorityField` property, as records would otherwise be ordered lexicographically. The model
+    * properties used by this method are as follows:
+    *   - model.table:   the table name is appended to the Firebase root folder to obtain the correct data
+    *                    bucket for this model.
+    *   - model.fields:  used to parse and prepare fields for insertion
+    *   - model.sort:    provides a field in the record to use for setting priority (sorting) the data
+    *
+    * @param {Model}  model   the schema for a data model
+    * @param {Record} record  the data to be inserted
+    * @return {Promise} a jQuery.Deferred().promise() object
+    */
    FirebaseStore.prototype.create = function(model, record) {
       return ko.sync.handle(this, function(cb, eb) { // creates a promise
-         var table = this.base.child(model.dataTable),
-             key = record.hasKey()? record.getKey() : undef,
-             ref = _buildRecord(table, key);
+         var table = this.base.child(model.table),
+             // fetch the record using .child()
+             ref = _buildRecord(table, record.getKey());
          ref.set(cleanData(model.fields, record.getData()), function(success) {
             (success && cb(ref.name())) || eb(ref.name());
          });
       });
    };
 
+   /**
+    * Read a record from the database. If the record doesn't exist, a null will be returned.
+    *
+    * The model is used for the following fields:
+    *   - model.table:  the table name is appended to the Firebase root folder to obtain the correct data
+    *                   bucket for this model.
+    *
+    * @param {Model}           model
+    * @param {RecordId|Record} recOrId
+    * @return {Promise}
+    */
    FirebaseStore.prototype.read         = function(model, recOrId) {
       return ko.sync.handle(this, function(cb) {
-         var table = this.base.child(model.dataTable),
-             key   = _idFor(recOrId),
+         var table = this.base.child(model.table),
+             key   = _keyFor(recOrId),
              ref   = _buildRecord(table, key);
          ref.once('value', function(snapshot) {
-            cb(snapshot.val());
+            cb(model.newRecord(snapshot.val()));
          });
       });
    };
@@ -42,15 +84,17 @@
     *****************************************************************************************/
 
    /**
-    * Create or load a record to receive data. For new records, data/key are not necessary.
+    * Create or load a record to receive data. If `key` is provided, then the record is created
+    * with the unique id of `key`, otherwise an ID is generated automagically (and chronologically)
+    * by Firebase.
     *
     * @param table
-    * @param {string} [key]
+    * @param {RecordId}  [key]
     * @return {Firebase}
     * @private
     */
    function _buildRecord(table, key) {
-      return key? table.child(key) : table.push();
+      return key.isSet()? table.child(key.valueOf()) : table.push();
    }
 
    function exists(data, key) {
@@ -123,7 +167,7 @@
       return getDefaultValue('date');
    }
 
-   function _idFor(recOrId) {
+   function _keyFor(recOrId) {
       if( typeof(recOrId) === 'object' && recOrId.getKey ) {
          return recOrId.getKey();
       }
@@ -144,6 +188,25 @@
       };
    }
 
+   /**
+    * @param root
+    * @param base
+    * @return {Firebase}
+    * @private
+    */
+   function _base(root, base) {
+      if( base ) {
+         var curr = root;
+         base.split('/').forEach(function(p) {
+            curr = curr.child(p);
+         });
+         return curr;
+      }
+      else {
+         return root;
+      }
+   }
+
 //
 //   function isTempId(data, key) {
 //      var v = data && key && data.hasOwnProperty(key)? data[key] : null;
@@ -161,4 +224,4 @@
    ko.sync || (ko.sync = {stores: []});
    ko.sync.stores.FirebaseStore = FirebaseStore;
 
-})(ko);
+})(ko, Firebase);

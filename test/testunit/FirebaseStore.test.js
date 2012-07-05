@@ -1,29 +1,24 @@
 
 jQuery(function($) {
+   "use strict";
+
    var undef;
-
-   var FIREBASE_URL = 'http://gamma.firebase.com/wordspot/';
-   var FIREBASE_TEST_URL = 'GitHub/firebase-sync/';
-
-   var firebaseRoot = new Firebase(FIREBASE_URL);
-   var syncRoot = firebaseRoot.child(FIREBASE_TEST_URL);
+   var FIREBASE_URL = 'http://gamma.firebase.com/wordspot';
+   var FIREBASE_TEST_URL = 'GitHub/firebase-sync';
+   var syncRoot = new window.Firebase(FIREBASE_URL+'/'+FIREBASE_TEST_URL);
 
    var sequenceMethods = {
       create: function(store, model, data) {
-         console.log('create', arguments);
-         var record = new TestRecord(data, model.primaryKey);
+         var record = model.newRecord(data);
          return store.create(model, record);
       },
       read: function(store, model, recordId) {
-         console.log('read', arguments);
          return store.read(model, recordId);
       },
-      waitForAdd: {fxn: function(table, recordId) {
-         console.log('waitForAdd', arguments);
+      waitForAdd: {fx: function(table, recordId) {
          return watchForEntry(syncRoot.child(table).child(recordId));
       }, prevPos: 1},
-      check: {fxn: function(fields, origData, resultData) {
-         console.log('check', arguments);
+      check: {fx: function(fields, origData, resultData) {
          var k, keys = Object.keys(fields), i = keys.length;
          while(i--) {
             k = keys[i];
@@ -46,7 +41,7 @@ jQuery(function($) {
 
    clearAllRecords();
 
-   var modelKeyed = {
+   var modelKeyed = new ko.sync.Model({
       dataTable: 'TableKeyed',
       primaryKey: 'id',
       fields: {
@@ -64,9 +59,11 @@ jQuery(function($) {
          emailOptional:  { required: false, persist: true, type: 'email' },
          emailRequired:  { required: true,  persist: true, type: 'email' }
       }
-   };
+   });
 
-   var modelUnkeyed = {
+   //todo composite key? are these keys even right anymore?
+
+   var modelUnkeyed = new ko.sync.Model({
       dataTable: 'TableUnkeyed',
       fields: {
          stringOptional: { required: false, persist: true, type: 'string' },
@@ -82,7 +79,7 @@ jQuery(function($) {
          emailOptional:  { required: false, persist: true, type: 'email' },
          emailRequired:  { required: true,  persist: true, type: 'email' }
       }
-   };
+   });
 
    var genericUnkeyedRecord = {
       stringOptional: 'optional-string',
@@ -95,6 +92,7 @@ jQuery(function($) {
    };
 
    module("FirebaseStore");
+
    asyncTest("#create (keyed record)", function() {
       var store = newStore(), data = {
          id:             'test1',
@@ -109,17 +107,14 @@ jQuery(function($) {
       // we perform one assertion for each field plus one assertion for the id returned by create
       expect(Object.keys(modelKeyed.fields).length+1);
 
-      var keyedRecord = new TestRecord(data, modelKeyed.primaryKey);
-
       startSequence()
          .create(store, modelKeyed, data)
          .then(function(id) { equal(id, data.id, 'resolves with correct id'); })
-         .waitForAdd(modelKeyed.dataTable)
+         .waitForAdd(modelKeyed.table)
          .check(modelKeyed.fields, data)
          .end()
-         .fail(function(e) { ok(false, 'should not fail: '+e); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
-
    });
 
    asyncTest("#create (unkeyed record)", function() {
@@ -138,10 +133,10 @@ jQuery(function($) {
       startSequence()
          .create(store, modelUnkeyed, data)
          .then(function(id) { ok(exists(id), 'resolves with correct id'); })
-         .waitForAdd(modelUnkeyed.dataTable)
+         .waitForAdd(modelUnkeyed.table)
          .check(modelUnkeyed.fields, data)
          .end()
-         .fail(function(e) { ok(false, 'should not fail: '+e); })
+         .fail(function(e) { console.error(e); ok(false, e.toString());})
          .always(start);
 
    });
@@ -155,15 +150,26 @@ jQuery(function($) {
       startSequence()
          .create(store, modelUnkeyed, data)
          .then(function(id) { ok(exists(id), 'test1', 'resolves with correct id'); })
-         .waitForAdd(modelUnkeyed.dataTable)
+         .waitForAdd(modelUnkeyed.table)
          .check(modelUnkeyed.fields, data)
          .end()
-         .fail(function(e) { ok(false, 'should not fail: '+e); })
+         .fail(function(e) { console.error(e); ok(false, e.toString());})
          .always(start);
    });
 
    asyncTest("#read", function() {
-
+      var store = newStore(), recId = new ko.sync.RecordId(modelKeyed.fields, {id: 'record123'});
+      startSequence()
+         .create(store, modelKeyed, {id: 'record123'})
+         .waitForAdd(modelKeyed.table)
+         .read(store, modelKeyed, recId)
+         .then(function(rec) {
+            ok(rec instanceof ko.sync.Record, 'is instanceof record');
+            equal(rec.get('id'), 'record123', 'has the right id');
+         })
+         .end()
+         .fail(function(e) { console.error(e); ok(false, e.toString());})
+         .always(start);
    });
 
    asyncTest('sorted records', function() {
@@ -171,31 +177,41 @@ jQuery(function($) {
       start();
    });
 
+   test("composite keys", function() {
+      expect(1);
+      ok(false, 'Implement me!')
+   });
 
    test("#update", function() {
       expect(1);
       ok(false, 'Implement me!')
    });
+
    test("#delete", function() {
       expect(1);
       ok(false, 'Implement me!')
    });
+
    test("#query", function() {
       expect(1);
       ok(false, 'Implement me!')
    });
+
    test("#assignTempId", function() {
       expect(1);
       ok(false, 'Implement me!')
    });
+
    test("#sync", function() {
       expect(1);
       ok(false, 'Implement me!')
    });
+
    test("#onConnect", function() {
       expect(1);
       ok(false, 'Implement me!')
    });
+
    test("#onDisconnect", function() {
       expect(1);
       ok(false, 'Implement me!')
@@ -244,29 +260,6 @@ jQuery(function($) {
    function clearAllRecords() {
       syncRoot.set({});
    }
-
-   /**
-    * @param {object} data
-    * @param {string} [key]
-    * @constructor
-    */
-   function TestRecord(data, key) {
-      this.data = data;
-      this.key = key;
-   }
-   TestRecord.prototype.hasKey  = function() { return this.key? true : false; };
-   TestRecord.prototype.getKey  = function() { return this.data[this.key]; };
-   TestRecord.prototype.getData = function() { return this.data; };
-
-   Object.keys || (Object.keys = function(o) {
-      var result = [];
-      for(var name in o) {
-         if (o.hasOwnProperty(name))
-            result.push(name);
-      }
-      return result;
-   });
-
 
    function getDefaultValue(type) {
       switch(type) {
