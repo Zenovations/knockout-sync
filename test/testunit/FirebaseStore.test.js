@@ -9,39 +9,62 @@ jQuery(function($) {
 
    var sequenceMethods = {
       create: function(store, model, data) {
-         var record = model.newRecord(data);
-         return store.create(model, record);
+         var record = model.newRecord(data), def = $.Deferred();
+         store.create(model, record).done(function(id) {
+            // do not immediately return the record because it is actually only stored locally at this point
+            // wait for the server database to recognize it, then resolve, just to simplify our test case if/else nesting
+            watchForEntry(model.table, id).done(function(rec) {
+               def.resolve(id);
+            }).fail(function(e) { def.reject(e); });
+         }).fail(function(e) { def.reject(e); });
+         return def.promise();
       },
       read: function(store, model, recordId) {
          return store.read(model, recordId);
       },
-      waitForAdd: {fx: function(table, recordId) {
-         return watchForEntry(syncRoot.child(table).child(recordId));
-      }, prevPos: 1},
-      check: {fx: function(fields, origData, resultData) {
-         var k, keys = Object.keys(fields), i = keys.length;
-         while(i--) {
-            k = keys[i];
-            if( origData.hasOwnProperty(k) ) {
-               switch(k) {
-                  case 'dateRequired':
-                  case 'dateOptional':
-                     equal(moment(resultData[k]).valueOf(), origData[k].valueOf(), k+' has correct date');
-                     break;
-                  default:
-                     equal(resultData[k], origData[k], k+' has correct value');
+      update: function(store, model, data) {
+         return store.update(model, model.newRecord(data));
+      },
+      delete: function(store, model, recordId) {
+         return store.delete(model, new ko.sync.RecordId('id', {id: recordId}));
+      },
+      /** check if record exists in database (do not use the Store to do this) */
+      exists: function(table, recordId) {
+         var def = $.Deferred();
+         syncRoot.child(table).child(recordId).once('value', function(snapshot) {
+            def.resolve(snapshot.val() !== null);
+         });
+         return def;
+      },
+      /** Check the record by retrieving it from the database and comparing to the original (do not use the Store) */
+      check: {fx: function(model, origData, recordId) {
+         var table = model.table, fields = model.fields, k, keys = Object.keys(fields), i = keys.length;
+         // because the record may have just been added, it may not be in the db yet
+         // so wait for it to be added before fetching it
+         watchForEntry(table, recordId).done(function(resultData) {
+            while(i--) {
+               k = keys[i];
+               if( origData.hasOwnProperty(k) ) {
+                  switch(k) {
+                     case 'dateRequired':
+                     case 'dateOptional':
+                        equal(moment(resultData[k]).valueOf(), origData[k].valueOf(), k+' has correct date');
+                        break;
+                     default:
+                        equal(resultData[k], origData[k], k+' has correct value');
+                  }
+               }
+               else {
+                  equal(resultData[k], getDefaultValue(fields[k].type), k+' has correct default');
                }
             }
-            else {
-               equal(resultData[k], getDefaultValue(fields[k].type), k+' has correct default');
-            }
-         }
+         }).fail(function(e) { ok(false, e); });
       }, prevPos: 2}
    };
 
    clearAllRecords();
 
-   var modelKeyed = new ko.sync.Model({
+   var genericModel = new ko.sync.Model({
       dataTable: 'TableKeyed',
       primaryKey: 'id',
       fields: {
@@ -61,27 +84,19 @@ jQuery(function($) {
       }
    });
 
-   //todo composite key? are these keys even right anymore?
+   //todo composite key
 
-   var modelUnkeyed = new ko.sync.Model({
-      dataTable: 'TableUnkeyed',
-      fields: {
-         stringOptional: { required: false, persist: true, type: 'string' },
-         stringRequired: { required: true,  persist: true, type: 'string' },
-         dateOptional:   { required: false, persist: true, type: 'date' },
-         dateRequired:   { required: true,  persist: true, type: 'date' },
-         intOptional:    { required: false, persist: true, type: 'int' },
-         intRequired:    { required: true,  persist: true, type: 'int' },
-         boolOptional:   { required: false, persist: true, type: 'boolean' },
-         boolRequired:   { required: true,  persist: true, type: 'boolean' },
-         floatOptional:  { required: false, persist: true, type: 'float' },
-         floatRequired:  { required: true,  persist: true, type: 'float' },
-         emailOptional:  { required: false, persist: true, type: 'email' },
-         emailRequired:  { required: true,  persist: true, type: 'email' }
-      }
-   });
+   var genericKeyedData = {
+      id:             'test1',
+      stringRequired: '1-stringRequired',
+      dateRequired:   moment().add('days', 5).toDate(),
+      intRequired:    -1,
+      boolRequired:   true,
+      floatRequired:  1.1,
+      emailRequired:  'me1@me1.com'
+   };
 
-   var genericUnkeyedRecord = {
+   var genericUnkeyedData = {
       stringOptional: 'optional-string',
       stringRequired: 'required-string',
       dateRequired:   new Date(),
@@ -94,31 +109,22 @@ jQuery(function($) {
    module("FirebaseStore");
 
    asyncTest("#create (keyed record)", function() {
-      var store = newStore(), data = {
-         id:             'test1',
-         stringRequired: '1-stringRequired',
-         dateRequired:   moment().add('days', 5).toDate(),
-         intRequired:    -1,
-         boolRequired:   true,
-         floatRequired:  1.1,
-         emailRequired:  'me1@me1.com'
-      };
+      var store = resetStore(), data = genericKeyedData;
 
       // we perform one assertion for each field plus one assertion for the id returned by create
-      expect(Object.keys(modelKeyed.fields).length+1);
+      expect(Object.keys(genericModel.fields).length+1);
 
       startSequence()
-         .create(store, modelKeyed, data)
+         .create(store, genericModel, data)
          .then(function(id) { equal(id, data.id, 'resolves with correct id'); })
-         .waitForAdd(modelKeyed.table)
-         .check(modelKeyed.fields, data)
+         .check(genericModel, data)
          .end()
          .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#create (unkeyed record)", function() {
-      var store = newStore(), data = {
+      var store = resetStore(), data = {
          stringRequired: '1-stringRequired',
          dateRequired:   moment().add('days', 5).toDate(),
          intRequired:    -1,
@@ -128,13 +134,12 @@ jQuery(function($) {
       };
 
       // we perform one assertion for each field plus one assertion for the id returned by create
-      expect(Object.keys(modelUnkeyed.fields).length+1);
+      expect(Object.keys(genericModel.fields).length+1);
 
       startSequence()
-         .create(store, modelUnkeyed, data)
+         .create(store, genericModel, data)
          .then(function(id) { ok(exists(id), 'resolves with correct id'); })
-         .waitForAdd(modelUnkeyed.table)
-         .check(modelUnkeyed.fields, data)
+         .check(genericModel, data)
          .end()
          .fail(function(e) { console.error(e); ok(false, e.toString());})
          .always(start);
@@ -142,27 +147,27 @@ jQuery(function($) {
    });
 
    asyncTest("#create (empty record)", function() {
-      var store = newStore(), data = {};
+      var store = resetStore(), data = {};
 
       // we perform one assertion for each field plus one assertion for the id returned by create
-      expect(Object.keys(modelUnkeyed.fields).length+1);
+      expect(Object.keys(genericModel.fields).length+1);
 
       startSequence()
-         .create(store, modelUnkeyed, data)
+         .create(store, genericModel, data)
          .then(function(id) { ok(exists(id), 'test1', 'resolves with correct id'); })
-         .waitForAdd(modelUnkeyed.table)
-         .check(modelUnkeyed.fields, data)
+         .check(genericModel, data)
          .end()
          .fail(function(e) { console.error(e); ok(false, e.toString());})
          .always(start);
    });
 
    asyncTest("#read", function() {
-      var store = newStore(), recId = new ko.sync.RecordId(modelKeyed.fields, {id: 'record123'});
+      expect(2);
+      var store = resetStore(), data = {id: 'record123'},
+          recId = new ko.sync.RecordId('id', data);
       startSequence()
-         .create(store, modelKeyed, {id: 'record123'})
-         .waitForAdd(modelKeyed.table)
-         .read(store, modelKeyed, recId)
+         .create(store, genericModel, data)
+         .read(store, genericModel, recId)
          .then(function(rec) {
             ok(rec instanceof ko.sync.Record, 'is instanceof record');
             equal(rec.get('id'), 'record123', 'has the right id');
@@ -172,27 +177,86 @@ jQuery(function($) {
          .always(start);
    });
 
+   asyncTest("#update", function() {
+      var store = resetStore(), data = {
+         id:             'test2',
+         stringRequired: '2-stringRequired',
+         dateRequired:   moment().add('days', 7).toDate(),
+         intRequired:    -2,
+         boolRequired:   false,
+         floatRequired:  1.2,
+         emailRequired:  'me2@me2.com'
+      };
+
+      expect(Object.keys(genericModel.fields).length*2);
+
+      startSequence()
+         .create(store, genericModel, genericKeyedData)
+         .check(genericModel, genericKeyedData)
+         .update(store, genericModel, data)
+         .check(genericModel, data)
+         .end()
+         .fail(function(e) { console.error(e); ok(false, e.toString());})
+         .always(start);
+   });
+
+   asyncTest("#update without key", function() {
+      expect(1);
+      var store = resetStore(), data = {
+         stringRequired: '2-stringRequired',
+         dateRequired:   moment().add('days', 7).toDate(),
+         intRequired:    -2,
+         boolRequired:   false,
+         floatRequired:  1.2,
+         emailRequired:  'me2@me2.com'
+      };
+
+      startSequence()
+         .create(store, genericModel, genericKeyedData)
+         .update(store, genericModel, data)
+         .end()
+         .fail(function(e) {
+               equal(e, 'Invalid key', 'should fail with invalid key error');
+         })
+         .always(start);
+   });
+
+   test('#update non-existing', function() {
+
+   });
+
+   asyncTest("#delete", function() {
+      expect(2);
+      var store = resetStore();
+      startSequence()
+         .create(store, genericModel, genericKeyedData)
+         .delete(store, genericModel, $.Sequence.PREV)
+         .then(function(id) {
+            // did we get return value?
+            equal(id, 'test1', 'returned id of deleted record');
+         })
+         .exists(genericModel.table, $.Sequence.PREV)
+         .then(function(x) { strictEqual(x, false, 'does not exist'); })
+         .end()
+         .fail(function(e) { ok(false, e); })
+         .always(start);
+   });
+
+   test("#delete followed by #update", function() {
+      //todo
+   });
+
+   test("#query", function() {
+      expect(1);
+      ok(false, 'Implement me!')
+   });
+
    asyncTest('sorted records', function() {
       //todo sorted data
       start();
    });
 
    test("composite keys", function() {
-      expect(1);
-      ok(false, 'Implement me!')
-   });
-
-   test("#update", function() {
-      expect(1);
-      ok(false, 'Implement me!')
-   });
-
-   test("#delete", function() {
-      expect(1);
-      ok(false, 'Implement me!')
-   });
-
-   test("#query", function() {
       expect(1);
       ok(false, 'Implement me!')
    });
@@ -217,14 +281,21 @@ jQuery(function($) {
       ok(false, 'Implement me!')
    });
 
-   function watchForEntry(storeRec) {
-      var def = $.Deferred();
-      storeRec.on('value', function(snapshot) {
+   function watchForEntry(table, recordId) {
+      var def = $.Deferred(), ref = syncRoot.child(table).child(recordId);
+      var fx = function(snapshot) {
          var rec = snapshot.val();
          if( rec !== null ) {
+            if( timeout ) { clearTimeout(timeout); timeout = null; }
+            ref.off('value', fx); // stop listening for changes
             def.resolve(rec);
          }
-      });
+      };
+      ref.on('value', fx);
+      var timeout = setTimeout(function() {
+         def.reject('timed out');
+         timeout = null;
+      }, 5000); // die after 5 seconds if we don't have any data
       return def.promise();
    }
 
@@ -253,7 +324,8 @@ jQuery(function($) {
    /**
     * @return {ko.sync.stores.FirebaseStore}
     */
-   function newStore() {
+   function resetStore() {
+      clearAllRecords();
       return new ko.sync.stores.FirebaseStore(FIREBASE_URL, FIREBASE_TEST_URL);
    }
 

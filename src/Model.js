@@ -18,6 +18,7 @@
          this.key           = props.primaryKey;
          this.sort          = props.sortField;
          this.validator     = props.validator;
+         this.counter       = props.updateCounter;
          this.fields        = _processFields(defaults, props.fields);
          this.recordFactory = props.recordFactory || new RecordFactory(this);
       },
@@ -40,6 +41,7 @@
       minLength: 0,
       maxLength: 0,
       valid:     null, //todo tie this to this.validator?
+      updateCounter: 'update_counter',
       format:    function(v) { return v; }
    };
 
@@ -85,6 +87,7 @@
        * @param {Array|string} fields
        * @param {object} [data]
        * @param {string} [separator]
+       * @constructor
        */
       init: function(fields, data, separator) {
          var i;

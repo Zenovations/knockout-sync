@@ -37,9 +37,11 @@
     *
     * @param {Model}  model   the schema for a data model
     * @param {Record} record  the data to be inserted
-    * @return {Promise} a jQuery.Deferred().promise() object
+    * @return {Promise} resolves to the record's {string} id
     */
    FirebaseStore.prototype.create = function(model, record) {
+      //todo use a transaction?
+      //todo create an update counter?
       return ko.sync.handle(this, function(cb, eb) { // creates a promise
          var table = this.base.child(model.table),
              // fetch the record using .child()
@@ -59,7 +61,7 @@
     *
     * @param {Model}           model
     * @param {RecordId|Record} recOrId
-    * @return {Promise}
+    * @return {Promise} resolves to the Record object
     */
    FirebaseStore.prototype.read         = function(model, recOrId) {
       return ko.sync.handle(this, function(cb) {
@@ -72,11 +74,37 @@
       });
    };
 
-   FirebaseStore.prototype.update       = function(model, rec) {}; //todo
-   FirebaseStore.prototype.delete       = function(model, recOrId) {}; //todo
+   /**
+    * Update an existing record in the database. If the record does not already exist, it will be created.
+    * @param {Model}  model
+    * @param {Record} rec
+    * @return {Promise} resolves to the record's {string}id
+    */
+   FirebaseStore.prototype.update       = function(model, rec) {
+      //todo use a transaction? (currently, a delete followed by an update will re-create the record)
+      //todo use an update counter?
+      return ko.sync.handle(this, function(cb, eb) {
+         if( !rec.hasKey() ) { eb('Invalid key'); }
+         var table = this.base.child(model.table), key = _keyFor(rec), ref = _buildRecord(table, key);
+         ref.set(cleanData(model.fields, rec.getData()), function(success) {
+            (success && cb(ref.name())) || eb(ref.name());
+         });
+      });
+   };
+
+   FirebaseStore.prototype.delete       = function(model, recOrId) {
+      //todo update the (soon to be) update counter?
+      return ko.sync.handle(this, function(cb, eb) {
+         var ref = _buildRecord(this.base.child(model.table), _keyFor(recOrId));
+         ref.remove(function(success) {
+            (success && cb(ref.name())) || eb(ref.name());
+         })
+      });
+   };
+
    FirebaseStore.prototype.query        = function(model, params) {}; //todo
 
-   FirebaseStore.prototype.sync         = function(callback) {}; //todo
+   FirebaseStore.prototype.sync         = function(location, callback) {}; //todo
    FirebaseStore.prototype.onDisconnect = function(callback) {}; //todo
    FirebaseStore.prototype.onConnect    = function(callback) {}; //todo
 
