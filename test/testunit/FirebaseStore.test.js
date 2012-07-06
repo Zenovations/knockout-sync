@@ -37,7 +37,7 @@ jQuery(function($) {
          return def;
       },
       /** Check the record by retrieving it from the database and comparing to the original (do not use the Store) */
-      check: {fx: function(model, origData, recordId) {
+      check: function(model, origData, recordId) {
          var table = model.table, fields = model.fields, k, keys = Object.keys(fields), i = keys.length;
          // because the record may have just been added, it may not be in the db yet
          // so wait for it to be added before fetching it
@@ -59,7 +59,7 @@ jQuery(function($) {
                }
             }
          }).fail(function(e) { ok(false, e); });
-      }, prevPos: 2}
+      }
    };
 
    clearAllRecords();
@@ -117,7 +117,7 @@ jQuery(function($) {
       startSequence()
          .create(store, genericModel, data)
          .then(function(id) { equal(id, data.id, 'resolves with correct id'); })
-         .check(genericModel, data)
+         .check(genericModel, data, $.Sequence.PREV)
          .end()
          .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
@@ -139,7 +139,7 @@ jQuery(function($) {
       startSequence()
          .create(store, genericModel, data)
          .then(function(id) { ok(exists(id), 'resolves with correct id'); })
-         .check(genericModel, data)
+         .check(genericModel, data, $.Sequence.PREV)
          .end()
          .fail(function(e) { console.error(e); ok(false, e.toString());})
          .always(start);
@@ -155,7 +155,7 @@ jQuery(function($) {
       startSequence()
          .create(store, genericModel, data)
          .then(function(id) { ok(exists(id), 'test1', 'resolves with correct id'); })
-         .check(genericModel, data)
+         .check(genericModel, data, $.Sequence.PREV)
          .end()
          .fail(function(e) { console.error(e); ok(false, e.toString());})
          .always(start);
@@ -177,9 +177,21 @@ jQuery(function($) {
          .always(start);
    });
 
+   asyncTest('#read (non-existing record)', function() {
+      var store = resetStore(), recId = new ko.sync.RecordId('id', {id: 'i am not a record'});
+      startSequence()
+         .read(store, genericModel, recId)
+         .then(function(rec) {
+            strictEqual(rec, null, 'record should be null');
+         })
+         .end()
+         .fail(function(e) { console.error(e); ok(false, e.toString());})
+         .always(start);
+   });
+
    asyncTest("#update", function() {
       var store = resetStore(), data = {
-         id:             'test2',
+         id:             'test1',
          stringRequired: '2-stringRequired',
          dateRequired:   moment().add('days', 7).toDate(),
          intRequired:    -2,
@@ -192,9 +204,9 @@ jQuery(function($) {
 
       startSequence()
          .create(store, genericModel, genericKeyedData)
-         .check(genericModel, genericKeyedData)
+         .check(genericModel, genericKeyedData, data.id)
          .update(store, genericModel, data)
-         .check(genericModel, data)
+         .check(genericModel, data, data.id)
          .end()
          .fail(function(e) { console.error(e); ok(false, e.toString());})
          .always(start);
@@ -221,8 +233,26 @@ jQuery(function($) {
          .always(start);
    });
 
-   test('#update non-existing', function() {
+   asyncTest('#update non-existing', function() {
+      expect(1);
+      var store = resetStore(), data = {
+         id: 'I am not a valid record id',
+         stringRequired: '2-stringRequired',
+         dateRequired:   moment().add('days', 7).toDate(),
+         intRequired:    -2,
+         boolRequired:   false,
+         floatRequired:  1.2,
+         emailRequired:  'me2@me2.com'
+      };
 
+      startSequence()
+         .create(store, genericModel, genericKeyedData)
+         .update(store, genericModel, data)
+         .end()
+         .fail(function(e) {
+            equal(e, 'Record does not exist', 'should fail because record does not exist');
+         })
+         .always(start);
    });
 
    asyncTest("#delete", function() {
@@ -242,11 +272,21 @@ jQuery(function($) {
          .always(start);
    });
 
-   test("#delete followed by #update", function() {
-      //todo
+   asyncTest("#delete followed by #update", function() {
+      expect(1);
+      var store = resetStore(), newData = $.extend({}, genericKeyedData, {intRequired: 99});
+      startSequence()
+         .create(store, genericModel, genericKeyedData)
+         .delete(store, genericModel, $.Sequence.PREV)
+         .update(store, genericModel, newData)
+         .end()
+         .fail(function(e) {
+            equal(e, 'Record does not exist', 'should fail because record does not exist');
+         })
+         .always(start);
    });
 
-   test("#query", function() {
+   test("#load", function() {
       expect(1);
       ok(false, 'Implement me!')
    });

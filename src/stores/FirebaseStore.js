@@ -18,14 +18,15 @@
     * @param {string} [base] the child under the Firebase URL which is the root level of our data
     * @constructor
     */
-   function FirebaseStore(url, base) {
-      //todo extend Store
-      this.base = _base(new Firebase(url), base);
-   }
+   var FirebaseStore = ko.sync.Store.extend({
+      init: function(url, base) {
+         this.base = _base(new Firebase(url), base);
+      }
+   });
 
    /**
-    * Writes a new record to the database. It does not check to make sure the record doesn't exist, so if it
-    * is keyed and has an ID already in the database, that record will be overwritten.
+    * Writes a new record to the database. If the record exists, then it will be overwritten (does not check that
+    * id is not in database).
     *
     * The Firebase store accepts both keyed and unkeyed records. For keyed records, models should normally set
     * the `model.priorityField` property, as records would otherwise be ordered lexicographically. The model
@@ -40,8 +41,7 @@
     * @return {Promise} resolves to the record's {string} id
     */
    FirebaseStore.prototype.create = function(model, record) {
-      //todo use a transaction?
-      //todo create an update counter?
+      //todo sort priorities
       return ko.sync.handle(this, function(cb, eb) { // creates a promise
          var table = this.base.child(model.table),
              // fetch the record using .child()
@@ -66,34 +66,59 @@
    FirebaseStore.prototype.read         = function(model, recOrId) {
       return ko.sync.handle(this, function(cb) {
          var table = this.base.child(model.table),
-             key   = _keyFor(recOrId),
-             ref   = _buildRecord(table, key);
-         ref.once('value', function(snapshot) {
-            cb(model.newRecord(snapshot.val()));
-         });
+            key   = _keyFor(recOrId),
+            ref;
+         if( !key.isSet() ) {
+            return null;
+         }
+         else {
+            ref = _buildRecord(table, key);
+            ref.once('value', function(snapshot) {
+               var val = snapshot.val();
+               cb(val === null? val : model.newRecord(val));
+            });
+         }
       });
    };
 
    /**
-    * Update an existing record in the database. If the record does not already exist, it will be created.
+    * Update an existing record in the database. If the record does not already exist, the promise is rejected.
     * @param {Model}  model
     * @param {Record} rec
-    * @return {Promise} resolves to the record's {string}id
+    * @return {Promise} resolves to callback({string}id, {boolean}updated), where updated is true if an update occurred or false if data was not dirty
     */
    FirebaseStore.prototype.update       = function(model, rec) {
-      //todo use a transaction? (currently, a delete followed by an update will re-create the record)
-      //todo use an update counter?
+      //todo sort priorities
+      var table = this.base.child(model.table);
       return ko.sync.handle(this, function(cb, eb) {
          if( !rec.hasKey() ) { eb('Invalid key'); }
-         var table = this.base.child(model.table), key = _keyFor(rec), ref = _buildRecord(table, key);
-         ref.set(cleanData(model.fields, rec.getData()), function(success) {
-            (success && cb(ref.name())) || eb(ref.name());
-         });
+         this.read(model, rec).done(function(origRec) {
+            if( origRec === null ) { eb('Record does not exist'); }
+            else {
+               origRec.updateAll(rec);
+               if( origRec.isDirty() ) {
+                  var key = _keyFor(origRec), ref = _buildRecord(table, key);
+                  ref.set(cleanData(model.fields, rec.getData()), function(success) {
+                     (success && cb(ref.name(), true)) || eb('Synchronize failed');
+                  });
+               }
+               else {
+                  cb(origRec.getRecordId().valueOf(), false);
+               }
+            }
+         }).fail(function(e) { eb(e); });
       });
    };
 
+   /**
+    * Delete a record from the database. If the record does not exist, then it is considered already deleted (no
+    * error is generated)
+    *
+    * @param {Model}           model
+    * @param {Record|RecordId} recOrId
+    * @return {Promise} resolves with record's {string}id
+    */
    FirebaseStore.prototype.delete       = function(model, recOrId) {
-      //todo update the (soon to be) update counter?
       return ko.sync.handle(this, function(cb, eb) {
          var ref = _buildRecord(this.base.child(model.table), _keyFor(recOrId));
          ref.remove(function(success) {
@@ -102,11 +127,61 @@
       });
    };
 
-   FirebaseStore.prototype.query        = function(model, params) {}; //todo
+   /**
+    * Perform a query against the database. The options for query are fairly limited:
+    *
+    * - limit:   {int=100}      number of records to return, use 0 for all
+    * - offset:  {int=0}        start after this record, e.g.: {limit: 100, offset: 100} would return records 101-200
+    * - filter:  {function}     filter returned results using this function (true=include, false=exclude)
+    * - sort:    {array|string} Sort returned results by this field or fields. Each field specified in sort
+    *                           array could also be an object in format {field: 'field_name', desc: true} to obtain
+    *                           reversed sort order
+    *
+    * The use of `filter` is applied by stores after `limit`. Thus, when using `filter` it is important to note that
+    * less results may (and probably will) be returned than `limit`.
+    *
+    * Each record received is handled by the progressFxn, not by the fulfilled promise. The fulfilled promise simply
+    * notifies listeners that it is done retrieving records.
+    *
+    * There are no guarantees on how a store will optimize the query. It may apply the constraints before or after
+    * retrieving data, depending on the capabilities and structure of the data layer. To ensure high performance
+    * for very large data sets, and maintain store-agnostic design, implementations should use some sort of
+    * pre-built query data in an index instead of directly querying records (think NoSQL databases like
+    * DynamoDB and Firebase, not MySQL queries)
+    *
+    * Alternately, very sophisticated queries could be done external to the knockout-sync module and then
+    * injected into the synced data after.
+    *
+    * @param {Function} progressFxn called once for each record received
+    * @param {Model}  model
+    * @param {object} [params]
+    * @return {Promise} fulfilled with callback('tableName', limit) if limit is reached
+    */
+   FirebaseStore.prototype.load = function(progressFxn, model, params) {
+      var def = $.Deferred();
+      var opts = ko.utils.extend({limit: 100, offset: 0, filter: null, sort: null}, params);
+      var table = this.base.child(model.table);
+      var count = 0, offset = ~~opts.offset, limit = opts.limit? ~~opts.offset + ~~opts.limit : 0;
+      //todo if the model has a sort priority, we can use that with startAt() and endAt()
+      if( limit ) { table.limit(limit); }
+      table.forEach(function(snapshot) {
+         var data = snapshot.val();
+         if( data !== null ) {
+            count++;
+            if( count <= start ) { return; }
+            else if( count > limit ) {
+               def.resolve(model.table, opts.limit);
+               return true;
+            }
+            if( !opts.filter || opts.filter(data) ) {
+               progressFxn(data);
+            }
+         }
+      });
+      return def.promise();
+   };
 
-   FirebaseStore.prototype.sync         = function(location, callback) {}; //todo
-   FirebaseStore.prototype.onDisconnect = function(callback) {}; //todo
-   FirebaseStore.prototype.onConnect    = function(callback) {}; //todo
+   FirebaseStore.prototype.sync = function(location, callback) {}; //todo
 
    /** UTILITIES
     *****************************************************************************************/
@@ -252,4 +327,4 @@
    ko.sync || (ko.sync = {stores: []});
    ko.sync.stores.FirebaseStore = FirebaseStore;
 
-})(ko, Firebase);
+})(ko, window.Firebase);

@@ -76,7 +76,7 @@ Just call `ko.sync.use(...)` (usually from inside the view model)
 
         // add all the fields from the data model
         // this view now represents a single Record
-        ko.sync.use(this, model);
+        ko.sync.use(model, this);
 
         // add a computed field
         // (we can only refer to the model's fields, name and address, after ko.sync.use() is called!)
@@ -87,13 +87,13 @@ Just call `ko.sync.use(...)` (usually from inside the view model)
     var view = new View(model);
     ko.applyBindings(view);
 
-    // on an observableArray, which represents an array of Records
+    // on an observableArray, creates an array of Records
     var users = ko.sync.newList( model );
-    var users = ko.sync.use( ko.observableArray(), model );  // same thing
+    var users = ko.sync.use( model, ko.observableArray() );  // same thing
 
-    // on a plain object, which represents a single Record
-    var users = ko.sync.newRecord( model );
-    var users = ko.sync.use( {}, model ); // same thing
+    // on an object, creates a single Record
+    var view = ko.sync.newView( model );
+    var view = ko.sync.use( model, {} ); // same thing
 ```
 
 ### Perform CRUD operations on Knockout observables
@@ -101,14 +101,14 @@ Just call `ko.sync.use(...)` (usually from inside the view model)
 Once `ko.sync.use()` is called on a view/object, it has its own CRUD methods:
 
 ```javascript
-      var view = ko.sync.use({}, model);
+      var view = ko.sync.newView(model);
 
       // create a user from some json data we got elsewhere
       // if there is an ID field, then it's an existing record, otherwise it's a new one
       view.crud.create( {data...} );
 
       // or get a user from the database
-      view.crud.load userId );
+      view.crud.load( userId );
 
       // update the user
       view.saveButtonClick = function() {
@@ -230,13 +230,13 @@ the dirty flag. However, autosave will not be run and save() must be called manu
    var list = ko.sync.use( ko.observableArray(), model ); // same thing
 ```
 
-### ko.sync.newRecord( model [, data] )
+### ko.sync.newView( model [, data] )
 
 @param {Model} model
 @param {Object} [data]
 @returns {object} with `Crud` methods attached
 
-Creates an object representing a single Record. This Record is suitable for use as a Knockout.js View or for just
+Creates a view representing a single Record. This Record is suitable for use as a Knockout.js View or for just
 about anything else an object with observable attributes might be useful for.
 
 If `data` is specified, then it is loaded into the new record using the same behaviors as `Crud.create()` regarding

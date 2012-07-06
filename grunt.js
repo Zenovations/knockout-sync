@@ -10,25 +10,30 @@ module.exports = function(grunt) {
             '<%= grunt.template.today("yyyy-mm-dd") %>\n' +
             '<%= pkg.homepage ? "* " + pkg.homepage + "\n" : "" %>' +
             '* Copyright (c) <%= grunt.template.today("yyyy") %> <%= pkg.author.name %>;' +
-            ' Licensed <%= _.pluck(pkg.licenses, "type").join(", ") %> */'
+            ' Licensed <%= _.pluck(pkg.licenses, "type").join(", ") %> */\n\n(function(global) {\n'+
+            'var ko = global.ko, jQuery = global.jQuery;\n\n'
+         , footer: '\n}).call({}, this);\n'
       },
       concat: {
          dist: {
-            src: ['<banner:meta.banner>',
-                  'lib/**/*.js',
-                  '<file_strip_banner:src/<%= pkg.name %>.js>',
-                  'src/Model.js'
+            src: [
+               '<banner:meta.banner>',
+               'lib/**/*.js',
+               'src/*.js',
+               'src/classes/*.js',
+               '<banner:meta.footer>'
             ],
             dest: 'dist/<%= pkg.name %>.js'
          },
          all: {
-            src: ['<banner:meta.banner>',
+            src: [
+               '<banner:meta.banner>',
                'lib/**/*.js',
-               'src/Class.js',
-               '<file_strip_banner:src/<%= pkg.name %>.js>',
-               'src/Model.js',
-               'src/Validator.js',
-               'src/stores/*.js'
+               'src/*.js',
+               'src/classes/*.js',
+               'src/validators/*.js',
+               'src/stores/*.js',
+               '<banner:meta.footer>'
             ],
             dest: 'dist/<%= pkg.name %>.all.js'
          }

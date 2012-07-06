@@ -33,13 +33,6 @@
       return target;
    };
 
-   ko.sync || (ko.sync = {});
-   ko.sync.stores || (ko.sync.stores = []);
-
-   ko.sync.use = function() {}; //todo
-   ko.sync.newList = function() {}; //todo
-   ko.sync.newRecord = function() {}; //todo
-
    //todo does this have much better performance?
    //todo if so, we can use the isDirty({read: ..., write...}) approach
    //ko.extenders.dirty = function(target, startDirty) {
@@ -197,9 +190,15 @@
    }
 
    ko.sync || (ko.sync = {});
+   ko.sync.stores || (ko.sync.stores = []);
+
+   ko.sync.use = function() {}; //todo
+   ko.sync.newView = function(model) {}; //todo
+   ko.sync.newList = function(model) {}; //todo
+
    ko.sync.when   = When;
    ko.sync.handle = Handle;
 
-
+   ko.sync.instanceId = moment().unix()+':'+(((1+Math.random())*1000)|0);
 
 })(jQuery, ko);
