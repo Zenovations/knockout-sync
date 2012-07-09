@@ -1,8 +1,10 @@
 /*******************************************
  * RecordList class for knockout-sync
  *******************************************/
-(function(ko) {
+(function() {
    "use strict";
+
+   var ko = this.ko;
 
    /**
     * @var ko.sync.RecordList
@@ -48,8 +50,8 @@
          }
       }
       else {
+         record.subscribe(_.bind(this.updated, this));
          var key = record.getKey().valueOf();
-         record.subscribe(this.updated);
          this.recs[key] = record;
          this.added.push(key);
          this.dirty = true;
@@ -83,7 +85,7 @@
             this.add(record);
             break;
          default:
-            if( _recordFound(this, record) && record.isDirty() ) {
+            if( record.isDirty() && record.getKey().valueOf() in this.recs ) {
                this.changed.push(record);
                this.dirty = true;
             }
@@ -94,7 +96,7 @@
    RecordList.Iterator = function(list) {
       this.curr = -1;
       // snapshot to guarantee iterator is not mucked up if synced records update during iteration
-      this.recs = _.prototype.slice.call(list.recs);
+      this.recs = _.toArray(list.recs);
       this.len  = this.recs.length;
    };
 
@@ -121,5 +123,5 @@
    ko.sync || (ko.sync = {});
    ko.sync.RecordList = RecordList;
 
-})(ko);
+}).call(this);
 

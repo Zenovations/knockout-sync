@@ -1,8 +1,8 @@
 /*******************************************
  * FirebaseStore for knockout-sync
  *******************************************/
-(function(ko, Firebase) {
-   var undef;
+(function() {
+   var undef, ko = this.ko, Firebase = this.Firebase;
 
    /** IDE CLUES
     **********************/
@@ -327,4 +327,4 @@
    ko.sync || (ko.sync = {stores: []});
    ko.sync.stores.FirebaseStore = FirebaseStore;
 
-})(ko, window.Firebase);
+}).call(this);

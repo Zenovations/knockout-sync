@@ -71,5 +71,5 @@
       return v !== null && v !== undefined;
    }
 
-})(ko);
+})(this.ko);
 

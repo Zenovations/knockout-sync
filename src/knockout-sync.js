@@ -192,7 +192,7 @@
    ko.sync || (ko.sync = {});
    ko.sync.stores || (ko.sync.stores = []);
 
-   ko.sync.use = function() {}; //todo
+   ko.sync.use = function(model, target) {}; //todo
    ko.sync.newView = function(model) {}; //todo
    ko.sync.newList = function(model) {}; //todo
 

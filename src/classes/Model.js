@@ -88,4 +88,4 @@
     */
    ko.sync.Model = Model;
 
-})(ko);
+})(this.ko);

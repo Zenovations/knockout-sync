@@ -10,8 +10,8 @@ module.exports = function(grunt) {
             '<%= grunt.template.today("yyyy-mm-dd") %>\n' +
             '<%= pkg.homepage ? "* " + pkg.homepage + "\n" : "" %>' +
             '* Copyright (c) <%= grunt.template.today("yyyy") %> <%= pkg.author.name %>;' +
-            ' Licensed <%= _.pluck(pkg.licenses, "type").join(", ") %> */\n\n(function(global) {\n'+
-            'var ko = global.ko, jQuery = global.jQuery;\n\n'
+            ' Licensed <%= _.pluck(pkg.licenses, "type").join(", ") %> */\n\n(function(root) {\n'+
+            'var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;\n\n'
          , footer: '\n}).call({}, this);\n'
       },
       concat: {

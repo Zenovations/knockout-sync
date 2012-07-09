@@ -38,12 +38,14 @@
       get:             function(field) {
          return this.data[field];
       },
-      set:             function(field, val) {
+      set:             function(field, val, suppressNotifications) {
          if( this.data.hasOwnProperty(field) && this.data[field] !== val ) {
             this.changed = true;
             //todo validate!
             this.data[field] = val;
-            _updateListeners(this.listeners, this);
+            if( ! suppressNotifications ) {
+               _updateListeners(this.listeners, this);
+            }
             return true;
          }
          return false;
@@ -61,11 +63,14 @@
        * @param {Record|object} newVals
        */
       updateAll: function(newVals) {
-         var k, data = (newVals instanceof Record)? newVals.getData() : newVals;
+         var k, data = (newVals instanceof Record)? newVals.getData() : newVals, changes = false;
          for(k in data) {
             if( data.hasOwnProperty(k) ) {
-               this.set(k, data[k]);
+               changes |= this.set(k, data[k], true);
             }
+         }
+         if( changes ) {
+            _updateListeners(this.listeners, this);
          }
          return this.changed;
       },
@@ -73,7 +78,7 @@
        * Invokes `callback` with this record object whenever a change occurs to the data
        */
       subscribe: function(callback) {
-         this.listeners.push(callback.update);
+         this.listeners.push(callback);
       }
    });
 
@@ -105,5 +110,5 @@
    ko.sync || (ko.sync = {});
    ko.sync.Record = Record;
 
-})(ko);
+})(this.ko);
 

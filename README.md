@@ -1,6 +1,8 @@
 
 # KnockoutSync
 
+<span style="color: red">This is pre-alpha software (unstable)</span>
+
 KnockoutSync is a persistence, validation, and synchronization library that connects Knockout.js with a data Store (a RESTful server, Firebase, etc).
 
 ## Installation
@@ -65,46 +67,57 @@ Alternately, if you want to include your own data store or validator:
     });
 ```
 
-### Apply the model to a view, observableArray, array, or plain old object
-
-Just call `ko.sync.use(...)` (usually from inside the view model)
+### Create a new view using the model
 
 ```javascript
-    // initialize a view model using the data model
-    function View(model) {
-        var self = this;
+   // creates a single Record
+   var view = ko.sync.newView( model );
+   ko.applyBindings(view);
 
-        // add all the fields from the data model
-        // this view now represents a single Record
-        ko.sync.use(model, this);
+   // the same thing
+   var view = ko.sync.use( model, {} );
+   ko.applyBindings(view);
+```
 
-        // add a computed field
-        // (we can only refer to the model's fields, name and address, after ko.sync.use() is called!)
-        self.emailUrl = ko.computed(function() {
-           'mailto: ' + self.name() + '<' + self.address() + '>';
-        });
-    };
-    var view = new View(model);
-    ko.applyBindings(view);
+### Create a new observableArray using the model
 
-    // on an observableArray, creates an array of Records
-    var users = ko.sync.newList( model );
-    var users = ko.sync.use( model, ko.observableArray() );  // same thing
+```javascript
+   // creates an array of Records (a RecordList)
+   var users = ko.sync.newList( model );
 
-    // on an object, creates a single Record
-    var view = ko.sync.newView( model );
-    var view = ko.sync.use( model, {} ); // same thing
+   // does the same thing
+   var users = ko.sync.use( model, ko.observableArray() );
+```
+
+### Add model data to an existing view
+
+```javascript
+   // or initialize a more complex view using the data model
+   function View(model) {
+      var self = this;
+
+      // add all the fields from the data model
+      // this view now represents a single Record
+      ko.sync.use(model, this);
+
+      // add a computed field
+      // (we can only refer to the model's fields, name and address, after ko.sync.use() is called!)
+      self.emailUrl = ko.computed(function() {
+         'mailto: ' + self.name() + '<' + self.address() + '>';
+      });
+   };
+   var view = new View(model);
+   ko.applyBindings(view);
 ```
 
 ### Perform CRUD operations on Knockout observables
 
-Once `ko.sync.use()` is called on a view/object, it has its own CRUD methods:
+Once `ko.sync.use()` is called on a view/object/array, it has its own CRUD methods:
 
 ```javascript
       var view = ko.sync.newView(model);
 
       // create a user from some json data we got elsewhere
-      // if there is an ID field, then it's an existing record, otherwise it's a new one
       view.crud.create( {data...} );
 
       // or get a user from the database
