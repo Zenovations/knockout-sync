@@ -50,11 +50,14 @@
          }
          return false;
       },
-      isDirty:         function() {
+      isDirty:         function(newVal) {
+         if( typeof(newVal) === 'boolean' ) {
+            this.changed = newVal;
+         }
          return this.changed;
       },
       clearDirty:      function() {
-         this.changed = false;
+         return this.isDirty(false);
       },
       isValid:         function() {
          return !this.validator || this.validator.validate(this);

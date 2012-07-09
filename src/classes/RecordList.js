@@ -19,8 +19,7 @@
       this.dirty   = false;
       this.model   = model;
       this.recs    = {};
-      if( records ) { this.add(records); }
-      this.checkpoint();
+      if( records ) { this.load(records); }
    };
 
    RecordList.prototype.checkpoint = function() {
@@ -50,11 +49,25 @@
          }
       }
       else {
+         record.isDirty(true);
          record.subscribe(_.bind(this.updated, this));
          var key = record.getKey().valueOf();
-         this.recs[key] = record;
          this.added.push(key);
          this.dirty = true;
+         this.load(record);
+      }
+   };
+
+   RecordList.prototype.load = function(record) {
+      if(_.isArray(record)) {
+         var i = -1, len = record.length;
+         while(++i < len) {
+            this.load(record[i]);
+         }
+      }
+      else {
+         var key = record.getKey().valueOf();
+         this.recs[key] = record;
       }
    };
 

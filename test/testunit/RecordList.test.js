@@ -6,23 +6,21 @@ jQuery(function($) {
    var genericModel = new ko.sync.Model(ko.sync.TestData.genericModelProps);
    var genericData  = $.extend({}, ko.sync.TestData.genericDataWithId);
 
+   // create a generic list of test records
+   function testRecord(model, base, i) {
+      var data = $.extend({}, base);
+      data.id = 'record-'+i;
+      data.requiredInt = i;
+      data.requiredFloat = i + (i * .01);
+      data.requiredString = 'string-'+i;
+      return model.newRecord(data);
+   }
+
    function testData(model, base, len) {
       var recs = [];
-
-      // create a generic list of test records
-      function _aRec(model, base, i) {
-         var data = $.extend({}, base);
-         data.id = 'record-'+i;
-         data.requiredInt = i;
-         data.requiredFloat = i + (i * .01);
-         data.requiredString = 'string-'+i;
-         return model.newRecord(data);
-      }
-
       for(var i = 1; i <= len; i++) {
-         recs.push(_aRec(genericModel, genericData, i));
+         recs.push(testRecord(genericModel, genericData, i));
       }
-
       return recs;
    }
 
@@ -59,7 +57,27 @@ jQuery(function($) {
    });
 
    test('#add', function() {
-      //todo-test
+      var data = testData(genericModel, genericData, 5), list = new ko.sync.RecordList(genericModel, data.slice(0, 4)),
+          newRec = testRecord(genericModel, data.slice(4,5)[0]), key = newRec.getKey().valueOf();
+      list.checkpoint();
+      strictEqual(list.isDirty(), false, 'list is not dirty before add');
+      ok(_.indexOf(list.added, key) < 0, 'list.added does not contain record before add');
+      list.add(newRec);
+      strictEqual(list.isDirty(), true, 'list is dirty after add');
+      strictEqual(newRec.isDirty(), true, 'rec should be dirty after add');
+      ok(_.indexOf(list.added, key) >= 0, 'list.added contains the newly added record');
+   });
+
+   test('#load', function() {
+      var data = testData(genericModel, genericData, 5), list = new ko.sync.RecordList(genericModel, data.slice(0, 4)),
+         newRec = testRecord(genericModel, data.slice(4,5)[0]), key = newRec.getKey().valueOf();
+      list.checkpoint();
+      strictEqual(list.isDirty(), false, 'list is not dirty before push');
+      ok(!(key in list.recs), 'list does not contain record before push');
+      list.load(newRec);
+      strictEqual(list.isDirty(), false, 'list is not dirty after push');
+      strictEqual(newRec.isDirty(), false, 'rec should not be dirty after push');
+      ok(key in list.recs, 'list contains record after push');
    });
 
    test('#remove', function() {
