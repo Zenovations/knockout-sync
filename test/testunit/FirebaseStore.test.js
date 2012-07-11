@@ -6,6 +6,12 @@ jQuery(function($) {
    var FIREBASE_URL = 'http://gamma.firebase.com/wordspot';
    var FIREBASE_TEST_URL = 'GitHub/firebase-sync';
    var syncRoot = new window.Firebase(FIREBASE_URL+'/'+FIREBASE_TEST_URL);
+   var TestData = ko.sync.TestData;
+   var genericModel = new ko.sync.Model(TestData.genericModelProps);
+   //todo composite key
+   var genericKeyedData = TestData.genericData;
+   var genericUnkeyedData = TestData.genericDataWithoutId;
+   var Util = ko.sync.stores.FirebaseStore.Util;
 
    var sequenceMethods = {
       create: function(store, model, data) {
@@ -41,7 +47,7 @@ jQuery(function($) {
          var table = model.table, fields = model.fields, k, keys = Object.keys(fields), i = keys.length;
          // because the record may have just been added, it may not be in the db yet
          // so wait for it to be added before fetching it
-         watchForEntry(table, recordId).done(function(resultData) {
+         return watchForEntry(table, recordId).done(function(resultData) {
             while(i--) {
                k = keys[i];
                if( origData.hasOwnProperty(k) ) {
@@ -58,53 +64,11 @@ jQuery(function($) {
                   equal(resultData[k], getDefaultValue(fields[k].type), k+' has correct default');
                }
             }
-         }).fail(function(e) { ok(false, e); });
+         });
       }
    };
 
    clearAllRecords();
-
-   var genericModel = new ko.sync.Model({
-      dataTable: 'TableKeyed',
-      primaryKey: 'id',
-      fields: {
-         id:             { required: true,  persist: true, type: 'string' },
-         stringOptional: { required: false, persist: true, type: 'string' },
-         stringRequired: { required: true,  persist: true, type: 'string' },
-         dateOptional:   { required: false, persist: true, type: 'date' },
-         dateRequired:   { required: true,  persist: true, type: 'date' },
-         intOptional:    { required: false, persist: true, type: 'int' },
-         intRequired:    { required: true,  persist: true, type: 'int' },
-         boolOptional:   { required: false, persist: true, type: 'boolean' },
-         boolRequired:   { required: true,  persist: true, type: 'boolean' },
-         floatOptional:  { required: false, persist: true, type: 'float' },
-         floatRequired:  { required: true,  persist: true, type: 'float' },
-         emailOptional:  { required: false, persist: true, type: 'email' },
-         emailRequired:  { required: true,  persist: true, type: 'email' }
-      }
-   });
-
-   //todo composite key
-
-   var genericKeyedData = {
-      id:             'test1',
-      stringRequired: '1-stringRequired',
-      dateRequired:   moment().add('days', 5).toDate(),
-      intRequired:    -1,
-      boolRequired:   true,
-      floatRequired:  1.1,
-      emailRequired:  'me1@me1.com'
-   };
-
-   var genericUnkeyedData = {
-      stringOptional: 'optional-string',
-      stringRequired: 'required-string',
-      dateRequired:   new Date(),
-      intRequired:    -25,
-      boolRequired:   true,
-      floatRequired:  2.5,
-      emailRequired:  'two@five.com'
-   };
 
    module("FirebaseStore");
 
@@ -119,29 +83,22 @@ jQuery(function($) {
          .then(function(id) { equal(id, data.id, 'resolves with correct id'); })
          .check(genericModel, data, $.Sequence.PREV)
          .end()
-         .fail(function(e) { console.error(e); ok(false, e.toString()); })
+            .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#create (unkeyed record)", function() {
-      var store = resetStore(), data = {
-         stringRequired: '1-stringRequired',
-         dateRequired:   moment().add('days', 5).toDate(),
-         intRequired:    -1,
-         boolRequired:   true,
-         floatRequired:  1.1,
-         emailRequired:  'me1@me1.com'
-      };
+      var store = resetStore(), data = genericUnkeyedData;
 
       // we perform one assertion for each field plus one assertion for the id returned by create
       expect(Object.keys(genericModel.fields).length+1);
 
       startSequence()
          .create(store, genericModel, data)
-         .then(function(id) { ok(exists(id), 'resolves with correct id'); })
+         .then(function(id) { ok(exists(id), 'resolves with an id'); })
          .check(genericModel, data, $.Sequence.PREV)
          .end()
-         .fail(function(e) { console.error(e); ok(false, e.toString());})
+            .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
 
    });
@@ -157,7 +114,7 @@ jQuery(function($) {
          .then(function(id) { ok(exists(id), 'test1', 'resolves with correct id'); })
          .check(genericModel, data, $.Sequence.PREV)
          .end()
-         .fail(function(e) { console.error(e); ok(false, e.toString());})
+            .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
@@ -173,20 +130,22 @@ jQuery(function($) {
             equal(rec.get('id'), 'record123', 'has the right id');
          })
          .end()
-         .fail(function(e) { console.error(e); ok(false, e.toString());})
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest('#read (non-existing record)', function() {
-      var store = resetStore(), recId = new ko.sync.RecordId('id', {id: 'i am not a record'});
-      startSequence()
-         .read(store, genericModel, recId)
-         .then(function(rec) {
-            strictEqual(rec, null, 'record should be null');
-         })
-         .end()
-         .fail(function(e) { console.error(e); ok(false, e.toString());})
-         .always(start);
+      expect(1);
+      var store = resetStore(), recId = TestData.makeRecordId('i am not a record');
+//      startSequence()
+//         .read(store, genericModel, recId)
+//         .then(function(rec) {
+//            strictEqual(rec, null, 'record should be null');
+//         })
+//         .end()
+//         .fail(function(e) { console.error(e); ok(false, e.toString()); })
+//         .always(start);
+      start();
    });
 
    asyncTest("#update", function() {
@@ -249,6 +208,9 @@ jQuery(function($) {
          .create(store, genericModel, genericKeyedData)
          .update(store, genericModel, data)
          .end()
+            .done(function() {
+               ok(false, 'should not succeed (record does not exist)');
+            })
          .fail(function(e) {
             equal(e, 'Record does not exist', 'should fail because record does not exist');
          })
@@ -321,21 +283,20 @@ jQuery(function($) {
       ok(false, 'Implement me!')
    });
 
-   function watchForEntry(table, recordId) {
-      var def = $.Deferred(), ref = syncRoot.child(table).child(recordId);
-      var fx = function(snapshot) {
+   function watchForEntry(table, hashKey) {
+      var tableRef = syncRoot.child(table);
+      var def = $.Deferred();
+      var timeout = setTimeout(function() {
+         def.reject('record did not sync in 5 seconds');
+         timeout = null;
+      }, 5000); // die after 5 seconds if we don't have any data
+      tableRef.child(hashKey).on('value', function(snapshot) {
          var rec = snapshot.val();
          if( rec !== null ) {
             if( timeout ) { clearTimeout(timeout); timeout = null; }
-            ref.off('value', fx); // stop listening for changes
             def.resolve(rec);
          }
-      };
-      ref.on('value', fx);
-      var timeout = setTimeout(function() {
-         def.reject('timed out');
-         timeout = null;
-      }, 5000); // die after 5 seconds if we don't have any data
+      });
       return def.promise();
    }
 
@@ -344,13 +305,13 @@ jQuery(function($) {
     * @return {jQuery.Sequence}
     */
    function startSequence(timeout) {
-      timeout || (timeout = 5000);
+      timeout || (timeout = 2000);
       var seq = $.Sequence.start(sequenceMethods), timeoutRef;
 
       if( timeout ) {
          timeoutRef = setTimeout(function() {
             timeoutRef = null;
-            seq.abort(new Error('timeout exceeded'));
+            seq.abort('timeout exceeded');
          }, timeout);
       }
 

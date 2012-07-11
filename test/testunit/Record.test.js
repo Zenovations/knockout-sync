@@ -23,14 +23,14 @@ jQuery(function($) {
 
    test("#getRecordId", function() {
       var model = new ko.sync.Model(ko.sync.TestData.genericModelProps),
-         rec = new ko.sync.Record(model, ko.sync.TestData.genericDataWithId),
-         id  = new ko.sync.RecordId(model.key, ko.sync.TestData.genericDataWithId);
+         rec = new ko.sync.Record(model, ko.sync.TestData.genericData),
+         id  = new ko.sync.RecordId(model.key, ko.sync.TestData.genericData);
       ok(id.equals(rec.getRecordId()), 'id ('+id+')should equal what we put in record ('+rec.getRecordId()+')');
    });
 
    test("#getSortPriority", function() {
-      var data  = $.extend({}, ko.sync.TestData.genericData, {intRequired: 50}),
-         model = new ko.sync.Model(ko.sync.TestData.genericModelWithSort),
+      var data  = $.extend({}, ko.sync.TestData.genericDataWithoutId, {intRequired: 50}),
+         model = new ko.sync.Model(ko.sync.TestData.genericModelPropsWithSort),
          rec   = new ko.sync.Record(model, data);
       strictEqual(rec.getSortPriority(), 50, 'sortPriority set correctly');
 
@@ -62,25 +62,26 @@ jQuery(function($) {
       var rec;
 
       // without key
-      strictEqual(_buildARecord().getKey().valueOf(), null, 'no key');
+      rec = _buildARecord();
+      ok(rec.hashKey().match(/^tmp[.][0-9]+/) && rec.hasKey() === false, 'no key');
 
       // with key
-      strictEqual(_buildARecord(true).getKey().valueOf(), 'record123', 'has a key');
+      strictEqual(_buildARecord(true).hashKey(), 'record123', 'has a key');
 
       // composite key with a null
       rec = _buildARecord(null, false, {primaryKey: ['id', 'intRequired']});
-      strictEqual(rec.getKey().valueOf(), null, 'no key on composite with null');
+      ok(rec.hashKey().match(/^tmp[.][0-9]+/) && rec.hasKey() === false, 'no key on composite with null');
 
       // composite key set
       rec = _buildARecord({intRequired: 10}, true,
          {primaryKey: ['id', 'intRequired']});
-      strictEqual(rec.getKey().valueOf(), 'record123|10', 'key set on composite');
+      strictEqual(rec.hashKey(), 'record123|10', 'key set on composite');
    });
 
    test("#getData", function() {
       var model = _buildAModel(),
          defaults = _fullData(model, {}),
-         genericData = _fullData(model, ko.sync.TestData.genericData),
+         genericData = _fullData(model, ko.sync.TestData.genericDataWithoutId),
          emptyRec = new ko.sync.Record(model, {});
 
       // make sure defaults are used
@@ -119,6 +120,14 @@ jQuery(function($) {
       strictEqual(rec.isDirty(), false, 'not dirty after setting non-existing field');
    });
 
+   test('#hashKey', function() {
+      var rec = _buildARecord(true);
+      strictEqual(rec.hashKey(), rec.getKey().hashKey(), 'with temporary id');
+
+      rec = _buildARecord();
+      strictEqual(rec.hashKey(), rec.getKey().hashKey(), 'with permanent id');
+   });
+
    test('#subscribe', function() {
       //todo-test
    });
@@ -136,8 +145,8 @@ jQuery(function($) {
     */
    function _buildARecord(addData, withId, modelProps) {
       var args = _buildArgs(arguments), data;
-      if( args.withId ) { data = $.extend({}, ko.sync.TestData.genericDataWithId, args.data); }
-      else { data = $.extend({}, ko.sync.TestData.genericData, args.data); }
+      if( args.withId ) { data = $.extend({}, ko.sync.TestData.genericData, args.data); }
+      else { data = $.extend({}, ko.sync.TestData.genericDataWithoutId, args.data); }
       return new ko.sync.Record(_buildAModel(args.model), data);
    }
 

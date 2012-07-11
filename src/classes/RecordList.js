@@ -5,6 +5,7 @@
    "use strict";
 
    var ko = this.ko;
+   var _ = this._;
 
    /**
     * @var ko.sync.RecordList
@@ -50,8 +51,7 @@
       }
       else {
          record.isDirty(true);
-         record.subscribe(_.bind(this.updated, this));
-         var key = record.getKey().valueOf();
+         var key = record.hashKey();
          this.added.push(key);
          this.dirty = true;
          this.load(record);
@@ -66,22 +66,25 @@
          }
       }
       else {
-         var key = record.getKey().valueOf();
+         record.subscribe(_.bind(this.updated, this));
+         var key = record.hashKey();
          this.recs[key] = record;
       }
    };
 
    RecordList.prototype.remove = function(recordOrId) {
-      var record = _findRecord(this.iterator(), recordOrId);
+      var record = _findRecord(this.recs, recordOrId);
       if( record ) {
-         var key = record.getKey().valueOf();
+         var key = record.hashKey();
+         record.isDirty(true);
+         this.dirty = true;
+         this.deleted.push(record);
          delete this.recs[key];
          ko.utils.arrayRemoveItem(this.recs, record);
-         this.deleted.push(record);
-         this.dirty = true;
       }
       else {
          console.log('could not find record', recordOrId);
+         console.log(this.recs);
       }
    };
 
@@ -98,7 +101,10 @@
             this.add(record);
             break;
          default:
-            if( record.isDirty() && record.getKey().valueOf() in this.recs ) {
+            if( state && state !== 'updated' ) {
+               throw new Error('Invalid status '+state);
+            }
+            if( record.isDirty() && record.hashKey() in this.recs ) {
                this.changed.push(record);
                this.dirty = true;
             }
@@ -120,17 +126,28 @@
    RecordList.Iterator.prototype.hasPrev = function() { return this.len && this.curr > 0; };
    RecordList.Iterator.prototype.hasNext = function() { return this.len && this.curr < this.len-1; };
 
-   function _findRecord(list, recId) {
-      if( typeof(recId) !== 'object' || !recId ) {
+   function _keyFor(recOrId) {
+      if( typeof(recOrId) !== 'object' || !recOrId ) {
          return null;
       }
+      else if( _.isFunction(recOrId['getKey']) ) {
+         return recOrId.getKey();
+      }
       else {
-         return list.recs[ recId.valueOf() ];
+         return recOrId;
       }
    }
 
-   function _recordFound(list, record) {
-      return _findRecord(list, record) !== null;
+   function _findRecord(list, recOrId) {
+      var key = _keyFor(recOrId);
+      if( key === null ) {
+         console.log('no key for '+recOrId);
+         return null;
+      }
+      else {
+         console.log('key for '+recOrId);
+         return list[ key.hashKey() ];
+      }
    }
 
    ko.sync || (ko.sync = {});

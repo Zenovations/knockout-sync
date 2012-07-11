@@ -32,6 +32,9 @@
       getKey:          function() {
          return this.id;
       },
+      hashKey:         function() {
+         return this.getKey().hashKey();
+      },
       getData:         function() {
          return ko.utils.extend({}, this.data);
       },

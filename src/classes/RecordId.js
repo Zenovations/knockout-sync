@@ -18,12 +18,13 @@
          this.separator = separator || RecordId.DEFAULT_SEPARATOR;
          this.multi = fields.length > 1;
          this.fields = fields;
-         this.id = _buildRecordId(this.separator, fields, data);
+         this.hash = _createHash(this.separator, fields, data);
+         this.tmpId = _isTempId(this.hash);
       },
-      isSet:              function() { return !_isTempId(this.id); },
+      isSet:              function() { return !this.tmpId; },
       isComposite:        function() { return this.multi; },
-      valueOf:            function() { return this.id; },
-      toString:           function() { return this.valueOf(); },
+      hashKey:            function() { return this.hash; },
+      toString:           function() { return this.hashKey(); },
       getCompositeFields: function() { return this.fields; },
       equals:             function(o) {
          // it is possible to match a RecordId even if it has no key, because you can check the Record's ID
@@ -31,8 +32,8 @@
          // can work as long as one is careful to always use the ID off the record and never grow new ones
          if( !this.isSet() ) { return o === this; }
          // assuming they are not the same instance, it's easiest to check the valueOf() attribute
-         return (o instanceof RecordId && o.valueOf() === this.valueOf())
-               || (typeof(o) === 'string' && o === this.valueOf());
+         return (o instanceof RecordId && o.hashKey() === this.hashKey())
+               || (typeof(o) === 'string' && o === this.hashKey());
       }
    });
    RecordId.DEFAULT_SEPARATOR = '|';
@@ -40,22 +41,22 @@
       return new RecordId(model.primaryKey, record.getData());
    };
 
-   function _isTempId(id) {
-      return id && id.match(/^[0-9]+:[0-9]+[.]tmp[.][0-9]+$/);
+   function _isTempId(hash) {
+      return (hash && hash.match(/^tmp[.][0-9]+:[0-9]+[.]/))? true : false;
    }
 
-   function _createTempId() {
-      return 'tmp.'+ko.sync.instanceId+'.'+(_.uniqueId());
+   function _createTempHash() {
+      return _.uniqueId('tmp.'+ko.sync.instanceId+'.');
    }
 
-   function _buildRecordId(separator, fields, data) {
+   function _createHash(separator, fields, data) {
       if( typeof(data) === 'object' && !_.isEmpty(data) ) {
          var s = '', f, i = fields.length;
          while(i--) {
             f = fields[i];
             // if any of the composite key fields are missing, there is no key value
             if( !exists(data[f]) ) {
-               return _createTempId();
+               return _createTempHash();
             }
             // we're iterating in reverse (50% faster in IE) so prepend
             s = data[ f ] + (s.length? separator+s : s);
@@ -63,7 +64,7 @@
          return s;
       }
       else {
-         return _createTempId();
+         return _createTempHash();
       }
    }
 

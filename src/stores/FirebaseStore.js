@@ -2,7 +2,7 @@
  * FirebaseStore for knockout-sync
  *******************************************/
 (function() {
-   var undef, ko = this.ko, Firebase = this.Firebase;
+   var undef, ko = this.ko, Firebase = this.Firebase, $ = this.jQuery;
 
    /** IDE CLUES
     **********************/
@@ -53,7 +53,8 @@
    };
 
    /**
-    * Read a record from the database. If the record doesn't exist, a null will be returned.
+    * Read a record from the database. If the record doesn't exist, a null will be returned. If record.hasKey()
+    * would return false, then this method will return null (can't retrieve a record with a temporary id).
     *
     * The model is used for the following fields:
     *   - model.table:  the table name is appended to the Firebase root folder to obtain the correct data
@@ -61,23 +62,14 @@
     *
     * @param {Model}           model
     * @param {RecordId|Record} recOrId
-    * @return {Promise} resolves to the Record object
+    * @return {Promise} resolves to the Record object or null if not found
     */
-   FirebaseStore.prototype.read         = function(model, recOrId) {
-      return ko.sync.handle(this, function(cb) {
-         var table = this.base.child(model.table),
+   FirebaseStore.prototype.read = function(model, recOrId) {
+      var table = this.base.child(model.table),
             key   = _keyFor(recOrId),
-            ref;
-         if( !key.isSet() ) {
-            return null;
-         }
-         else {
-            ref = _buildRecord(table, key);
-            ref.once('value', function(snapshot) {
-               var val = snapshot.val();
-               cb(val === null? val : model.newRecord(val));
-            });
-         }
+            hash  = key.hashKey();
+      return Util.val(table, hash).pipe(function(data) {
+         return data? model.newRecord(data) : null;
       });
    };
 
@@ -87,7 +79,7 @@
     * @param {Record} rec
     * @return {Promise} resolves to callback({string}id, {boolean}updated), where updated is true if an update occurred or false if data was not dirty
     */
-   FirebaseStore.prototype.update       = function(model, rec) {
+   FirebaseStore.prototype.update = function(model, rec) {
       //todo sort priorities
       var table = this.base.child(model.table);
       return ko.sync.handle(this, function(cb, eb) {
@@ -103,7 +95,7 @@
                   });
                }
                else {
-                  cb(origRec.getRecordId().valueOf(), false);
+                  cb(origRec.getRecordId().hashKey(), false);
                }
             }
          }).fail(function(e) { eb(e); });
@@ -118,7 +110,7 @@
     * @param {Record|RecordId} recOrId
     * @return {Promise} resolves with record's {string}id
     */
-   FirebaseStore.prototype.delete       = function(model, recOrId) {
+   FirebaseStore.prototype.delete = function(model, recOrId) {
       return ko.sync.handle(this, function(cb, eb) {
          var ref = _buildRecord(this.base.child(model.table), _keyFor(recOrId));
          ref.remove(function(success) {
@@ -164,7 +156,7 @@
       var count = 0, offset = ~~opts.offset, limit = opts.limit? ~~opts.offset + ~~opts.limit : 0;
       //todo if the model has a sort priority, we can use that with startAt() and endAt()
       if( limit ) { table.limit(limit); }
-      table.forEach(function(snapshot) {
+      table.forEach(function(snapshot) { //todo need table snapshot to do this
          var data = snapshot.val();
          if( data !== null ) {
             count++;
@@ -197,7 +189,7 @@
     * @private
     */
    function _buildRecord(table, key) {
-      return key.isSet()? table.child(key.valueOf()) : table.push();
+      return key.isSet()? table.child(key.hashKey()) : table.push();
    }
 
    function exists(data, key) {
@@ -310,16 +302,177 @@
       }
    }
 
-//
-//   function isTempId(data, key) {
-//      var v = data && key && data.hasOwnProperty(key)? data[key] : null;
-//      return typeof(v) === 'number' && v < 0;
-//   }
-//
-//   function isPermanentId(data, key) {
-//      var v = data && key && data.hasOwnProperty(key)? data[key] : null;
-//      return v && typeof(v) === 'string';
-//   }
+   var Util = FirebaseStore.Util = {
+      /**
+       * Returns a snapshot of the current reference
+       * @param {Firebase} ref
+       * @return {jQuery.Deferred} a promise
+       */
+      snap: function(ref) {
+         var def = $.Deferred(), to = _timeout(def);
+         ref.once('value', function(snapshot) {
+            clearTimeout(to);
+            def.resolve(snapshot);
+         });
+         return def.promise();
+      },
+
+      /**
+       * Returns a promise which resolves to a hash containing name/val for each record. Also accepts an optional
+       * function which is invoked for each snapshot value. The iteration of values stops if `fx` returns true.
+       *
+       * @param {Firebase} parentRef
+       * @param {Function} [fx] passed into forEach() on each iteration, see http://www.firebase.com/docs/datasnapshot/foreach.html
+       * @return {jQuery.Deferred} a promise
+       */
+      each: function(parentRef, fx) {
+         return this.snap(parentRef).pipe(function(snapshot) {
+            var def = $.Deferred(), vals = [], ret;
+            try {
+               snapshot.forEach(function(childSnapshot) {
+                  vals.push({name: childSnapshot.name(), val: childSnapshot.val()});
+                  return fx && fx(childSnapshot);
+               });
+               def.resolve(vals);
+            }
+            catch(e) {
+               def.reject(e);
+            }
+            return def.promise();
+         });
+      },
+
+      /**
+       * @param {Firebase} parentRef
+       * @param {String}   childPath the child object to retrieve and get the value for
+       * @return {jQuery.Deferred} a promise
+       */
+      val: function(parentRef, childPath) {
+         var def = $.Deferred(), to = _timeout(def);
+         parentRef.child(childPath).once('value', function(snapshot) {
+            clearTimeout(to);
+            def.resolve(snapshot.val());
+         });
+         return def.promise();
+      },
+
+      /**
+       * @param {Firebase} parentRef
+       * @param {string|object|function} childPath
+       * @return {jQuery.Deferred} resolves with child snapshot if it exists or fails if it does not
+       */
+      require: function(parentRef, childPath) {
+         return this.find(parentRef, childPath).pipe(function(snapshot) {
+            if( snapshot === null ) {
+               return $.Deferred().reject('child not found: '+childPath);
+            }
+            else {
+               return snapshot;
+            }
+         });
+      },
+
+      /**
+       * @param {Firebase} parentRef
+       * @param {string} childPath
+       * @return {jQuery.Deferred} resolves to true if childPath exists or false if not
+       */
+      has: function(parentRef, childPath) {
+         var def = $.Deferred(), to = _timeout(def);
+         parentRef.child(childPath).once('value', function(snapshot) {
+            clearTimeout(to);
+            def.resolve(snapshot.val() !== null);
+         });
+         return def.promise();
+      },
+
+      /**
+       * Retrieves first child snapshot from the parentRef which matches criteria. If the criteria
+       * is a string, it's treated as a child path (making this the same as calling val())
+       *
+       * If the criteria is an Object, it's treated as key/value pairs representing fields on the child which must
+       * match. Each value may also be a function in the format function(value, key, child) {...} which must return true/false.
+       *
+       * If the criteria is a Function, then the object is passed in to that function to be compared. It must return
+       * true or false.
+       *
+       * @param {Firebase} parentRef
+       * @param {string|Function|object} matchCriteria see description
+       * @return {jQuery.Deferred} a promise which resolves to the snapshot of child or null if not found
+       */
+      find: function(parentRef, matchCriteria) {
+         if( typeof(matchCriteria) === 'string' ) {
+            return this.val(parentRef, matchCriteria);
+         }
+         else {
+            var matchFxn = _matchFxn(matchCriteria), def = $.Deferred();
+            this.each(parentRef, function(snapshot) {
+               if( matchFxn(snapshot) ) {
+                  def.resolve(snapshot);
+                  return true;
+               }
+            });
+            if( !def.isResolved() ) { def.resolve(null); }
+            return def.promise();
+         }
+      },
+
+      /**
+       * Retrieves all child snapshots from the parentRef which match criteria.
+       *
+       * If the criteria is a Function, then the snapshot is passed in to that function to be compared. It must return
+       * true or false.
+       *
+       * If the criteria is an Object, it's treated as key/value pairs representing fields on the child which must
+       * match. Objects are compared with _.isEqual(...), strings/numbers/null/booleans are compared with ===.
+       * Functions are invoked with arguments `value, key, snapshot` and must return true (keep) or false (discard).
+       *
+       * @param {Firebase} parentRef
+       * @param {Function|object}  filterCriteria see description
+       * @return {jQuery.Deferred} a promise which resolves to the {object} record after it is retrieved (or null if not found)
+       */
+      filter: function(parentRef, filterCriteria) {
+         var matchFxn = _matchFxn(filterCriteria), def = $.Deferred();
+         return $.when(function() {
+            var vals = [];
+            this.each(parentRef, function(snapshot) {
+               matchFxn(snapshot) && vals.push(snapshot);
+            });
+            return vals;
+         });
+      }
+   };
+
+   function _matchFxn(criteria) {
+      if(_.isFunction(criteria)) {
+         return criteria;
+      }
+      else {
+         return function(snapshot) {
+            var val = snapshot.val();
+            if( val === null ) { return false; }
+            _.any(val, function(v, k) {
+               if( k in this ) {
+                  switch(typeof(this[k])) {
+
+                  }
+               }
+            }, criteria);
+         }
+      }
+   }
+
+   /**
+    * @param {jQuery.Deferred} def
+    * @param {int} [timeout]
+    * @return {Number}
+    * @private
+    */
+   function _timeout(def, timeout) {
+      return setTimeout(function() {
+         def.reject('timed out');
+      }, timeout||15000);
+   }
 
    /** ADD TO NAMESPACE
     ******************************************************************************/

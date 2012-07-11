@@ -17,7 +17,7 @@ jQuery(function($) {
    module("RecordFactory");
    test("#create", function() {
       var model = _buildAModel(), factory = model.recordFactory,
-         baseData = ko.sync.TestData.genericData,
+         baseData = ko.sync.TestData.genericDataWithoutId,
          rec = factory.create(baseData),
          data = _fullData(model, baseData);
       Object.keys(data).forEach(function(k) {
@@ -34,8 +34,8 @@ jQuery(function($) {
     */
    function _buildARecord(addData, withId, modelProps) {
       var args = _buildArgs(arguments), data;
-      if( args.withId ) { data = $.extend({}, ko.sync.TestData.genericDataWithId, args.data); }
-      else { data = $.extend({}, ko.sync.TestData.genericData, args.data); }
+      if( args.withId ) { data = $.extend({}, ko.sync.TestData.genericData, args.data); }
+      else { data = $.extend({}, ko.sync.TestData.genericDataWithoutId, args.data); }
       return new ko.sync.Record(_buildAModel(args.model), data);
    }
 
