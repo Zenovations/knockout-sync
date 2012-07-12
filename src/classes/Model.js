@@ -37,6 +37,7 @@
       observe:   true,
       minLength: 0,
       maxLength: 0,
+      sortField: null,
       valid:     null, //todo tie this to this.validator?
       updateCounter: 'update_counter',
       format:    function(v) { return v; } //todo

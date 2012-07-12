@@ -44,6 +44,7 @@ jQuery(function($) {
       },
       /** Check the record by retrieving it from the database and comparing to the original (do not use the Store) */
       check: function(model, origData, recordId) {
+         //todo-test check sort priorities
          var table = model.table, fields = model.fields, k, keys = Object.keys(fields), i = keys.length;
          // because the record may have just been added, it may not be in the db yet
          // so wait for it to be added before fetching it
@@ -72,6 +73,7 @@ jQuery(function($) {
 
    module("FirebaseStore");
 
+   //todo-test test sort priorities (create/update/etc)
    asyncTest("#create (keyed record)", function() {
       var store = resetStore(), data = genericKeyedData;
 
@@ -137,20 +139,19 @@ jQuery(function($) {
    asyncTest('#read (non-existing record)', function() {
       expect(1);
       var store = resetStore(), recId = TestData.makeRecordId('i am not a record');
-//      startSequence()
-//         .read(store, genericModel, recId)
-//         .then(function(rec) {
-//            strictEqual(rec, null, 'record should be null');
-//         })
-//         .end()
-//         .fail(function(e) { console.error(e); ok(false, e.toString()); })
-//         .always(start);
-      start();
+      startSequence()
+         .read(store, genericModel, recId)
+         .then(function(rec) {
+            strictEqual(rec, null, 'record should be null');
+         })
+         .end()
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
+         .always(start);
    });
 
    asyncTest("#update", function() {
       var store = resetStore(), data = {
-         id:             'test1',
+         id:             'record123',
          stringRequired: '2-stringRequired',
          dateRequired:   moment().add('days', 7).toDate(),
          intRequired:    -2,
@@ -225,7 +226,7 @@ jQuery(function($) {
          .delete(store, genericModel, $.Sequence.PREV)
          .then(function(id) {
             // did we get return value?
-            equal(id, 'test1', 'returned id of deleted record');
+            equal(id, 'record123', 'returned id of deleted record');
          })
          .exists(genericModel.table, $.Sequence.PREV)
          .then(function(x) { strictEqual(x, false, 'does not exist'); })
@@ -287,9 +288,9 @@ jQuery(function($) {
       var tableRef = syncRoot.child(table);
       var def = $.Deferred();
       var timeout = setTimeout(function() {
-         def.reject('record did not sync in 5 seconds');
+         def.reject('record not found');
          timeout = null;
-      }, 5000); // die after 5 seconds if we don't have any data
+      }, 2000); // die after 5 seconds if we don't have any data
       tableRef.child(hashKey).on('value', function(snapshot) {
          var rec = snapshot.val();
          if( rec !== null ) {
@@ -305,7 +306,7 @@ jQuery(function($) {
     * @return {jQuery.Sequence}
     */
    function startSequence(timeout) {
-      timeout || (timeout = 2000);
+      timeout || (timeout = 5000);
       var seq = $.Sequence.start(sequenceMethods), timeoutRef;
 
       if( timeout ) {

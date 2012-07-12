@@ -43,11 +43,10 @@
    FirebaseStore.prototype.create = function(model, record) {
       //todo sort priorities
       return ko.sync.handle(this, function(cb, eb) { // creates a promise
-         var table = this.base.child(model.table),
+         var table = this.base.child(model.table);
              // fetch the record using .child()
-             ref = _buildRecord(table, record.getKey());
-         ref.set(cleanData(model.fields, record.getData()), function(success) {
-            (success && cb(ref.name())) || eb(ref.name());
+         _createRecord(table, record.getKey(), cleanData(model.fields, record.getData())).then(function(success, recordId) {
+            (success && cb(recordId)) || eb(recordId);
          });
       });
    };
@@ -81,7 +80,7 @@
     */
    FirebaseStore.prototype.update = function(model, rec) {
       //todo sort priorities
-      var table = this.base.child(model.table);
+      var base = this.base;
       return ko.sync.handle(this, function(cb, eb) {
          if( !rec.hasKey() ) { eb('Invalid key'); }
          this.read(model, rec).done(function(origRec) {
@@ -89,9 +88,9 @@
             else {
                origRec.updateAll(rec);
                if( origRec.isDirty() ) {
-                  var key = _keyFor(origRec), ref = _buildRecord(table, key);
+                  var key = _keyFor(origRec), ref = base.child(model.table).child(key.hashKey());
                   ref.set(cleanData(model.fields, rec.getData()), function(success) {
-                     (success && cb(ref.name(), true)) || eb('Synchronize failed');
+                     (success && cb(ref.name(), true)) || eb('synchronize failed');
                   });
                }
                else {
@@ -112,10 +111,15 @@
     */
    FirebaseStore.prototype.delete = function(model, recOrId) {
       return ko.sync.handle(this, function(cb, eb) {
-         var ref = _buildRecord(this.base.child(model.table), _keyFor(recOrId));
-         ref.remove(function(success) {
-            (success && cb(ref.name())) || eb(ref.name());
-         })
+         var key = _keyFor(recOrId);
+         if( !key.isSet() ) {
+            eb('no key set on record; cannot delete it');
+         }
+         else {
+            this.base.child(model.table).child(key.hashKey()).remove(function(success) {
+               (success && cb(ref.name())) || eb(ref.name());
+            });
+         }
       });
    };
 
@@ -154,22 +158,32 @@
       var opts = ko.utils.extend({limit: 100, offset: 0, filter: null, sort: null}, params);
       var table = this.base.child(model.table);
       var count = 0, offset = ~~opts.offset, limit = opts.limit? ~~opts.offset + ~~opts.limit : 0;
-      //todo if the model has a sort priority, we can use that with startAt() and endAt()
       if( limit ) { table.limit(limit); }
-      table.forEach(function(snapshot) { //todo need table snapshot to do this
-         var data = snapshot.val();
-         if( data !== null ) {
-            count++;
-            if( count <= start ) { return; }
-            else if( count > limit ) {
-               def.resolve(model.table, opts.limit);
-               return true;
+      if( model.sort ) {
+         //todo
+         //todo
+         //todo
+         throw new Error('I\'m not ready for sort priorities yet');
+      }
+      else {
+         var vals = [];
+         Util.each(table, function(snapshot) {
+            var data = snapshot.val();
+            if( data !== null ) {
+               count++;
+               if( count <= start ) { return; }
+               else if( limit && count > limit ) {
+                  def.resolve(model.table, opts.limit);
+                  return true;
+               }
+               if( !opts.filter || opts.filter(data) ) {
+                  vals.push(data);
+                  progressFxn(data);
+               }
             }
-            if( !opts.filter || opts.filter(data) ) {
-               progressFxn(data);
-            }
-         }
-      });
+         });
+         if( !def.isResolved() ) { def.resolve(vals); }
+      }
       return def.promise();
    };
 
@@ -184,12 +198,23 @@
     * by Firebase.
     *
     * @param table
-    * @param {RecordId}  [key]
-    * @return {Firebase}
+    * @param {RecordId}  key
+    * @param {object}    data
+    * @param {int}      [sortPriority]
+    * @return {jQuery.Deferred}
     * @private
     */
-   function _buildRecord(table, key) {
-      return key.isSet()? table.child(key.hashKey()) : table.push();
+   function _createRecord(table, key, data, sortPriority) {
+      var def = $.Deferred(), ref, cb = function(success) { def.resolve(success, ref.name()); };
+      if( key.isSet() ) {
+         ref = table.child(key.hashKey());
+         (sortPriority && ref.setWithPriority(data, sortPriority, cb)) || ref.set(data, cb);
+      }
+      else {
+         ref = table.push(data, cb);
+         if( sortPriority ) { ref.setPriority(sortPriority); }
+      }
+      return def.promise();
    }
 
    function exists(data, key) {
