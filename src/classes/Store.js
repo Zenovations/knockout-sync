@@ -69,18 +69,35 @@
        *
        * - limit:   {int=100}      number of records to return, use 0 for all
        * - offset:  {int=0}        starting point in records, e.g.: {limit: 100, start: 101} would return records 101-200
-       * - filter:  {function}     filter returned results using this function (true=include, false=exclude)
+       * - filter:  {function|object}  filter rows using this function or value map
        * - sort:    {array|string} Sort returned results by this field or fields. Each field specified in sort
        *                           array could also be an object in format {field: 'field_name', desc: true} to obtain
        *                           reversed sort order
        *
-       * The use of `filter` is applied by stores after `limit`. Thus, when using `filter` it is important to note that
-       * less results may (and probably will) be returned than `limit`.
+       * USE OF FILTER
+       * -------------
+       * When `filter` is a function, it is always applied after the results are returned. Thus, when used in conjunction
+       * with `limit`, there may (and probably will) be less results than `limit` en toto.
        *
-       * Each record received is handled by the progressFxn, not by the fulfilled promise. The fulfilled promise simply
-       * notifies listeners that it is done retrieving records.
+       * When `filter` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
+       * the store. For SQL-like databases, it may be part of the query. For data stores like Simperium, Firebase, or
+       * other No-SQL types, it could require fetching all results from the table and filtering them on return. So
+       * use this with discretion.
        *
-       * There are no guarantees on how a store will optimize the query. It may apply the constraints before or after
+       * THE PROGRESS FUNCTION
+       * ---------------------
+       * Each record received is handled by `progressFxn`. When no limit is set, stores may never fulfill
+       * the promise. This is a very important point to keep in mind.
+       *
+       * Additionally, even if a limit is set, if the number of results is less than limit, the promise may
+       * still never fulfill (as stores will not fulfill until the required number of results is reached).
+       *
+       * In the case of a failure, the fail() method on the promise will always be notified immediately, and the load
+       * operation will end immediately.
+       *
+       * PERFORMANCE
+       * -----------
+       * There are no guarantees on how a store will optimize a query. It may apply the constraints before or after
        * retrieving data, depending on the capabilities and structure of the data layer. To ensure high performance
        * for very large data sets, and maintain store-agnostic design, implementations should use some sort of
        * pre-built query data in an index instead of directly querying records (think NoSQL databases like
@@ -94,7 +111,7 @@
        * @param {object} [parms]
        * @return {Promise}
        */
-      load: function(progressFxn, model, parms) { throw new Error('Interface not implemented'); },
+      query: function(progressFxn, model, parms) { throw new Error('Interface not implemented'); },
 
       /**
        * Given a particular data model, get notifications of any changes to the data. The change notifications will

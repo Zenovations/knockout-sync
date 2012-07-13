@@ -116,8 +116,9 @@
             eb('no key set on record; cannot delete it');
          }
          else {
-            this.base.child(model.table).child(key.hashKey()).remove(function(success) {
-               (success && cb(ref.name())) || eb(ref.name());
+            var ref = this.base.child(model.table).child(key.hashKey());
+            ref.remove(function(success) {
+               (success && cb(ref.name())) || eb(ref.name(), 'Unable to sync');
             });
          }
       });
@@ -129,9 +130,6 @@
     * - limit:   {int=100}      number of records to return, use 0 for all
     * - offset:  {int=0}        start after this record, e.g.: {limit: 100, offset: 100} would return records 101-200
     * - filter:  {function}     filter returned results using this function (true=include, false=exclude)
-    * - sort:    {array|string} Sort returned results by this field or fields. Each field specified in sort
-    *                           array could also be an object in format {field: 'field_name', desc: true} to obtain
-    *                           reversed sort order
     *
     * The use of `filter` is applied by stores after `limit`. Thus, when using `filter` it is important to note that
     * less results may (and probably will) be returned than `limit`.
@@ -153,7 +151,7 @@
     * @param {object} [params]
     * @return {Promise} fulfilled with callback('tableName', limit) if limit is reached
     */
-   FirebaseStore.prototype.load = function(progressFxn, model, params) {
+   FirebaseStore.prototype.query = function(progressFxn, model, params) {
       var def = $.Deferred();
       var opts = ko.utils.extend({limit: 100, offset: 0, filter: null, sort: null}, params);
       var table = this.base.child(model.table);

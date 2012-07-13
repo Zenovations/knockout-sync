@@ -38,7 +38,7 @@ Alternately, if you want to include your own data store or validator:
 
 ## Usage
 
-### Create a data storage instance (a store):
+### Create a connection to your data layer (a store):
 
 ```javascript
     // create a data store
@@ -46,6 +46,9 @@ Alternately, if you want to include your own data store or validator:
 ```
 
 ### Create a data model
+
+A data model represents a table/bucket/data type kept in the store and explains it's fields and storage behaviours. It
+also provides validation if a validator is configured.
 
 ```javascript
     // create a data model
@@ -73,10 +76,6 @@ Alternately, if you want to include your own data store or validator:
    // creates a single Record
    var view = ko.sync.newView( model );
    ko.applyBindings(view);
-
-   // the same thing
-   var view = ko.sync.use( model, {} );
-   ko.applyBindings(view);
 ```
 
 ### Create a new observableArray using the model
@@ -84,12 +83,9 @@ Alternately, if you want to include your own data store or validator:
 ```javascript
    // creates an array of Records (a RecordList)
    var users = ko.sync.newList( model );
-
-   // does the same thing
-   var users = ko.sync.use( model, ko.observableArray() );
 ```
 
-### Add model data to an existing view
+### Apply model data to an existing view
 
 ```javascript
    // or initialize a more complex view using the data model
@@ -101,7 +97,7 @@ Alternately, if you want to include your own data store or validator:
       ko.sync.use(model, this);
 
       // add a computed field
-      // (we can only refer to the model's fields, name and address, after ko.sync.use() is called!)
+      // (we can now refer to the model's fields!)
       self.emailUrl = ko.computed(function() {
          'mailto: ' + self.name() + '<' + self.address() + '>';
       });
@@ -121,7 +117,7 @@ Once `ko.sync.use()` is called on a view/object/array, it has its own CRUD metho
       view.crud.create( {data...} );
 
       // or get a user from the database
-      view.crud.load( userId );
+      view.crud.query( userId );
 
       // update the user
       view.saveButtonClick = function() {
@@ -168,7 +164,7 @@ Note that there is no need to use destroy() as removed items are automagically t
     users.push(model.new({name: 'John Smith', ...})); // same thing
 
     // or load some users from the database (all users created in the last hour)
-    users.crud.load( {created: {greaterThan: new Date().valueOf() - 3600}} );
+    users.crud.query( {created: {greaterThan: new Date().valueOf() - 3600}} );
 
     // delete a user from the list
     users.crud.remove( userId );
@@ -417,7 +413,7 @@ records are marked dirty and the promise fulfills immediately.
    );
 ```
 
-### Crud.load()
+### Crud.read(recordId)
 
 @param {string} recordId
 @returns {Promise} fulfilled when the store returns a result
@@ -431,7 +427,7 @@ records are marked dirty and the promise fulfills immediately.
    });
 
    var data = ko.sync.newRecord(model);
-   data.load( recordId ).then(
+   data.read( recordId ).then(
       function(result) { /* runs after the store returns result */ },
       function(errors) { /* runs if record could not be found */ }
    );
@@ -494,18 +490,62 @@ new records will be sent immediately. Otherwise, flips the dirty flag on new rec
 When auto-update is true, the promise will be fulfilled after the save operation completes. Otherwise, it will fulfill
 immediately.
 
-#### Crud.Array.load( params )
+#### Crud.Array.query( params )
 
-@param {object} params
-@returns {Promise} resolved after the data store returns results
+@param {object}    [params]
+@returns {Promise} resolved if limit is reached or if a failure occurs (does not contain the values fetched!)
 
-The params object may contain any of the following keys:
+Perform a query against the database. The `params` argument may contain:
 
-  - limit:  {int=100} number of records to return, use 0 for all
-  - filter: {function} filter returned results (after query) using this function (true=include, false=exclude)
-  - sort:   {array|string} either a field to sort results by or an array of fields
-            (some stores, like Firebase, may choose to sort the results after they return)
-  - desc:   {boolean} return records from beginning instead of the end of the list
+- limit:   {int=100}      number of records to return, use 0 for all
+- offset:  {int=0}        starting point in records, e.g.: {limit: 100, start: 101} would return records 101-200
+- when:    {function|object} filter rows using key/value pairs or a function
+- sort:    {array|string} Sort returned results by this field or fields.
+
+##### limit parameter
+It is possible that the promise will never be fulfilled if there are fewer records available than `limit`. This
+is an important consideration as code that waits on the promise to fulfill will be quite lonely.
+
+##### when parameter
+If `when` is a function, it is always applied after the results are returned. Thus, when used in conjunction
+with `limit`, there may (and probably will) be less results than `limit` en toto. The function returns true for
+records to keep and false for ones to discard. It receives the record data as a hash(object) and the record's ID as
+a string.
+
+If `when` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
+the store. For SQL-like databases, it may be part of the query. For data stores like Simperium, Firebase, or
+other No-SQL types, it could require fetching all results from the table and filtering them on return. So
+use this with discretion.
+
+The keys are field names, and the values are a string or integer (equals match) or an object containing any
+of the following:
+
+Examples:
+
+     // filter results using a function
+     recordList.crud.query({
+        when: function(recordData, recordId) { return data.color = 'purple' && data.priority > 5; }
+     });
+
+     // filter results using a hash
+     recurdList.crud.query({
+        when: {color: 'purple', priority: {greaterThan: 5}}
+     });
+
+**sort**
+When `sort` is a string, it represents a single field name. If it is an array, each value may be a field name (sorted
+ascending) or an object in format {field: 'field_name', desc: true}.
+
+
+##### performance considerations
+There are no guarantees on how a store will optimize a query. It may apply the constraints before or after
+retrieving data, depending on the capabilities and structure of the data layer. To ensure high performance
+for very large data sets, and maintain store-agnostic design, implementations should use some sort of
+pre-built query data in an index instead of directly querying records (think NoSQL databases like
+DynamoDB and Firebase, not MySQL queries)
+
+Alternately, very sophisticated queries could be done external to the knockout-sync module and then
+injected into the synced data after.
 
 <a id='Model' name='Model'></a>
 ## Model (ko.sync.Model)
@@ -643,34 +683,6 @@ Use HTML5 storage to track changes if the network connection is lost.
 ## Merge changes
 
 Use http://code.google.com/p/google-diff-match-patch/ and some versioning (when offline), like update counters, to apply changes
-
-## Where clauses for Crud.Array.load()?
-
-```javascript
-   // find the last ten book reviews in the sci-fi genre, sorted by ranking
-   data.crud.load( {limit: 10, desc: true, sort: 'rank', where: {genre: 'sci-fi'}} );
-```
-
-Where clauses contain a list of key/value pairs, where the key is a field name and the value is a string representing
-an exact match, or an object containing one or more of the following:
-
-  - greaterThan: {int|Date}
-  - lessThan:    {int|Date}
-  - contains:    {string}
-  - beginsWith:  {string}
-  - endsWith:    {string}
-  - equals:      {*}
-  - in:          {Array} of possible values
-
-And of course we can do logical negation (i.e. "not")
-
-  - notGreaterThan:   {int|Date}
-  - notLessThan:      {int|Date}
-  - notContaining:    {string}
-  - notBeginningWith: {string}
-  - notEndingWith:    {string}
-  - notEquals:        {*}
-  - notIn:            {Array} of possible values
 
   [1]: http://en.wikipedia.org/wiki/Futures_and_promises
   [2]: http://docs.jquery.com/Downloading_jQuery
