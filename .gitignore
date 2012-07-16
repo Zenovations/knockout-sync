@@ -162,3 +162,5 @@ pip-log.txt
 .DS_Store
 
 /.idea
+/test/muck.html
+/muck.txt
