@@ -1,0 +1,20 @@
+
+body {
+   padding-top: 10px;
+}
+
+div.row .nav-tabs {
+   background-color: #eee;
+}
+
+#panelBox {
+   border: 1px solid #DDDDDD;
+}
+
+#panelBox .nav-tabs {
+   padding-left: 15px;
+}
+
+#panels {
+   margin: 0 10px 10px 15px;
+}

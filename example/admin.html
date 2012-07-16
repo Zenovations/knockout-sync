@@ -1,0 +1,66 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+      "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+
+   <link rel="stylesheet" href="lib/bootstrap/css/bootstrap.css" />
+   <link rel="stylesheet" href="lib/font-awesome/css/font-awesome.css" />
+   <!--[if IE 7]><link rel="stylesheet" href="lib/font-awesome/css/font-awesome-ie7.css"><![endif]-->
+   <link rel="stylesheet" href="assets/css/admin.css" type="text/css"/>
+
+   <!-- LIBS
+   ---------------------------------------------------------------->
+   <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.js"></script>
+   <script type="text/javascript" src="http://static.firebase.com/v0/firebase.js"></script>
+   <script type="text/javascript" src="lib/bootstrap/js/bootstrap.min.js"></script>
+   <script type="text/javascript" src="lib/moment/moment.min.js"></script>
+   <script type="text/javascript" src="lib/knockout/knockout.min.js"></script>
+   <script type="text/javascript" src="lib/knockout/ko.mapping.min.js"></script>
+   <!--<script type="text/javascript" src="lib/path/path.min.js"></script>-->
+   <script type="text/javascript" src="../dist/knockout-sync.all.js"></script>
+   <script type="text/javascript" src="lib/js/underscore.js"></script>
+   <script type="text/javascript" src="lib/js/underscore.string.js"></script>
+
+   <!-- APP
+   ---------------------------------------------------------------->
+   <script type="text/javascript" src="assets/js/admin.js"></script>
+
+</head>
+<body>
+
+<div class="container">
+   <div class="row">
+      <div class="span12" data-bind="with: NavView" id="panelBox">
+         <ul class="nav nav-tabs">
+            <li class="active">
+               <a href="#stores" data-toggle="tab">Stores (<span data-bind="text: storeNames().length"></span>)</a>
+            </li>
+            <li><a href="#tables" data-toggle="tab">Tables (<span data-bind="text: tablesLoaded"></span>)</a></li>
+            <li><a href="#data" data-toggle="tab">Data</a></li>
+            <li class="separator"></li>
+            <li class="dropdown" data-bind="visible: storeNames().length > 0">
+               <a class="dropdown-toggle" data-bind="text: currentStore" data-toggle="dropdown" href="#">
+                  Dropdown
+                  <b class="caret"></b>
+               </a>
+               <ul class="dropdown-menu">
+                  <li><a href="#">one</a></li>
+                  <li><a href="#">two</a></li>
+                  <li><a href="#">three</a></li>
+               </ul>
+            </li>
+         </ul>
+         <div id="panels" class="tab-content">
+            <div class="panel tab-pane fade active in" id="stores">stores panel</div>
+            <div class="panel tab-pane fade" id="tables">Create a store first.</div>
+            <div class="panel tab-pane fade" id="data">Create a store first.</div>
+         </div>
+      </div>
+   </div>
+</div>
+
+
+
+
+</body>
+</html>
