@@ -83,8 +83,8 @@ module.exports = function(grunt) {
    });
 
    // Default task.
-   grunt.registerTask('default', 'lint qunit');
-   grunt.registerTask('make', 'concat min');
+   grunt.registerTask('default', 'concat min');
+   grunt.registerTask('test', 'mocha');
 //   grunt.registerTask('default', 'concat min');
 
    grunt.loadNpmTasks('grunt-mocha');
