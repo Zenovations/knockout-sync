@@ -67,20 +67,20 @@
       /**
        * Perform a query against the database. The options for query are fairly limited:
        *
-       * - limit:   {int=100}      number of records to return, use 0 for all
-       * - offset:  {int=0}        starting point in records, e.g.: {limit: 100, start: 101} would return records 101-200
-       * - filter:  {function|object}  filter rows using this function or value map
-       * - sort:    {array|string} Sort returned results by this field or fields. Each field specified in sort
-       *                           array could also be an object in format {field: 'field_name', desc: true} to obtain
-       *                           reversed sort order
+       * - limit:   {int=100}         number of records to return, use 0 for all
+       * - offset:  {int=0}           starting point in records, e.g.: {limit: 100, start: 101} would return records 101-200
+       * - when:    {function|object} filter rows using this function or value map
+       * - sort:    {array|string}    Sort returned results by this field or fields. Each field specified in sort
+       *                              array could also be an object in format {field: 'field_name', desc: true} to obtain
+       *                              reversed sort order
        *
-       * USE OF FILTER
+       * USE OF WHEN
        * -------------
-       * When `filter` is a function, it is always applied after the results are returned. Thus, when used in conjunction
+       * If `when` is a function, it is always applied after the results are returned. Thus, when used in conjunction
        * with `limit`, there may (and probably will) be less results than `limit` en toto.
        *
-       * When `filter` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
-       * the store. For SQL-like databases, it may be part of the query. For data stores like Simperium, Firebase, or
+       * If `filter` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
+       * the store. For SQL-like databases, it may be part of the query. For data stores like Firebase, or
        * other No-SQL types, it could require fetching all results from the table and filtering them on return. So
        * use this with discretion.
        *

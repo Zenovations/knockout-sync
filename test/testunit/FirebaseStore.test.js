@@ -249,39 +249,32 @@ jQuery(function($) {
          .always(start);
    });
 
-   test("#load", function() {
-      expect(1);
-      ok(false, 'Implement me!')
-   });
-
-   asyncTest('sorted records', function() {
-      //todo sorted data
-      start();
-   });
-
-   test("composite keys", function() {
-      expect(1);
-      ok(false, 'Implement me!')
-   });
-
-   test("#assignTempId", function() {
-      expect(1);
-      ok(false, 'Implement me!')
+   test("#query", function() {
+      ok(false, 'Implement me!');
    });
 
    test("#sync", function() {
-      expect(1);
-      ok(false, 'Implement me!')
+      ok(false, 'Implement me!');
    });
 
    test("#onConnect", function() {
-      expect(1);
-      ok(false, 'Implement me!')
+      ok(false, 'Implement me!');
    });
 
    test("#onDisconnect", function() {
-      expect(1);
-      ok(false, 'Implement me!')
+      ok(false, 'Implement me!');
+   });
+
+   test('sorted records', function() {
+      ok(false, 'Implement me');
+   });
+
+   test("composite keys", function() {
+      ok(false, 'Implement me!');
+   });
+
+   test("#assignTempId", function() {
+      ok(false, 'Implement me!');
    });
 
    function watchForEntry(table, hashKey) {

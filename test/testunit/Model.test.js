@@ -16,7 +16,7 @@ jQuery(function($) {
 
    module("RecordFactory");
    test("#create", function() {
-      var model = _buildAModel(), factory = model.recordFactory,
+      var model = _buildAModel(), factory = model.factory,
          baseData = ko.sync.TestData.genericDataWithoutId,
          rec = factory.create(baseData),
          data = _fullData(model, baseData);

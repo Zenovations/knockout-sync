@@ -10,14 +10,15 @@
        * @constructor
        */
       init: function(props) {
-         var defaults       = ko.utils.extend(Model.FIELD_DEFAULTS, props.defaults);
-         this.store         = props.dataStore;
-         this.table         = props.dataTable;
-         this.key           = props.primaryKey;
-         this.sort          = props.sortField;
-         this.validator     = props.validator;
-         this.fields        = _processFields(defaults, props.fields);
-         this.recordFactory = props.recordFactory || new RecordFactory(this);
+         var defaults    = ko.utils.extend(Model.FIELD_DEFAULTS, props.defaults);
+         this.store      = props.dataStore;
+         this.table      = props.dataTable;
+         this.key        = props.primaryKey;
+         this.sort       = props.sortField;
+         this.validator  = props.validator;
+         this.auto       = props.autoSync;
+         this.fields     = _processFields(defaults, props.fields);
+         this.factory    = props.recordFactory || new RecordFactory(this);
       },
 
       applyTo: function(viewOrObject, initialData) { }, //todo
@@ -27,7 +28,7 @@
        * @return {*}
        */
       newRecord: function(data) {
-         return this.recordFactory.create(data);
+         return this.factory.create(data);
       }
    });
    Model.FIELD_DEFAULTS = {
@@ -40,6 +41,7 @@
       sortField: null,
       valid:     null, //todo tie this to this.validator?
       updateCounter: 'update_counter',
+      autoSync:  false,
       format:    function(v) { return v; } //todo
    };
 

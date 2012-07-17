@@ -11,7 +11,7 @@
       var cleanValue = ko.observable(ko.mapping.toJSON(target));
       var dirtyOverride = ko.observable(ko.utils.unwrapObservable(startDirty));
 
-      target.crud = {
+      target.rec = {
          /**
           * @param {boolean} [newValue]
           * @return {boolean}
@@ -21,12 +21,29 @@
          }),
 
          markClean: function(){
+            //todo remove this and markDirty, use read: method on isDirty observable
             cleanValue(ko.mapping.toJSON(target));
             dirtyOverride(false);
          },
 
          markDirty: function(){
             dirtyOverride(true);
+         },
+
+         create: function() {
+            //todo
+         },
+
+         read: function() {
+            //todo
+         },
+
+         update: function() {
+            //todo
+         },
+
+         delete: function() {
+            //todo
          }
       };
 
@@ -192,7 +209,7 @@
    ko.sync || (ko.sync = {});
    ko.sync.stores || (ko.sync.stores = []);
 
-   ko.sync.use = function(model, target) {}; //todo
+   ko.sync.use = function(target, model) {}; //todo
    ko.sync.newView = function(model) {}; //todo
    ko.sync.newList = function(model) {}; //todo
 

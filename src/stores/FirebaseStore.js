@@ -127,9 +127,10 @@
    /**
     * Perform a query against the database. The options for query are fairly limited:
     *
-    * - limit:   {int=100}      number of records to return, use 0 for all
-    * - offset:  {int=0}        start after this record, e.g.: {limit: 100, offset: 100} would return records 101-200
-    * - filter:  {function}     filter returned results using this function (true=include, false=exclude)
+    * - limit:   {int=100}         number of records to return, use 0 for all
+    * - offset:  {int=0}           start after this record, e.g.: {limit: 100, offset: 100} would return records 101-200
+    * - when:    {function|object} filter returned results using this function (true=include, false=exclude) or a map of key/values
+    * - sort:    {string|object|array}
     *
     * The use of `filter` is applied by stores after `limit`. Thus, when using `filter` it is important to note that
     * less results may (and probably will) be returned than `limit`.
@@ -163,6 +164,12 @@
          //todo
          throw new Error('I\'m not ready for sort priorities yet');
       }
+      else if( params.sort ) {
+         //todo
+         //todo
+         //todo
+         throw new Error('I\'m not ready for sorting yet');
+      }
       else {
          var vals = [];
          Util.each(table, function(snapshot) {
@@ -185,7 +192,7 @@
       return def.promise();
    };
 
-   FirebaseStore.prototype.sync = function(location, callback) {}; //todo
+   FirebaseStore.prototype.sync = function(model, callback) {}; //todo
 
    /** UTILITIES
     *****************************************************************************************/
@@ -315,7 +322,8 @@
    function _base(root, base) {
       if( base ) {
          var curr = root;
-         base.split('/').forEach(function(p) {
+         //todo is this necessary?
+         _.forEach(base.split('/'), function(p) {
             curr = curr.child(p);
          });
          return curr;
