@@ -2,6 +2,7 @@
       "http://www.w3.org/TR/html4/loose.dtd">
 <html>
 <head>
+   <meta charset="UTF-8">
 
    <link rel="stylesheet" href="lib/bootstrap/css/bootstrap.css" />
    <link rel="stylesheet" href="lib/font-awesome/css/font-awesome.css" />
@@ -11,6 +12,8 @@
    <!-- LIBS
    ---------------------------------------------------------------->
    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.js"></script>
+   <script type="text/javascript" src="lib/jquery/jquery.validate.js"></script>
+   <script type="text/javascript" src="lib/jquery/jquery.validate.bootstrap.adapter.js"></script>
    <script type="text/javascript" src="http://static.firebase.com/v0/firebase.js"></script>
    <script type="text/javascript" src="lib/bootstrap/js/bootstrap.min.js"></script>
    <script type="text/javascript" src="lib/moment/moment.min.js"></script>
@@ -28,39 +31,73 @@
 </head>
 <body>
 
-<div class="container">
-   <div class="row">
-      <div class="span12" data-bind="with: NavView" id="panelBox">
-         <ul class="nav nav-tabs">
-            <li class="active">
-               <a href="#stores" data-toggle="tab">Stores (<span data-bind="text: storeNames().length"></span>)</a>
-            </li>
-            <li><a href="#tables" data-toggle="tab">Tables (<span data-bind="text: tablesLoaded"></span>)</a></li>
-            <li><a href="#data" data-toggle="tab">Data</a></li>
-            <li class="separator"></li>
-            <li class="dropdown" data-bind="visible: storeNames().length > 0">
-               <a class="dropdown-toggle" data-bind="text: currentStore" data-toggle="dropdown" href="#">
-                  Dropdown
-                  <b class="caret"></b>
-               </a>
-               <ul class="dropdown-menu">
-                  <li><a href="#">one</a></li>
-                  <li><a href="#">two</a></li>
-                  <li><a href="#">three</a></li>
-               </ul>
-            </li>
-         </ul>
-         <div id="panels" class="tab-content">
-            <div class="panel tab-pane fade active in" id="stores">stores panel</div>
-            <div class="panel tab-pane fade" id="tables">Create a store first.</div>
-            <div class="panel tab-pane fade" id="data">Create a store first.</div>
-         </div>
-      </div>
-   </div>
+<div id="panelBox">
+    <ul class="nav nav-tabs" data-bind="with: NavView" >
+        <li class="active">
+            <a href="#stores" data-toggle="tab">Stores (<span data-bind="text: storeNames().length"></span>)</a>
+        </li>
+        <li><a href="#tables" data-toggle="tab">Tables (<span data-bind="text: tablesLoaded"></span>)</a></li>
+        <li><a href="#data" data-toggle="tab">Data</a></li>
+        <li class="separator"></li>
+        <li class="dropdown" data-bind="visible: $root.hasStores">
+            <a class="dropdown-toggle" data-bind="text: currentStore" data-toggle="dropdown" href="#">
+                Dropdown
+                <b class="caret"></b>
+            </a>
+            <ul class="dropdown-menu">
+                <li><a href="#">one</a></li>
+                <li><a href="#">two</a></li>
+                <li><a href="#">three</a></li>
+            </ul>
+        </li>
+    </ul>
+    <div id="panels" class="tab-content">
+        <div class="panel tab-pane fade active in" id="stores" data-bind="with: getPanel('StoresPanel')">
+            <div class="container">
+                <div class="row">
+                    <div class="span6" data-bind="with: EditPanel">
+                        <form data-bind="submit: storeModal" class="form-inline">
+                            <fieldset><legend>Add a Store</legend>
+                            <input class="input-medium" type="text" name="storeName" placeholder="instance name">
+                            <select class="input-medium" name="storeType" data-bind="options: storeTypes"></select>
+                            <button class="btn btn-small btn-primary">Create Store</button>
+                            </fieldset>
+                        </form>
+                    </div>
+                    <div class="span6">
+                        <div data-bind="visible: $root.hasStores, template: {name: 'store-list-template', foreach: stores}"></div>
+                        <div data-bind="visible: !$root.hasStores()">No stores yet.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="panel tab-pane fade" id="tables">Create a store first.</div>
+        <div class="panel tab-pane fade" id="data">Create a store first.</div>
+    </div>
 </div>
 
 
+<script type="text/html" id="store-list-template">
+    <p data-bind="text: name"></p>
+</script>
 
+<script type="text/html" id="modal-template">
+    <div class="modal fade">
+        <div class="modal-header" data-bind="visible: showHeader()">
+            <a class="close pull-right" data-dismiss="modal"><i class="icon-remove"></i></a>
+            <h4 data-bind="visible: title, html: title"></h4>
+        </div>
+        <div class="modal-body" data-bind="html: body"></div>
+        <div class="modal-footer" data-bind="visible: showFooter(), html: footer"></div>
+    </div>
+</script>
+
+<script type="text/html" id="storetypes-Firebase-template">
+    aaaa
+    <!--<form>-->
+        <!--This is my form for <span data-bind="text: storeName"></span> (<span data-bind="text: storeType"></span>).-->
+    <!--</form>-->
+</script>
 
 </body>
 </html>

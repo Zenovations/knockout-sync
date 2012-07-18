@@ -84,6 +84,7 @@ module.exports = function(grunt) {
 
    // Default task.
    grunt.registerTask('default', 'concat min');
+   grunt.registerTask('make',    'concat min');
    grunt.registerTask('test', 'mocha');
 //   grunt.registerTask('default', 'concat min');
 

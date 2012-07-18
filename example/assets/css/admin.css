@@ -3,18 +3,22 @@ body {
    padding-top: 10px;
 }
 
-div.row .nav-tabs {
-   background-color: #eee;
-}
-
 #panelBox {
    border: 1px solid #DDDDDD;
 }
 
 #panelBox .nav-tabs {
    padding-left: 15px;
+   background-color: #eee;
 }
 
 #panels {
    margin: 0 10px 10px 15px;
+}
+
+input::-webkit-input-placeholder {
+   color:    #aad;
+}
+input:-moz-placeholder {
+   color:    #aad;
 }

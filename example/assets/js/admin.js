@@ -1,9 +1,8 @@
 
 (function($) {
 
-   /** CONTROLLERS / VIEWS
+   /** CONTROLLER
     ********************************************************/
-
    var Controller = {
       setPanel: function(route, view) {
          Controller.panel[route] = view;
@@ -11,7 +10,7 @@
       getPanel: function(route) {
          return Controller.panel[route];
       },
-      addStore: function(name, store) {
+      setStore: function(name, store) {
          Controller.stores[name] = store;
          NavView.storeNames.push(name);
       },
@@ -19,90 +18,109 @@
          NavView.currentStore(name);
          Controller.Store = Controller.stores[name];
       },
-      NavView: {
-         storeNames:   ko.observableArray(),
-         currentStore: ko.observable(),
-         tablesLoaded: ko.observable(0)
-      },
+      hasStores: ko.observable(false),
       panel: {},
-      stores: {}
+      stores: {},
+      Store: null
    };
 
-   var NavView = Controller.NavView;
+   /** NavView
+    ********************************************************/
+   var NavView = Controller.NavView = {
+      storeNames:   ko.observableArray(),
+      currentStore: ko.observable(''),
+      tablesLoaded: ko.observable(0)
+   };
 
-   function PanelView(route, props) {
-      applyProps(this, props);
-      this.route = route;
-      this.title = routeTitle(route);
-   }
+   /** StoresPanel
+    ********************************************************/
+   var StoresPanel = {
+      EditPanel: {
+         storeTypes:   ['Firebase'],
+         storeModal: function(form) {
+            var $form = $(form), type = $form.find('select[name=storeType]').val(),
+               name = $form.find('input[name=storeName]').val();
+            console.log(form);
+            createModal({
+               title: 'Create a '+type+' store',
+               storeType: type,
+               storeName: name,
+               body: '<div data-bind="template: storetypes-'+type+'-template">'+name+'</div>'
+            });
+         },
+         addStore: function(form) {
+            console.log(form);
+         },
+         showEditForm: ko.observable(false),
+         editAStore: function() {
+            console.log('editAStore', this, arguments);
+         }
+      }
+   };
+   Controller.setPanel('StoresPanel', StoresPanel);
 
-   /** ROUTING
+   /** Validation
     ********************************************************/
 
-   // STORES
-   createPanel('#stores', {
-      stores: [],
-      storeTypes: {
-         ignore: true,
-         val: {Firebase: {template: 'firebase-store-template'}}
-      }
-   });
-
-   // TABLES
-   createPanel('#tables', {
-      tables: [],
-      setTable: function(name) {
-         //todo
-      }
-   });
-
-   // DATA
-   createPanel('#data', {
-      setTable: function(name) {
-         //todo
-      }
-   });
 
    /** DOM READY
-    *********************/
+    ********************************************************/
    $(function($) {
       ko.applyBindings(Controller);
    });
 
-   /** UTILITIES
+   /** UTIL FUNCTIONS
     ********************************************************/
-
-   function createPanel(route, props) {
-      var panel = new PanelView(route, props);
-      Controller.setPanel(route, panel);
-   }
-
-   function applyProps(view, props) {
-      _.each(props, function(k, v) {
-         if( !$.isPlainObject(v) ) {
-            v = {val: v};
-         }
-         switch(typeof(v.val)) {
-            case 'object':
-               if(_.isArray(v.val) ) {
-                  view[k] = v.ignore? [] : ko.observableArray();
-               }
-               break;
-            case 'string':
-               view[k] = v.ignore? v.val : ko.observable(v.val);
-               break;
-            case 'function':
-               view[k] = v.val;
-               break;
-            default:
-               throw new Error('I don\'t know what to do with a '+ v.type);
-         }
+   function loadPartial($where, name, view) {
+      return $where.load('assets/partials/'+name+'.html', function() {
+         ko.applyBindings(view, this);
       });
    }
 
-   function routeTitle(route) {
-      return _.str.capitalize((route.match('#([a-zA-Z0-9]+)') || [null, 'Untitled'])[1]);
+   function createModal(props) {
+      console.log(props);
+      var $modal,
+          view = $.extend({
+             title:       false,
+             footer:      false,
+             showFooter:  function() { return view.footer? true : false; },
+             showHeader:  function() { return true; },
+             body:        "",
+             partial:     false,
+             destroyOnHide: true
+         }, props);
+
+      $modal = applyTemplate('modal-template', view);
+
+      // initialize this as a bootstrap modal
+      $modal.modal({show: false});
+
+      if( view.destroyOnHide ) {
+         $modal.on('hidden', function() {
+            $(this).remove();
+         });
+      }
+      if( view.partial ) {
+         // partial views are loaded via ajax calls
+         loadPartial($modal.find('.modal-body'), view.partial, view).then(function() {
+            $modal.modal('show');
+         });
+      }
+      else {
+         $modal.modal('show');
+      }
    }
 
+   function applyTemplate(template, view, target, opts) {
+      target || (target = 'body');
+      opts   || (opts = {});
+      var $e = $('<div />');
+      ko.renderTemplate(template, view, opts, $e.get(0));
+      // renderTemplate doesn't actually give us access to the element it creates
+      // and if we use replaceNode we don't get access to that either, so instead
+      // we will do this little magic to get the child of our element, which
+      // is where the template contents will be
+      return $e.find('.modal').appendTo(target);
+   }
 
 })(jQuery);

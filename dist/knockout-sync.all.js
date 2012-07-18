@@ -1,4 +1,4 @@
-/*! Knockout Sync - v0.1.0 - 2012-07-14
+/*! Knockout Sync - v0.1.0 - 2012-07-18
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL */
 
@@ -2635,7 +2635,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       var cleanValue = ko.observable(ko.mapping.toJSON(target));
       var dirtyOverride = ko.observable(ko.utils.unwrapObservable(startDirty));
 
-      target.crud = {
+      target.rec = {
          /**
           * @param {boolean} [newValue]
           * @return {boolean}
@@ -2645,12 +2645,29 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
          }),
 
          markClean: function(){
+            //todo remove this and markDirty, use read: method on isDirty observable
             cleanValue(ko.mapping.toJSON(target));
             dirtyOverride(false);
          },
 
          markDirty: function(){
             dirtyOverride(true);
+         },
+
+         create: function() {
+            //todo
+         },
+
+         read: function() {
+            //todo
+         },
+
+         update: function() {
+            //todo
+         },
+
+         delete: function() {
+            //todo
          }
       };
 
@@ -2816,7 +2833,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    ko.sync || (ko.sync = {});
    ko.sync.stores || (ko.sync.stores = []);
 
-   ko.sync.use = function(model, target) {}; //todo
+   ko.sync.use = function(target, model) {}; //todo
    ko.sync.newView = function(model) {}; //todo
    ko.sync.newList = function(model) {}; //todo
 
@@ -2838,14 +2855,15 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        * @constructor
        */
       init: function(props) {
-         var defaults       = ko.utils.extend(Model.FIELD_DEFAULTS, props.defaults);
-         this.store         = props.dataStore;
-         this.table         = props.dataTable;
-         this.key           = props.primaryKey;
-         this.sort          = props.sortField;
-         this.validator     = props.validator;
-         this.fields        = _processFields(defaults, props.fields);
-         this.recordFactory = props.recordFactory || new RecordFactory(this);
+         var defaults    = ko.utils.extend(Model.FIELD_DEFAULTS, props.defaults);
+         this.store      = props.dataStore;
+         this.table      = props.dataTable;
+         this.key        = props.primaryKey;
+         this.sort       = props.sortField;
+         this.validator  = props.validator;
+         this.auto       = props.autoSync;
+         this.fields     = _processFields(defaults, props.fields);
+         this.factory    = props.recordFactory || new RecordFactory(this);
       },
 
       applyTo: function(viewOrObject, initialData) { }, //todo
@@ -2855,7 +2873,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        * @return {*}
        */
       newRecord: function(data) {
-         return this.recordFactory.create(data);
+         return this.factory.create(data);
       }
    });
    Model.FIELD_DEFAULTS = {
@@ -2868,6 +2886,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       sortField: null,
       valid:     null, //todo tie this to this.validator?
       updateCounter: 'update_counter',
+      autoSync:  false,
       format:    function(v) { return v; } //todo
    };
 
@@ -3343,20 +3362,20 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       /**
        * Perform a query against the database. The options for query are fairly limited:
        *
-       * - limit:   {int=100}      number of records to return, use 0 for all
-       * - offset:  {int=0}        starting point in records, e.g.: {limit: 100, start: 101} would return records 101-200
-       * - filter:  {function|object}  filter rows using this function or value map
-       * - sort:    {array|string} Sort returned results by this field or fields. Each field specified in sort
-       *                           array could also be an object in format {field: 'field_name', desc: true} to obtain
-       *                           reversed sort order
+       * - limit:   {int=100}         number of records to return, use 0 for all
+       * - offset:  {int=0}           starting point in records, e.g.: {limit: 100, start: 101} would return records 101-200
+       * - when:    {function|object} filter rows using this function or value map
+       * - sort:    {array|string}    Sort returned results by this field or fields. Each field specified in sort
+       *                              array could also be an object in format {field: 'field_name', desc: true} to obtain
+       *                              reversed sort order
        *
-       * USE OF FILTER
+       * USE OF WHEN
        * -------------
-       * When `filter` is a function, it is always applied after the results are returned. Thus, when used in conjunction
+       * If `when` is a function, it is always applied after the results are returned. Thus, when used in conjunction
        * with `limit`, there may (and probably will) be less results than `limit` en toto.
        *
-       * When `filter` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
-       * the store. For SQL-like databases, it may be part of the query. For data stores like Simperium, Firebase, or
+       * If `filter` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
+       * the store. For SQL-like databases, it may be part of the query. For data stores like Firebase, or
        * other No-SQL types, it could require fetching all results from the table and filtering them on return. So
        * use this with discretion.
        *
@@ -3541,9 +3560,10 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    /**
     * Perform a query against the database. The options for query are fairly limited:
     *
-    * - limit:   {int=100}      number of records to return, use 0 for all
-    * - offset:  {int=0}        start after this record, e.g.: {limit: 100, offset: 100} would return records 101-200
-    * - filter:  {function}     filter returned results using this function (true=include, false=exclude)
+    * - limit:   {int=100}         number of records to return, use 0 for all
+    * - offset:  {int=0}           start after this record, e.g.: {limit: 100, offset: 100} would return records 101-200
+    * - when:    {function|object} filter returned results using this function (true=include, false=exclude) or a map of key/values
+    * - sort:    {string|object|array}
     *
     * The use of `filter` is applied by stores after `limit`. Thus, when using `filter` it is important to note that
     * less results may (and probably will) be returned than `limit`.
@@ -3577,6 +3597,12 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
          //todo
          throw new Error('I\'m not ready for sort priorities yet');
       }
+      else if( params.sort ) {
+         //todo
+         //todo
+         //todo
+         throw new Error('I\'m not ready for sorting yet');
+      }
       else {
          var vals = [];
          Util.each(table, function(snapshot) {
@@ -3599,7 +3625,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       return def.promise();
    };
 
-   FirebaseStore.prototype.sync = function(location, callback) {}; //todo
+   FirebaseStore.prototype.sync = function(model, callback) {}; //todo
 
    /** UTILITIES
     *****************************************************************************************/
@@ -3729,7 +3755,8 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    function _base(root, base) {
       if( base ) {
          var curr = root;
-         base.split('/').forEach(function(p) {
+         //todo is this necessary?
+         _.forEach(base.split('/'), function(p) {
             curr = curr.child(p);
          });
          return curr;
