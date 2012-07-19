@@ -2,7 +2,7 @@
  * FirebaseStore for knockout-sync
  *******************************************/
 (function() {
-   var undef, ko = this.ko, Firebase = this.Firebase, $ = this.jQuery;
+   var undef, ko = this.ko, Firebase = this.Firebase||window.Firebase, $ = this.jQuery;
 
    /** IDE CLUES
     **********************/

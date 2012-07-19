@@ -32,54 +32,31 @@
 <body>
 
 <div id="panelBox">
-    <ul class="nav nav-tabs" data-bind="with: NavView" >
+    <ul class="nav nav-tabs">
         <li class="active">
             <a href="#stores" data-toggle="tab">Stores (<span data-bind="text: storeNames().length"></span>)</a>
         </li>
         <li><a href="#tables" data-toggle="tab">Tables (<span data-bind="text: tablesLoaded"></span>)</a></li>
         <li><a href="#data" data-toggle="tab">Data</a></li>
         <li class="separator"></li>
-        <li class="dropdown" data-bind="visible: $root.hasStores">
-            <a class="dropdown-toggle" data-bind="text: currentStore" data-toggle="dropdown" href="#">
-                Dropdown
+        <li class="dropdown" data-bind="visible: hasStores">
+            <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                <span data-bind="text: currentStore"></span>
                 <b class="caret"></b>
             </a>
-            <ul class="dropdown-menu">
-                <li><a href="#">one</a></li>
-                <li><a href="#">two</a></li>
-                <li><a href="#">three</a></li>
+            <ul class="dropdown-menu" data-bind="foreach: stores">
+                <li><a href="#" data-bind="text: name, click: $parent.selectStore"></a></li>
             </ul>
         </li>
     </ul>
     <div id="panels" class="tab-content">
-        <div class="panel tab-pane fade active in" id="stores" data-bind="with: getPanel('StoresPanel')">
-            <div class="container">
-                <div class="row">
-                    <div class="span6" data-bind="with: EditPanel">
-                        <form data-bind="submit: storeModal" class="form-inline">
-                            <fieldset><legend>Add a Store</legend>
-                            <input class="input-medium" type="text" name="storeName" placeholder="instance name">
-                            <select class="input-medium" name="storeType" data-bind="options: storeTypes"></select>
-                            <button class="btn btn-small btn-primary">Create Store</button>
-                            </fieldset>
-                        </form>
-                    </div>
-                    <div class="span6">
-                        <div data-bind="visible: $root.hasStores, template: {name: 'store-list-template', foreach: stores}"></div>
-                        <div data-bind="visible: !$root.hasStores()">No stores yet.</div>
-                    </div>
-                </div>
-            </div>
+        <div class="panel tab-pane fade active in" id="stores" data-bind="partial: {name: 'stores', panel: 'StoresPanel'}">
+
         </div>
         <div class="panel tab-pane fade" id="tables">Create a store first.</div>
         <div class="panel tab-pane fade" id="data">Create a store first.</div>
     </div>
 </div>
-
-
-<script type="text/html" id="store-list-template">
-    <p data-bind="text: name"></p>
-</script>
 
 <script type="text/html" id="modal-template">
     <div class="modal fade">
@@ -87,16 +64,9 @@
             <a class="close pull-right" data-dismiss="modal"><i class="icon-remove"></i></a>
             <h4 data-bind="visible: title, html: title"></h4>
         </div>
-        <div class="modal-body" data-bind="html: body"></div>
+        <div class="modal-body" data-bind="boundHtml: body"></div>
         <div class="modal-footer" data-bind="visible: showFooter(), html: footer"></div>
     </div>
-</script>
-
-<script type="text/html" id="storetypes-Firebase-template">
-    aaaa
-    <!--<form>-->
-        <!--This is my form for <span data-bind="text: storeName"></span> (<span data-bind="text: storeType"></span>).-->
-    <!--</form>-->
 </script>
 
 </body>

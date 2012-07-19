@@ -1,4 +1,4 @@
-/*! Knockout Sync - v0.1.0 - 2012-07-18
+/*! Knockout Sync - v0.1.0 - 2012-07-19
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL */
 
@@ -3435,7 +3435,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
  * FirebaseStore for knockout-sync
  *******************************************/
 (function() {
-   var undef, ko = this.ko, Firebase = this.Firebase, $ = this.jQuery;
+   var undef, ko = this.ko, Firebase = this.Firebase||window.Firebase, $ = this.jQuery;
 
    /** IDE CLUES
     **********************/
