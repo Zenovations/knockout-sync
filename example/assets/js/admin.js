@@ -118,8 +118,8 @@
    };
 
    ko.bindingHandlers.partial = {
-      init: function(element, Δval, Δall, view, bindContext) {
-         var val = Δval(), props = $.extend({
+      init: function(element, valAccessor, allAccessor, view, bindContext) {
+         var val = valAccessor(), props = $.extend({
             ctx: view, name: null, after: '' },
             typeof(val) === 'object'? val : {name: val});
          if( props.panel ) {

@@ -69,28 +69,26 @@
        *
        * - limit:   {int=100}         number of records to return, use 0 for all
        * - offset:  {int=0}           starting point in records, e.g.: {limit: 100, start: 101} would return records 101-200
-       * - when:    {function|object} filter rows using this function or value map
+       * - wehre:   {function|object} filter rows using this function or value map
        * - sort:    {array|string}    Sort returned results by this field or fields. Each field specified in sort
        *                              array could also be an object in format {field: 'field_name', desc: true} to obtain
        *                              reversed sort order
        *
-       * USE OF WHEN
+       * USE OF WHERE
        * -------------
-       * If `when` is a function, it is always applied after the results are returned. Thus, when used in conjunction
+       * If `where` is a function, it is always applied after the results are returned. Thus, when used in conjunction
        * with `limit`, there may (and probably will) be less results than `limit` en toto.
        *
-       * If `filter` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
+       * If `where` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
        * the store. For SQL-like databases, it may be part of the query. For data stores like Firebase, or
        * other No-SQL types, it could require fetching all results from the table and filtering them on return. So
        * use this with discretion.
        *
        * THE PROGRESS FUNCTION
        * ---------------------
-       * Each record received is handled by `progressFxn`. When no limit is set, stores may never fulfill
-       * the promise. This is a very important point to keep in mind.
-       *
-       * Additionally, even if a limit is set, if the number of results is less than limit, the promise may
-       * still never fulfill (as stores will not fulfill until the required number of results is reached).
+       * Each record received is handled by `progressFxn`. When no limit is set, all records in the database
+       * are guaranteed to be loaded. However, even with limit set, some data layers may load all the records,
+       * particularly when using `where` parameters. This is a very important point to keep in mind.
        *
        * In the case of a failure, the fail() method on the promise will always be notified immediately, and the load
        * operation will end immediately.
@@ -112,6 +110,17 @@
        * @return {Promise}
        */
       query: function(progressFxn, model, parms) { throw new Error('Interface not implemented'); },
+
+      /**
+       * Given a particular data model, get a count of all records in the database matching
+       * the parms provided. Parms is the same as query() method. This could be a very high-cost
+       * operation depending on the data size and the data source (it could require iterating
+       * every record in the table) for some data layers.
+       *
+       * @param {ko.sync.Model} model
+       * @param {object}        [parms]
+       */
+      count: function(model, parms) { throw new Error('Interface not implemented'); },
 
       /**
        * Given a particular data model, get notifications of any changes to the data. The change notifications will

@@ -78,7 +78,34 @@
     */
    ko.sync.TestData.makeRecordId = function(value) {
       return new ko.sync.RecordId(['id'], {'id': value});
-   }
+   };
+
+   ko.sync.TestData.bigDataProps = {
+      dataTable: 'BigData',
+      primaryKey: 'id',
+      sortField:  'sortField',
+      fields: {
+         id:        { required: true,  persist: true, type: 'string'  },
+         aString:   { required: false, persist: true, type: 'string'  },
+         sortField: { required: false, persist: true, type: 'int'     },
+         aBool:     { required: false, persist: true, type: 'boolean' }
+      }
+   };
+
+   ko.sync.TestData.resetBigData = function(firebaseRoot) {
+      var i, def = $.Deferred(), count = 0;
+      firebaseRoot.child('BigData').set(null, function() {
+         var ref = firebaseRoot.child('BigData');
+         for(i=1; i <= 200; i++) {
+            ref.child(i).setWithPriority(
+               {id: i, aString: 'string-'+i, sortField: i, aBool: true},
+               i,
+               function() { if( ++count == 200 ) { def.resolve(); }
+            });
+         }
+      });
+      return def.promise();
+   };
 
 })(ko);
 

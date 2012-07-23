@@ -249,6 +249,10 @@ jQuery(function($) {
          .always(start);
    });
 
+   test("#count", function() {
+      ok(false, 'Implement me!');
+   });
+
    test("#query", function() {
       ok(false, 'Implement me!');
    });

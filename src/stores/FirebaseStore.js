@@ -125,36 +125,35 @@
    };
 
    /**
-    * Perform a query against the database. The options for query are fairly limited:
+    * Perform a query against the database and get a snapshot of current matching records. To perform
+    * a query that is synchronized and updated whenever the records change, try `sync` instead.
     *
-    * - limit:   {int=100}         number of records to return, use 0 for all
-    * - offset:  {int=0}           start after this record, e.g.: {limit: 100, offset: 100} would return records 101-200
-    * - when:    {function|object} filter returned results using this function (true=include, false=exclude) or a map of key/values
-    * - sort:    {string|object|array}
+    * The options for query are fairly limited:
+    *  - limit:   {int=100}         number of records to return, use 0 for all records in table
+    *  - offset:  {int=0}           start after this record, e.g.: {limit: 100, offset: 100} would return records 101-200
+    *  - where:   {function|object} filter returned results using this function (true=include, false=exclude) or a map of key/values
+    *  - sort:    {string|object|array}
     *
-    * The use of `filter` is applied by stores after `limit`. Thus, when using `filter` it is important to note that
-    * less results may (and probably will) be returned than `limit`.
+    * USE OF WHERE
+    * -------------
+    * See Store::query for options and details
     *
-    * Each record received is handled by the progressFxn, not by the fulfilled promise. The fulfilled promise simply
-    * notifies listeners that it is done retrieving records.
+    * THE PROGRESS FUNCTION
+    * ---------------------
+    * Each record received is handled by `progressFxn`.
     *
-    * There are no guarantees on how a store will optimize the query. It may apply the constraints before or after
-    * retrieving data, depending on the capabilities and structure of the data layer. To ensure high performance
-    * for very large data sets, and maintain store-agnostic design, implementations should use some sort of
-    * pre-built query data in an index instead of directly querying records (think NoSQL databases like
-    * DynamoDB and Firebase, not MySQL queries)
-    *
-    * Alternately, very sophisticated queries could be done external to the knockout-sync module and then
-    * injected into the synced data after.
+    * In the case of a failure, the fail() method on the promise will always be notified immediately,
+    * and the load operation will end immediately.
     *
     * @param {Function} progressFxn called once for each record received
-    * @param {Model}  model
-    * @param {object} [params]
-    * @return {Promise} fulfilled with callback('tableName', limit) if limit is reached
+    * @param {Model}    model
+    * @param {object}   [params]
+    * @return {Promise} fulfilled when all records have been fetched with {int} total number
     */
    FirebaseStore.prototype.query = function(progressFxn, model, params) {
       var def = $.Deferred();
-      var opts = ko.utils.extend({limit: 100, offset: 0, filter: null, sort: null}, params);
+      var opts = ko.utils.extend({limit: 100, offset: 0, where: null, sort: null}, params);
+      _buildFilter(opts);
       var table = this.base.child(model.table);
       var count = 0, offset = ~~opts.offset, limit = opts.limit? ~~opts.offset + ~~opts.limit : 0;
       if( limit ) { table.limit(limit); }
@@ -183,13 +182,38 @@
                }
                if( !opts.filter || opts.filter(data) ) {
                   vals.push(data);
-                  progressFxn(data);
+                  return progressFxn(data);
                }
             }
          });
          if( !def.isResolved() ) { def.resolve(vals); }
       }
       return def.promise();
+   };
+
+   /**
+    * Given a particular data model, get a count of all records in the database matching
+    * the parms provided. Parms is the same as query() method.
+    *
+    * This operation requires iterating all records in the table for Firebase.
+    *
+    * @param {ko.sync.Model} model
+    * @param {object}        [parms]
+    */
+   FirebaseStore.prototype.count = function(model, parms) {
+      if( !model.firebaseMeta ) { model.firebaseMeta = {}; }
+      if( !count in model.firebaseMeta ) {
+         var count = 0;
+         var ref = this.base.child(model.table);
+         Util.each(function(ss) {
+            //todo
+            //todo
+            //todo
+            //todo
+         });
+         model.firebaseMeta.count = count;
+      }
+      return model.firebaseMeta.count;
    };
 
    FirebaseStore.prototype.sync = function(model, callback) {}; //todo
@@ -360,9 +384,9 @@
          return this.snap(parentRef).pipe(function(snapshot) {
             var def = $.Deferred(), vals = [], ret;
             try {
-               snapshot.forEach(function(childSnapshot) {
-                  vals.push({name: childSnapshot.name(), val: childSnapshot.val()});
-                  return fx && fx(childSnapshot);
+               snapshot.forEach(function(snapshot) {
+                  vals.push({name: snapshot.name(), val: snapshot.val()});
+                  return fx && fx(snapshot);
                });
                def.resolve(vals);
             }
@@ -503,6 +527,44 @@
       return setTimeout(function() {
          def.reject('timed out');
       }, timeout||15000);
+   }
+
+   function _buildFilter(opts) {
+      var w =  'where' in opts? opts.where : null;
+      if( w ) {
+         switch(typeof(w)) {
+            case 'object':
+               // convert to a function
+               opts.filter = _filterFromParms(opts);
+               break;
+            case 'function':
+               opts.filter = opts.where;
+               break;
+            default:
+               throw new Error('Invalid `when` type ('+typeof(opts.when)+')');
+         }
+      }
+      else {
+         opts.filter = null;
+      }
+   }
+
+   function _filterFromParms(opts) {
+      return function(data) {
+         return _.every(opts, function(v, k) {
+            if( !(k in data) ) { return false; }
+            switch(typeof(v)) {
+               case 'function':
+                  return v(data[k], k);
+               case 'object':
+                  return _.isEqual(v, data[k]);
+               case 'number':
+                  return v === ~~data[k];
+               default:
+                  return v == data[k];
+            }
+         });
+      }
    }
 
    /** ADD TO NAMESPACE
