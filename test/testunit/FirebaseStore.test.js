@@ -8,6 +8,7 @@ jQuery(function($) {
    var syncRoot = new window.Firebase(FIREBASE_URL+'/'+FIREBASE_TEST_URL);
    var TestData = ko.sync.TestData;
    var genericModel = new ko.sync.Model(TestData.genericModelProps);
+   var bigModel = new ko.sync.Model(TestData.bigData.props);
    //todo composite key
    var genericKeyedData = TestData.genericData;
    var genericUnkeyedData = TestData.genericDataWithoutId;
@@ -16,6 +17,7 @@ jQuery(function($) {
    var sequenceMethods = {
       create: function(store, model, data) {
          var record = model.newRecord(data), def = $.Deferred();
+         //todo use pipe()
          store.create(model, record).done(function(id) {
             // do not immediately return the record because it is actually only stored locally at this point
             // wait for the server database to recognize it, then resolve, just to simplify our test case if/else nesting
@@ -249,15 +251,240 @@ jQuery(function($) {
          .always(start);
    });
 
-   test("#count", function() {
+   asyncTest("#count", function() {
+      expect(2);
+      var store = resetStore();
+      TestData.bigData.reset(syncRoot)
+         .pipe(function() {
+            return store.count(bigModel);
+         })
+         .pipe(function(count) {
+            strictEqual(count, TestData.bigData.COUNT, 'found correct number of records');
+         })
+         .pipe(function() {
+            return store.delete(bigModel, [TestData.makeRecordId(2), TestData.makeRecordId(3)]);
+         })
+         .pipe(function() {
+            return store.count(bigModel);
+         })
+         .done(function(count) {
+            strictEqual(count, TestData.bigData.COUNT-2, 'count correct after deletions');
+         })
+         .fail(function(e) { ok(false, e); })
+         .always(start);
+   });
+
+   asyncTest("#count limit", function() {
+      expect(1);
+      var store = resetStore(), LIMIT = 25;
+      TestData.bigData.reset(syncRoot)
+         .pipe(function() {
+            return store.count(bigModel, {limit: LIMIT});
+         })
+         .done(function(count) {
+            strictEqual(count, LIMIT, 'found correct number of records');
+         })
+         .fail(function(e) { ok(false, e); })
+         .always(start);
+   });
+
+   asyncTest("#count limit (not reached)", function() {
+      expect(1);
+      var store = resetStore(), LIMIT = 25, NUMRECS = 15;
+      TestData.bigData.reset(syncRoot, NUMRECS)
+         .pipe(function() {
+            return store.count(bigModel, {limit: LIMIT});
+         })
+         .done(function(count) {
+            strictEqual(count, NUMRECS, 'found correct number of records');
+         })
+         .fail(function(e) { ok(false, e); })
+         .always(start);
+   });
+
+   asyncTest("#count where object", function() {
+      expect(1);
+      var store = resetStore(), parms = {
+         where: { aBool: true, sortField: function(v) { return v < 51; } }
+      };
+      TestData.bigData.reset(syncRoot)
+         .pipe(function() {
+            return store.count(bigModel, parms);
+         })
+         .done(function(count) {
+            strictEqual(count, 25, 'correct number of records (evens under 51) returned');
+         })
+         .fail(function(e) { ok(false, e); })
+         .always(start);
+   });
+
+   asyncTest("#count where+limit", function() {
+      expect(2);
+      var store = resetStore(), parms = {
+         where: { aBool: false },
+         limit: 75
+      };
+      TestData.bigData.reset(syncRoot)
+         .pipe(function() {
+            return store.count(bigModel, parms);
+         })
+         .pipe(function(count) {
+            strictEqual(count, 75, 'correct number of records (odds up to 75) returned');
+         })
+         .pipe(function() {
+            parms.limit = 175;
+            return store.count(bigModel, parms);
+         })
+         .done(function(count) {
+            strictEqual(count, 100, 'correct number of records (limit never reached) returned');
+         })
+         .fail(function(e) { ok(false, e); })
+         .always(start);
+   });
+
+   asyncTest("#query", function() {
+      expect(2);
+      var store = resetStore(), parms = {
+         where: { aBool: true, sortField: function(v) { return v < 51; } }
+      }, iteratorCalls = 0;
+      TestData.bigData.reset(syncRoot)
+         .pipe(function() {
+            return store.query(bigModel, function(rec) {
+               iteratorCalls++;
+            }, parms);
+         })
+         .done(function(count) {
+            strictEqual(count, iteratorCalls, 'iterator called correct number of times');
+            strictEqual(count, 25, 'correct number of records (evens under 51) returned');
+         })
+         .fail(function(e) { ok(false, e); })
+         .always(start);
+   });
+
+   asyncTest("#query where+limit", function() {
+      expect(4);
+      var store = resetStore(), parms = {
+         where: { aBool: false },
+         limit: 75
+      }, iteratorCalls = 0;
+      TestData.bigData.reset(syncRoot)
+         .pipe(function() {
+            return store.query(bigModel, function(rec) {
+               iteratorCalls++;
+            }, parms);
+         })
+         .pipe(function(count) {
+            strictEqual(count, iteratorCalls, 'iterator called correct number of times');
+            strictEqual(count, 75, 'correct number of records (odds up to 75) returned');
+         })
+         .pipe(function() {
+            parms.limit = 175;
+            iteratorCalls = 0;
+            return store.query(bigModel, function(rec) {
+               iteratorCalls++;
+            }, parms);
+         })
+         .done(function(count) {
+            strictEqual(count, iteratorCalls, 'iterator called correct number of times');
+            strictEqual(count, 100, 'correct number of records (limit never reached) returned');
+         })
+         .fail(function(e) { ok(false, e); })
+         .always(start);
+   });
+
+   asyncTest("#query (no results)", function() {
+      expect(2);
+      var store = resetStore(), parms = { where: { aString: 'not this' } }, iteratorCalls = 0;
+      TestData.bigData.reset(syncRoot)
+         .pipe(function() {
+            return store.query(bigModel, function(rec) {
+               iteratorCalls++;
+            }, parms);
+         })
+         .done(function(count) {
+            strictEqual(count, iteratorCalls, 'iterator called correct number of times');
+            strictEqual(count, 0, 'no records returned');
+         })
+         .fail(function(e) { ok(false, e); })
+         .always(start);
+   });
+
+   asyncTest("#query function", function() {
+      expect(2);
+      var store = resetStore(), parms = { where: function(v, k) {
+         return k.match(/^1\d$/);
+      } }, iteratorCalls = 0;
+      TestData.bigData.reset(syncRoot)
+         .pipe(function() {
+            return store.query(bigModel, function(rec) {
+               iteratorCalls++;
+            }, parms);
+         })
+         .done(function(count) {
+            strictEqual(count, iteratorCalls, 'iterator called correct number of times');
+            strictEqual(count, 10, 'correct number of records returned');
+         })
+         .fail(function(e) { ok(false, e); })
+         .always(start);
+   });
+
+   asyncTest("#query function (no results)", function() {
+      expect(2);
+      var store = resetStore(), parms = { where: function() { return false; } }, iteratorCalls = 0;
+      TestData.bigData.reset(syncRoot)
+         .pipe(function() {
+            return store.query(bigModel, function(rec) {
+               iteratorCalls++;
+            }, parms);
+         })
+         .done(function(count) {
+            strictEqual(count, iteratorCalls, 'iterator called correct number of times');
+            strictEqual(count, 0, 'correct number of records returned');
+         })
+         .fail(function(e) { ok(false, e); })
+         .always(start);
+   });
+
+   test("#hasSync", function() {
+      var store = resetStore();
+      strictEqual(store.hasSync(), true, 'store has sync');
+   });
+
+   asyncTest("#sync added", function() {
+      expect(3);
+      var store = resetStore(), updatedData = $.extend({}, genericKeyedData, {intRequired: 10, boolOptional: true});
+      function fx(e, id, data) {
+         strictEqual(e.type, 'added', 'event type is "added"');
+         deepEqual(id, genericKeyedData.id, 'has correct id');
+         deepEqual(data, genericKeyedData, 'fields set correctly');
+      }
+      store.sync(genericModel, fx);
+      //todo these need to get created on the server for real testing
+      //todo this isn't an accurate test
+      startSequence(5000)
+         .create(store, genericModel, genericKeyedData)
+         .wait(100)
+         .end()
+         .fail(function(e) { ok(false, e); })
+         .always(function() {
+            store.unsync(genericModel, fx);
+            start();
+         });
+   });
+
+   test("#sync updated", function() {
       ok(false, 'Implement me!');
    });
 
-   test("#query", function() {
+   test("#sync deleted", function() {
       ok(false, 'Implement me!');
    });
 
-   test("#sync", function() {
+   test("#sync moved", function() {
+      ok(false, 'Implement me!');
+   });
+
+   test('#unsync', function() {
       ok(false, 'Implement me!');
    });
 
@@ -345,7 +572,7 @@ jQuery(function($) {
          case 'date':
             return null;
          default:
-            throw new Error('Invaild field type '+type);
+            throw new Error('Invalid field type '+type);
       }
    }
 

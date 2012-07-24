@@ -4,6 +4,8 @@
 (function() {
    var undef, ko = this.ko, Firebase = this.Firebase||window.Firebase, $ = this.jQuery;
 
+   var EVENT_TYPES = 'added deleted moved updated connected disconnected';
+
    /** IDE CLUES
     **********************/
    /** @var {jQuery.Deferred}  */ var Promise;
@@ -22,6 +24,8 @@
       init: function(url, base) {
          this.base = _base(new Firebase(url), base);
       }
+      // we don't need to include all the methods here because there is no _super to deal with
+      // we're just inheriting for the "is a" component and to enforce the contract of Store
    });
 
    /**
@@ -41,10 +45,10 @@
     * @return {Promise} resolves to the record's {string} id
     */
    FirebaseStore.prototype.create = function(model, record) {
-      //todo sort priorities
+      //todo-sort priorities
       return ko.sync.handle(this, function(cb, eb) { // creates a promise
          var table = this.base.child(model.table);
-             // fetch the record using .child()
+         // fetch the record using .child()
          _createRecord(table, record.getKey(), cleanData(model.fields, record.getData())).then(function(success, recordId) {
             (success && cb(recordId)) || eb(recordId);
          });
@@ -67,7 +71,8 @@
       var table = this.base.child(model.table),
             key   = _keyFor(recOrId),
             hash  = key.hashKey();
-      return Util.val(table, hash).pipe(function(data) {
+      return Util.val(table, hash).pipe(function(snapshot) {
+         var data = snapshot.val();
          return data? model.newRecord(data) : null;
       });
    };
@@ -79,8 +84,9 @@
     * @return {Promise} resolves to callback({string}id, {boolean}updated), where updated is true if an update occurred or false if data was not dirty
     */
    FirebaseStore.prototype.update = function(model, rec) {
-      //todo sort priorities
+      //todo-sort priorities
       var base = this.base;
+      //todo use .pipe instead of ko.sync.handle
       return ko.sync.handle(this, function(cb, eb) {
          if( !rec.hasKey() ) { eb('Invalid key'); }
          this.read(model, rec).done(function(origRec) {
@@ -110,6 +116,11 @@
     * @return {Promise} resolves with record's {string}id
     */
    FirebaseStore.prototype.delete = function(model, recOrId) {
+      if(_.isArray(recOrId)) {
+         return $.when(_.map(recOrId, function(id) {
+            return this.delete(model, id);
+         }, this));
+      }
       return ko.sync.handle(this, function(cb, eb) {
          var key = _keyFor(recOrId);
          if( !key.isSet() ) {
@@ -138,85 +149,121 @@
     * -------------
     * See Store::query for options and details
     *
-    * THE PROGRESS FUNCTION
+    * THE ITERATOR
     * ---------------------
-    * Each record received is handled by `progressFxn`.
+    * Each record received is handled by `iterator`. If iterator returns true, then the iteration is stopped. The
+    * iterator should be in the format `function(data, index, model)` where data is the record and index is the count
+    * of the record starting from 0
     *
     * In the case of a failure, the fail() method on the promise will always be notified immediately,
     * and the load operation will end immediately.
     *
-    * @param {Function} progressFxn called once for each record received
     * @param {Model}    model
-    * @param {object}   [params]
+    * @param {Function} iterator called once for each record received
+    * @param {object}   [criteria]
     * @return {Promise} fulfilled when all records have been fetched with {int} total number
     */
-   FirebaseStore.prototype.query = function(progressFxn, model, params) {
+   FirebaseStore.prototype.query = function(model, iterator, criteria) {
       var def = $.Deferred();
-      var opts = ko.utils.extend({limit: 100, offset: 0, where: null, sort: null}, params);
-      _buildFilter(opts);
       var table = this.base.child(model.table);
-      var count = 0, offset = ~~opts.offset, limit = opts.limit? ~~opts.offset + ~~opts.limit : 0;
-      if( limit ) { table.limit(limit); }
       if( model.sort ) {
-         //todo
-         //todo
-         //todo
+         //todo-sort
+         //todo-sort
+         //todo-sort
          throw new Error('I\'m not ready for sort priorities yet');
       }
-      else if( params.sort ) {
-         //todo
-         //todo
-         //todo
+      else if( criteria && criteria.sort ) {
+         //todo-sort
+         //todo-sort
+         //todo-sort
          throw new Error('I\'m not ready for sorting yet');
       }
       else {
-         var vals = [];
-         Util.each(table, function(snapshot) {
-            var data = snapshot.val();
-            if( data !== null ) {
-               count++;
-               if( count <= start ) { return; }
-               else if( limit && count > limit ) {
-                  def.resolve(model.table, opts.limit);
-                  return true;
-               }
-               if( !opts.filter || opts.filter(data) ) {
-                  vals.push(data);
-                  return progressFxn(data);
-               }
-            }
+         var count = 0;
+         return Util.filter(table, criteria, function(snapshot) {
+            return iterator(snapshot.val(), count++, model);
          });
-         if( !def.isResolved() ) { def.resolve(vals); }
       }
-      return def.promise();
    };
 
    /**
     * Given a particular data model, get a count of all records in the database matching
     * the parms provided. Parms is the same as query() method.
     *
+    * The sole difference is that the default limit is 0. A limit may still be used and
+    * useful in some cases, but is not set by default.
+    *
     * This operation requires iterating all records in the table for Firebase.
     *
     * @param {ko.sync.Model} model
-    * @param {object}        [parms]
+    * @param {object}        [parms] must be a hash ($.isPlainObject())
     */
    FirebaseStore.prototype.count = function(model, parms) {
-      if( !model.firebaseMeta ) { model.firebaseMeta = {}; }
-      if( !count in model.firebaseMeta ) {
-         var count = 0;
-         var ref = this.base.child(model.table);
-         Util.each(function(ss) {
-            //todo
-            //todo
-            //todo
-            //todo
-         });
-         model.firebaseMeta.count = count;
-      }
-      return model.firebaseMeta.count;
+      var count = 0, table = this.base.child(model.table),
+          opts  = ko.utils.extend({limit: 0, offset: 0, where: null, sort: null}, parms),
+          start = ~~opts.offset,
+          end   = opts.limit? start + ~~opts.limit : 0,
+          curr  = -1;
+      _buildFilter(opts);
+      return Util.each(table, function(snapshot) {
+         var data = snapshot.val();
+         if( data !== null && (!opts.filter || opts.filter(data)) ) {
+            curr++;
+            if( end && curr == end ) {
+               return true;
+            }
+            else if( curr >= start ) {
+               count++;
+            }
+         }
+      }).pipe(function() {
+            return count;
+      });
    };
 
-   FirebaseStore.prototype.sync = function(model, callback) {}; //todo
+   /**
+    * True if this data layer provides push updates that can be monitored for the given model
+    * @return {boolean}
+    */
+   FirebaseStore.prototype.hasSync = function(model) { return true; };
+
+   FirebaseStore.prototype.sync = function(model, callback, type) {
+      var eventList = type || EVENT_TYPES;
+      if( !('FirebaseListeners' in model) ) {
+         var $e = $('<p />');
+         model.FirebaseListeners = {count: 0, events: $e};
+         var ref = this.base.child(model.table);
+         ref.on('child_added', function(snapshot, prevSiblingId) {
+            var data = snapshot.val();
+            if( data !== null ) { $e.trigger('added', snapshot.name(), data, prevSiblingId); }
+         });
+         ref.on('child_removed', function(snapshot) {
+            $e.trigger('deleted', snapshot.name(), snapshot.val());
+         });
+         ref.on('child_changed', function(snapshot, prevSiblingId) {
+            $e.trigger('updated', snapshot.name(), snapshot.val(), prevSiblingId);
+         });
+         ref.on('child_moved', function(snapshot, prevSiblingId) {
+            $e.trigger('moved', snapshot.name(), snapshot.val(), prevSiblingId);
+         });
+      }
+      model.FirebaseListeners.count++;
+      model.FirebaseListeners.events.on(eventList, callback)
+   };
+
+   FirebaseStore.prototype.unsync = function(model, callback, type) {
+      var eventList = type || EVENT_TYPES;
+      if( 'FirebaseListeners' in model ) {
+         model.FirebaseListeners.count--;
+         if( model.FirebaseListeners.count < 1 ) {
+            //todo stop listening to Firebase events
+            //todo
+            //todo
+            //todo
+         }
+         model.FirebaseListeners.events.off(eventList, callback);
+      }
+   };
 
    /** UTILITIES
     *****************************************************************************************/
@@ -326,6 +373,7 @@
    }
 
    if (!Date.prototype.toISOString) {
+      //todo use moment?
       Date.prototype.toISOString = function() {
          function pad(n) { return n < 10 ? '0' + n : n }
          return this.getUTCFullYear() + '-'
@@ -373,22 +421,22 @@
       },
 
       /**
-       * Returns a promise which resolves to a hash containing name/val for each record. Also accepts an optional
-       * function which is invoked for each snapshot value. The iteration of values stops if `fx` returns true.
+       * Returns a promise which resolves to number of records iterated. The snapshots for each record are passed into
+       * `fx`. The iteration of values stops if `fx` returns true.
        *
-       * @param {Firebase} parentRef
-       * @param {Function} [fx] passed into forEach() on each iteration, see http://www.firebase.com/docs/datasnapshot/foreach.html
-       * @return {jQuery.Deferred} a promise
+       * @param {Firebase} table
+       * @param {Function} [fx]    passed into forEach() on each iteration, see http://www.firebase.com/docs/datasnapshot/foreach.html
+       * @return {jQuery.Deferred} a promise resolved to number of records iterated
        */
-      each: function(parentRef, fx) {
-         return this.snap(parentRef).pipe(function(snapshot) {
-            var def = $.Deferred(), vals = [], ret;
+      each: function(table, fx) {
+         return this.snap(table).pipe(function(snapshot) {
+            var def = $.Deferred(), count = 0;
             try {
                snapshot.forEach(function(snapshot) {
-                  vals.push({name: snapshot.name(), val: snapshot.val()});
-                  return fx && fx(snapshot);
+                  count++;
+                  return fx? fx(snapshot) : undef;
                });
-               def.resolve(vals);
+               def.resolve(count);
             }
             catch(e) {
                def.reject(e);
@@ -398,26 +446,26 @@
       },
 
       /**
-       * @param {Firebase} parentRef
+       * @param {Firebase} table
        * @param {String}   childPath the child object to retrieve and get the value for
        * @return {jQuery.Deferred} a promise
        */
-      val: function(parentRef, childPath) {
+      val: function(table, childPath) {
          var def = $.Deferred(), to = _timeout(def);
-         parentRef.child(childPath).once('value', function(snapshot) {
+         table.child(childPath).once('value', function(snapshot) {
             clearTimeout(to);
-            def.resolve(snapshot.val());
+            def.resolve(snapshot);
          });
          return def.promise();
       },
 
       /**
-       * @param {Firebase} parentRef
+       * @param {Firebase} table
        * @param {string|object|function} childPath
        * @return {jQuery.Deferred} resolves with child snapshot if it exists or fails if it does not
        */
-      require: function(parentRef, childPath) {
-         return this.find(parentRef, childPath).pipe(function(snapshot) {
+      require: function(table, childPath) {
+         return this.find(table, childPath).pipe(function(snapshot) {
             if( snapshot === null ) {
                return $.Deferred().reject('child not found: '+childPath);
             }
@@ -428,17 +476,14 @@
       },
 
       /**
-       * @param {Firebase} parentRef
+       * @param {Firebase} table
        * @param {string} childPath
        * @return {jQuery.Deferred} resolves to true if childPath exists or false if not
        */
-      has: function(parentRef, childPath) {
-         var def = $.Deferred(), to = _timeout(def);
-         parentRef.child(childPath).once('value', function(snapshot) {
-            clearTimeout(to);
-            def.resolve(snapshot.val() !== null);
+      has: function(table, childPath) {
+         return Util.val(table, childPath).pipe(function(ss) {
+            return ss.val() !== null;
          });
-         return def.promise();
       },
 
       /**
@@ -451,21 +496,19 @@
        * If the criteria is a Function, then the object is passed in to that function to be compared. It must return
        * true or false.
        *
-       * @param {Firebase} parentRef
+       * @param {Firebase} table
        * @param {string|Function|object} matchCriteria see description
        * @return {jQuery.Deferred} a promise which resolves to the snapshot of child or null if not found
        */
-      find: function(parentRef, matchCriteria) {
+      find: function(table, matchCriteria) {
          if( typeof(matchCriteria) === 'string' ) {
-            return this.val(parentRef, matchCriteria);
+            return Util.val(table, matchCriteria);
          }
          else {
-            var matchFxn = _matchFxn(matchCriteria), def = $.Deferred();
-            this.each(parentRef, function(snapshot) {
-               if( matchFxn(snapshot) ) {
-                  def.resolve(snapshot);
-                  return true;
-               }
+            var def = $.Deferred();
+            this.filter(table, matchCriteria, function(snapshot) {
+               def.resolve(snapshot);
+               return true;
             });
             if( !def.isResolved() ) { def.resolve(null); }
             return def.promise();
@@ -473,49 +516,40 @@
       },
 
       /**
-       * Retrieves all child snapshots from the parentRef which match criteria.
+       * Retrieves all child snapshots from the table which match given criteria.
        *
-       * If the criteria is a Function, then the snapshot is passed in to that function to be compared. It must return
-       * true or false.
+       * `filterCriteria` exactly matches the FirebaseStore.query and FirebaseStore.count() methods.
        *
-       * If the criteria is an Object, it's treated as key/value pairs representing fields on the child which must
-       * match. Objects are compared with _.isEqual(...), strings/numbers/null/booleans are compared with ===.
-       * Functions are invoked with arguments `value, key, snapshot` and must return true (keep) or false (discard).
+       * If recordMatchedCallback returns true, then the filter operation is ended immediately
        *
-       * @param {Firebase} parentRef
+       * @param {Firebase}         table
        * @param {Function|object}  filterCriteria see description
-       * @return {jQuery.Deferred} a promise which resolves to the {object} record after it is retrieved (or null if not found)
+       * @param {Function}         recordMatchedCallback called each time a match is found
+       * @return {jQuery.Deferred} resolves to number of records matched when operation completes
        */
-      filter: function(parentRef, filterCriteria) {
-         var matchFxn = _matchFxn(filterCriteria), def = $.Deferred();
-         return $.when(function() {
-            var vals = [];
-            this.each(parentRef, function(snapshot) {
-               matchFxn(snapshot) && vals.push(snapshot);
-            });
-            return vals;
-         });
+      filter: function(table, filterCriteria, recordMatchedCallback) {
+         var opts    = ko.utils.extend({limit: 0, offset: 0, where: null, sort: null}, filterCriteria),
+             start   = ~~opts.offset,
+             end     = opts.limit? start + ~~opts.limit : 0,
+             curr    = -1,
+             matches = 0,
+             def     = $.Deferred();
+         _buildFilter(opts);
+         return Util.each(table, function(snapshot) {
+            var data = snapshot.val();
+            if( data !== null && (!opts.filter || opts.filter(data, snapshot.name())) ) {
+               curr++;
+               if( end && curr == end ) {
+                  return true;
+               }
+               else if( curr >= start ) {
+                  matches++;
+                  return recordMatchedCallback(snapshot);
+               }
+            }
+         }).pipe(function(ct) { return matches; });
       }
    };
-
-   function _matchFxn(criteria) {
-      if(_.isFunction(criteria)) {
-         return criteria;
-      }
-      else {
-         return function(snapshot) {
-            var val = snapshot.val();
-            if( val === null ) { return false; }
-            _.any(val, function(v, k) {
-               if( k in this ) {
-                  switch(typeof(this[k])) {
-
-                  }
-               }
-            }, criteria);
-         }
-      }
-   }
 
    /**
     * @param {jQuery.Deferred} def
@@ -535,7 +569,7 @@
          switch(typeof(w)) {
             case 'object':
                // convert to a function
-               opts.filter = _filterFromParms(opts);
+               opts.filter = _filterFromParms(w);
                break;
             case 'function':
                opts.filter = opts.where;
@@ -549,17 +583,20 @@
       }
    }
 
-   function _filterFromParms(opts) {
-      return function(data) {
-         return _.every(opts, function(v, k) {
+   function _filterFromParms(where) {
+      return function(data, key) {
+         return _.every(where, function(v, k) {
             if( !(k in data) ) { return false; }
             switch(typeof(v)) {
                case 'function':
-                  return v(data[k], k);
+                  return v(data[k], k, key);
                case 'object':
+                  if( v === null ) { return data[k] === null; }
                   return _.isEqual(v, data[k]);
                case 'number':
                   return v === ~~data[k];
+               case 'undefined':
+                  return data[k] === undef;
                default:
                   return v == data[k];
             }

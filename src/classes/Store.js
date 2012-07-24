@@ -68,8 +68,8 @@
        * Perform a query against the database. The options for query are fairly limited:
        *
        * - limit:   {int=100}         number of records to return, use 0 for all
-       * - offset:  {int=0}           starting point in records, e.g.: {limit: 100, start: 101} would return records 101-200
-       * - wehre:   {function|object} filter rows using this function or value map
+       * - offset:  {int=0}           exclusive starting point in records, e.g.: {limit: 100, offset: 100} would return records 101-200 (the first record is 1 not 0)
+       * - where:   {function|object} filter rows using this function or value map
        * - sort:    {array|string}    Sort returned results by this field or fields. Each field specified in sort
        *                              array could also be an object in format {field: 'field_name', desc: true} to obtain
        *                              reversed sort order
@@ -84,9 +84,9 @@
        * other No-SQL types, it could require fetching all results from the table and filtering them on return. So
        * use this with discretion.
        *
-       * THE PROGRESS FUNCTION
+       * THE ITERATOR
        * ---------------------
-       * Each record received is handled by `progressFxn`. When no limit is set, all records in the database
+       * Each record received is handled by `iterator`. When no limit is set, all records in the database
        * are guaranteed to be loaded. However, even with limit set, some data layers may load all the records,
        * particularly when using `where` parameters. This is a very important point to keep in mind.
        *
@@ -104,12 +104,12 @@
        * Alternately, very sophisticated queries could be done external to the knockout-sync module and then
        * injected into the synced data after.
        *
-       * @param {Function} progressFxn
+       * @param {Function} iterator
        * @param {ko.sync.Model}  model
        * @param {object} [parms]
        * @return {Promise}
        */
-      query: function(progressFxn, model, parms) { throw new Error('Interface not implemented'); },
+      query: function(model, iterator, parms) { throw new Error('Interface not implemented'); },
 
       /**
        * Given a particular data model, get a count of all records in the database matching
@@ -123,19 +123,33 @@
       count: function(model, parms) { throw new Error('Interface not implemented'); },
 
       /**
+       * True if this data layer provides push updates that can be monitored.
+       * @return {boolean}
+       */
+      hasSync: function() { throw new Error('Interface not implemented'); },
+
+      /**
        * Given a particular data model, get notifications of any changes to the data. The change notifications will
        * come in the form:
        *
-       *   - callback('added', {string}record_id, {object}hash_of_name_value_pairs)
+       *   - callback('added',   {string}record_id, {object}json)
        *   - callback('deleted', {string}record_id)
-       *   - callback('updated', {string}record_id, {object}hash_of_name_value_pairs)
+       *   - callback('updated', {string}record_id, {object}json)
+       *   - callback('moved',   {string}record_id, {string}prevRecordId)
+       *   - callback('connected')     // connected to database layer
+       *   - callback('disconnected')  // disconnected from database layer
+       *
+       *   For "moved" events, this indicates that the record has changed positions relative to its siblings
+       *   The `prevRecordId` is the child just before the record at its new position (or null if first)
        *
        * @param {ko.sync.Model} model
-       * @param {Function} callback
+       * @param {Function}      callback
+       * @param {string}        [events]
        * @return {Store} this
        */
-      sync: function(model, callback) { throw new Error('Interface not implemented'); }
-
+      sync: function(model, callback, events) { throw new Error('Interface not implemented'); }
    });
+
+   Store.EVENT_TYPES = 'added deleted moved updated connected disconnected';
 
 })(this.ko);

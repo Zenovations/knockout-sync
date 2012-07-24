@@ -80,31 +80,38 @@
       return new ko.sync.RecordId(['id'], {'id': value});
    };
 
-   ko.sync.TestData.bigDataProps = {
-      dataTable: 'BigData',
-      primaryKey: 'id',
-      sortField:  'sortField',
-      fields: {
-         id:        { required: true,  persist: true, type: 'string'  },
-         aString:   { required: false, persist: true, type: 'string'  },
-         sortField: { required: false, persist: true, type: 'int'     },
-         aBool:     { required: false, persist: true, type: 'boolean' }
-      }
-   };
-
-   ko.sync.TestData.resetBigData = function(firebaseRoot) {
-      var i, def = $.Deferred(), count = 0;
-      firebaseRoot.child('BigData').set(null, function() {
-         var ref = firebaseRoot.child('BigData');
-         for(i=1; i <= 200; i++) {
-            ref.child(i).setWithPriority(
-               {id: i, aString: 'string-'+i, sortField: i, aBool: true},
-               i,
-               function() { if( ++count == 200 ) { def.resolve(); }
-            });
+   ko.sync.TestData.bigData = {
+      COUNT: 200,
+      props: {
+         dataTable: 'BigData',
+         primaryKey: 'id',
+         //sortField:  'sortField',
+         fields: {
+            id:        { required: true,  persist: true, type: 'string'  },
+            aString:   { required: false, persist: true, type: 'string'  },
+            sortField: { required: false, persist: true, type: 'int'     },
+            aBool:     { required: false, persist: true, type: 'boolean' }
          }
-      });
-      return def.promise();
+      },
+      /**
+       * @param firebaseRoot
+       * @param {int} [numrecs]
+       * @return {jQuery.Deferred}
+       */
+      reset: function(firebaseRoot, numrecs) {
+         var i, def = $.Deferred(), count = 0, ref = firebaseRoot.child('BigData');
+         ref.set(null, function() {
+            var ref = firebaseRoot.child('BigData'), max = numrecs || ko.sync.TestData.bigData.COUNT;
+            for(i=1; i <= max; i++) {
+               ref.child(i).setWithPriority(
+                  {id: i, aString: 'string-'+i, sortField: i, aBool: (i%2 === 0)},
+                  i,
+                  function() { if( ++count == max ) { def.resolve(ref); } }
+               );
+            }
+         });
+         return def.promise();
+      }
    };
 
 })(ko);
