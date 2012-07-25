@@ -25,7 +25,7 @@
          this.base = _base(new Firebase(url), base);
       }
       // we don't need to include all the methods here because there is no _super to deal with
-      // we're just inheriting for the "is a" component and to enforce the contract of Store
+      // we're just inheriting for the "is a" behavior and to enforce the contract of Store
    });
 
    /**
@@ -235,20 +235,23 @@
          var ref = this.base.child(model.table);
          ref.on('child_added', function(snapshot, prevSiblingId) {
             var data = snapshot.val();
-            if( data !== null ) { $e.trigger('added', snapshot.name(), data, prevSiblingId); }
+            if( data !== null ) { $e.trigger('added', [snapshot.name(), data, prevSiblingId]); }
          });
          ref.on('child_removed', function(snapshot) {
-            $e.trigger('deleted', snapshot.name(), snapshot.val());
+            $e.trigger('deleted', [snapshot.name(), snapshot.val()]);
          });
          ref.on('child_changed', function(snapshot, prevSiblingId) {
-            $e.trigger('updated', snapshot.name(), snapshot.val(), prevSiblingId);
+            $e.trigger('updated', [snapshot.name(), snapshot.val(), prevSiblingId]);
          });
          ref.on('child_moved', function(snapshot, prevSiblingId) {
-            $e.trigger('moved', snapshot.name(), snapshot.val(), prevSiblingId);
+            $e.trigger('moved', [snapshot.name(), snapshot.val(), prevSiblingId]);
          });
       }
       model.FirebaseListeners.count++;
-      model.FirebaseListeners.events.on(eventList, callback)
+      model.FirebaseListeners.events.on(eventList, function(e) {
+         var args = $.makeArray(arguments), type = args.shift().type;
+         callback.apply(this, [type].concat(args));
+      })
    };
 
    FirebaseStore.prototype.unsync = function(model, callback, type) {
@@ -352,15 +355,23 @@
    }
 
    function _formatDate(v) {
-      if( typeof(v) === 'object' ) {
-         if( v.toISOString ) {
-            return v.toISOString();
-         }
-         else if( typeof(moment) === 'object' && moment.isMoment && moment.isMoment(v) ) {
-            return moment.defaultFormat()
-         }
+      switch(typeof(v)) {
+         case 'object':
+            if( typeof(moment) === 'object' && moment.isMoment && moment.isMoment(v) ) {
+               return v.utc().format();
+            }
+            else if( 'toISOString' in v ) {
+               return v.toISOString();
+            }
+            else {
+               return getDefaultValue('date');
+            }
+         case 'string':
+         case 'number':
+            return moment(v).format();
+         default:
+            return getDefaultValue('date');
       }
-      return getDefaultValue('date');
    }
 
    function _keyFor(recOrId) {
@@ -372,17 +383,27 @@
       }
    }
 
-   if (!Date.prototype.toISOString) {
-      //todo use moment?
-      Date.prototype.toISOString = function() {
-         function pad(n) { return n < 10 ? '0' + n : n }
-         return this.getUTCFullYear() + '-'
-               + pad(this.getUTCMonth() + 1) + '-'
-               + pad(this.getUTCDate()) + 'T'
-               + pad(this.getUTCHours()) + ':'
-               + pad(this.getUTCMinutes()) + ':'
-               + pad(this.getUTCSeconds()) + 'Z';
-      };
+   if ( !Date.prototype.toISOString ) {
+      (function() {
+         function pad(number) {
+            var r = String(number);
+            if ( r.length === 1 ) {
+               r = '0' + r;
+            }
+            return r;
+         }
+
+         Date.prototype.toISOString = function() {
+            return this.getUTCFullYear()
+               + '-' + pad( this.getUTCMonth() + 1 )
+               + '-' + pad( this.getUTCDate() )
+               + 'T' + pad( this.getUTCHours() )
+               + ':' + pad( this.getUTCMinutes() )
+               + ':' + pad( this.getUTCSeconds() )
+               + '.' + String( (this.getUTCMilliseconds()/1000).toFixed(3) ).slice( 2, 5 )
+               + 'Z';
+         };
+      }());
    }
 
    /**

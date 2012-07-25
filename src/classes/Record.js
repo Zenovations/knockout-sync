@@ -89,17 +89,35 @@
    });
 
    function _setFields(fields, data) {
+      //todo validate the data before applying it somehow
       var k, out = {}, keys = _.keys(fields), i = keys.length;
       while(i--) {
          k = keys[i];
-         if( data.hasOwnProperty(k) && exists(data[k]) ) {
-            out[k] = data[k];
-         }
-         else {
-            out[k] = fields[k].default;
-         }
+         out[k] = _value(k, fields, data);
       }
       return out;
+   }
+
+   function _value(k, fields, data) {
+      var field = fields[k];
+      if( data.hasOwnProperty(k) && exists(data[k]) ) {
+         var v = data[k];
+         switch(field.type) {
+            case 'date':
+               return moment(v).utc().toDate();
+            case 'int':
+               return ~~v;
+            case 'float':
+               v = parseFloat(v);
+               if( isNaN(v) ) { return field.default; }
+               else { return v; }
+            default:
+               return v;
+         }
+     }
+      else {
+         return field.default;
+      }
    }
 
    function exists(v) {
@@ -113,7 +131,6 @@
       }
    }
 
-   ko.sync || (ko.sync = {});
    ko.sync.Record = Record;
 
 })(this.ko);

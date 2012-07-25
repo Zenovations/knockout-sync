@@ -2,9 +2,9 @@
 (function(ko) {
    "use strict";
 
-   ko.sync.TestData = {};
+   var exports = ko.sync.TestData = {}, Model = ko.sync.Model;
 
-   ko.sync.TestData.genericModelProps = {
+   var genericModelProps = {
       dataTable: 'TableKeyed',
       primaryKey: 'id',
       fields: {
@@ -24,34 +24,97 @@
       }
    };
 
-   ko.sync.TestData.genericModelPropsWithSort = ko.utils.extend(
-      {sortField: 'intRequired'}, ko.sync.TestData.genericModelProps);
+   var genericModelPropsWithSort = ko.utils.extend(
+      {sortField: 'intRequired'}, genericModelProps);
 
-   ko.sync.TestData.genericDataWithoutId = {
+   var genericDataWithoutId = {
       stringRequired: 'required',
-      dateRequired:   new Date(),
+      dateRequired:   moment().utc().format(),
       intRequired:    -25,
       boolRequired:   true,
       floatRequired:  2.5,
       emailRequired:  'two@five.com'
    };
 
-   ko.sync.TestData.genericData = ko.utils.extend(
-      {id: 'record123'}, ko.sync.TestData.genericDataWithoutId);
+   var genericDataWithId = ko.utils.extend({id: 'record123'}, genericDataWithoutId);
+
+   /**
+    * @param {object}  [moreOpts]
+    * @param {boolean} [withSort]
+    * @return {ko.sync.Model}
+    */
+   exports.model = function(moreOpts, withSort) {
+      if( arguments.length == 1 && _.isBoolean(moreOpts) ) {
+         withSort = moreOpts;
+         moreOpts = null;
+      }
+      var props = $.extend({}, (withSort? genericModelPropsWithSort : genericModelProps), moreOpts);
+      return new Model(props);
+   };
+
+   /**
+    * @param {boolean} [unkeyed]
+    * @param {object}  [moreData]
+    * @return {object}
+    */
+   exports.genericData = function(unkeyed, moreData) {
+      if( arguments.length == 1 && _.isObject(unkeyed) ) {
+         moreData = unkeyed;
+         unkeyed = false;
+      }
+      return $.extend({}, unkeyed? genericDataWithoutId : genericDataWithId, moreData);
+   };
+
+   /**
+    * @param {boolean} [unkeyed]
+    * @return {object}
+    */
+   exports.fullData = function(unkeyed, moreData) {
+      //todo-sort
+      return $.extend(
+         {},
+         exports.defaults(exports.model()),
+         exports.genericData.apply(null, $.makeArray(arguments))
+      );
+   };
+
+   /**
+    * Ensures dates are converted to compatible formats for comparison
+    * @param {object} data
+    * @return {object}
+    */
+   exports.forCompare = function(data) {
+      var out = $.extend({}, data);
+      if( 'dateOptional' in out && out.dateOptional ) {
+         out.dateOptional = moment.utc(out.dateOptional).toDate();
+      }
+      if( 'dateRequired' in out && out.dateRequired ) {
+         out.dateRequired = moment.utc(out.dateRequired).toDate();
+      }
+      return out;
+   };
+
+   exports.defaults = function(model) {
+      //todo-sort
+      var defaults = {};
+      _.each(model.fields, function(field, key) {
+         defaults[key] = field.default;
+      });
+      return defaults;
+   };
 
 
    /**
     * Creates records using ko.sync.TestData.makeRecord()
     *
-    * @param {ko.sync.Model} model
-    * @param {object}        base   a data template
     * @param {int}           len    how many records to create?
+    * @param {object}        [data] adjust the default data object
     * @return {Array}
     */
-   ko.sync.TestData.makeRecordList = function(model, base, len) {
-      var recs = [];
+   exports.makeRecords = function(len, data) {
+      var recs = [], base = $.extend({}, genericDataWithId, data);
       for(var i = 1; i <= len; i++) {
-         recs.push(ko.sync.TestData.makeRecord(model, base, i));
+         recs.push(exports.makeRecord(exports.model(), base, i));
       }
       return recs;
    };
@@ -62,7 +125,7 @@
     * @param {int}           i      used to build id, requiredInt, requiredFloat, and requiredString values
     * @return {ko.sync.Record}
     */
-   ko.sync.TestData.makeRecord = function(model, base, i) {
+   exports.makeRecord = function(model, base, i) {
       var data = $.extend({}, base);
       data.id = 'record-'+i;
       data.requiredInt = i;
@@ -76,11 +139,11 @@
     * ID gets a temporary ID.
     * @param {string} [value]
     */
-   ko.sync.TestData.makeRecordId = function(value) {
+   exports.makeRecordId = function(value) {
       return new ko.sync.RecordId(['id'], {'id': value});
    };
 
-   ko.sync.TestData.bigData = {
+   exports.bigData = {
       COUNT: 200,
       props: {
          dataTable: 'BigData',
@@ -101,7 +164,7 @@
       reset: function(firebaseRoot, numrecs) {
          var i, def = $.Deferred(), count = 0, ref = firebaseRoot.child('BigData');
          ref.set(null, function() {
-            var ref = firebaseRoot.child('BigData'), max = numrecs || ko.sync.TestData.bigData.COUNT;
+            var ref = firebaseRoot.child('BigData'), max = numrecs || exports.bigData.COUNT;
             for(i=1; i <= max; i++) {
                ref.child(i).setWithPriority(
                   {id: i, aString: 'string-'+i, sortField: i, aBool: (i%2 === 0)},
@@ -111,6 +174,14 @@
             }
          });
          return def.promise();
+      },
+      /**
+       * @param {object} [moreOpts]
+       * @return {ko.sync.Model}
+       */
+      model: function(moreOpts) {
+         var props = $.extend({}, exports.bigData.props, moreOpts);
+         return new Model(props);
       }
    };
 

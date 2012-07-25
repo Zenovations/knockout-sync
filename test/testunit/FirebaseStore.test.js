@@ -7,11 +7,9 @@ jQuery(function($) {
    var FIREBASE_TEST_URL = 'GitHub/firebase-sync';
    var syncRoot = new window.Firebase(FIREBASE_URL+'/'+FIREBASE_TEST_URL);
    var TestData = ko.sync.TestData;
-   var genericModel = new ko.sync.Model(TestData.genericModelProps);
-   var bigModel = new ko.sync.Model(TestData.bigData.props);
+   var genericModel = TestData.model();
+   var bigModel = TestData.bigData.model();
    //todo composite key
-   var genericKeyedData = TestData.genericData;
-   var genericUnkeyedData = TestData.genericDataWithoutId;
    var Util = ko.sync.stores.FirebaseStore.Util;
 
    var sequenceMethods = {
@@ -57,7 +55,15 @@ jQuery(function($) {
                   switch(k) {
                      case 'dateRequired':
                      case 'dateOptional':
-                        equal(moment(resultData[k]).valueOf(), origData[k].valueOf(), k+' has correct date');
+                        if( resultData[k] && origData[k] ) {
+                           equal(
+                              moment(resultData[k]).format(),
+                              moment(origData[k]).format(),
+                              k+' has correct date');
+                        }
+                        else {
+                           equal(resultData[k], origData[k]);
+                        }
                         break;
                      default:
                         equal(resultData[k], origData[k], k+' has correct value');
@@ -77,7 +83,7 @@ jQuery(function($) {
 
    //todo-test test sort priorities (create/update/etc)
    asyncTest("#create (keyed record)", function() {
-      var store = resetStore(), data = genericKeyedData;
+      var store = resetStore(), data = TestData.fullData();
 
       // we perform one assertion for each field plus one assertion for the id returned by create
       expect(Object.keys(genericModel.fields).length+1);
@@ -87,12 +93,12 @@ jQuery(function($) {
          .then(function(id) { equal(id, data.id, 'resolves with correct id'); })
          .check(genericModel, data, $.Sequence.PREV)
          .end()
-            .fail(function(e) { console.error(e); ok(false, e.toString()); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#create (unkeyed record)", function() {
-      var store = resetStore(), data = genericUnkeyedData;
+      var store = resetStore(), data = TestData.genericData(true);
 
       // we perform one assertion for each field plus one assertion for the id returned by create
       expect(Object.keys(genericModel.fields).length+1);
@@ -102,7 +108,7 @@ jQuery(function($) {
          .then(function(id) { ok(exists(id), 'resolves with an id'); })
          .check(genericModel, data, $.Sequence.PREV)
          .end()
-            .fail(function(e) { console.error(e); ok(false, e.toString()); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
 
    });
@@ -165,8 +171,8 @@ jQuery(function($) {
       expect(Object.keys(genericModel.fields).length*2);
 
       startSequence()
-         .create(store, genericModel, genericKeyedData)
-         .check(genericModel, genericKeyedData, data.id)
+         .create(store, genericModel, TestData.genericData())
+         .check(genericModel, TestData.genericData(), data.id)
          .update(store, genericModel, data)
          .check(genericModel, data, data.id)
          .end()
@@ -186,7 +192,7 @@ jQuery(function($) {
       };
 
       startSequence()
-         .create(store, genericModel, genericKeyedData)
+         .create(store, genericModel, TestData.genericData())
          .update(store, genericModel, data)
          .end()
          .fail(function(e) {
@@ -208,7 +214,7 @@ jQuery(function($) {
       };
 
       startSequence()
-         .create(store, genericModel, genericKeyedData)
+         .create(store, genericModel, TestData.genericData())
          .update(store, genericModel, data)
          .end()
             .done(function() {
@@ -224,7 +230,7 @@ jQuery(function($) {
       expect(2);
       var store = resetStore();
       startSequence()
-         .create(store, genericModel, genericKeyedData)
+         .create(store, genericModel, TestData.genericData())
          .delete(store, genericModel, $.Sequence.PREV)
          .then(function(id) {
             // did we get return value?
@@ -239,9 +245,9 @@ jQuery(function($) {
 
    asyncTest("#delete followed by #update", function() {
       expect(1);
-      var store = resetStore(), newData = $.extend({}, genericKeyedData, {intRequired: 99});
+      var store = resetStore(), newData = $.extend(TestData.genericData(), {intRequired: 99});
       startSequence()
-         .create(store, genericModel, genericKeyedData)
+         .create(store, genericModel, TestData.genericData())
          .delete(store, genericModel, $.Sequence.PREV)
          .update(store, genericModel, newData)
          .end()
@@ -452,28 +458,28 @@ jQuery(function($) {
 
    asyncTest("#sync added", function() {
       expect(3);
-      var store = resetStore(), updatedData = $.extend({}, genericKeyedData, {intRequired: 10, boolOptional: true});
+      var store = resetStore(),
+         data = TestData.genericData(),
+         table = syncRoot.child(genericModel.table),
+         done = $.Deferred();
       function fx(e, id, data) {
-         strictEqual(e.type, 'added', 'event type is "added"');
-         deepEqual(id, genericKeyedData.id, 'has correct id');
-         deepEqual(data, genericKeyedData, 'fields set correctly');
+         console.log('async fx called');
+         strictEqual(e, 'added', 'event type is "added"');
+         deepEqual(id, TestData.genericData().id, 'has correct id');
+         deepEqual(data, TestData.genericData(), 'fields set correctly');
+         done.resolve();
       }
       store.sync(genericModel, fx);
-      //todo these need to get created on the server for real testing
-      //todo this isn't an accurate test
-      startSequence(5000)
-         .create(store, genericModel, genericKeyedData)
-         .wait(100)
-         .end()
-         .fail(function(e) { ok(false, e); })
-         .always(function() {
-            store.unsync(genericModel, fx);
-            start();
-         });
+
+      //todo-sort add with priority?
+      table.child(data.id).set(data, function() {
+         done.then(start);
+      });
    });
 
-   test("#sync updated", function() {
-      ok(false, 'Implement me!');
+   asyncTest("#sync updated", function() {
+      expect(3);
+      start();
    });
 
    test("#sync deleted", function() {

@@ -3,16 +3,13 @@ jQuery(function($) {
    "use strict";
    var undef;
 
-   var genericModel = new ko.sync.Model(ko.sync.TestData.genericModelProps);
-   var genericData  = $.extend({}, ko.sync.TestData.genericData);
-   var makeRecord = ko.sync.TestData.makeRecord;
-   var makeRecordList = ko.sync.TestData.makeRecordList;
+   var TestData = ko.sync.TestData;
 
    module('RecordList');
 
    test('#checkpoint', function() {
-      var list = new ko.sync.RecordList(genericModel);
-      list.add( makeRecordList(genericModel, genericData, 2) );
+      var model = TestData.model(), list = new ko.sync.RecordList(model);
+      list.add( TestData.makeRecords(2) );
       strictEqual(list.isDirty(), true, 'list is dirty after adding records');
       list.checkpoint();
       strictEqual(list.isDirty(), false, 'not dirty after checkpoint');
@@ -20,8 +17,9 @@ jQuery(function($) {
 
    test('#iterator', function() {
       var it,
-          recs = makeRecordList(genericModel, genericData, 5),
-          list = new ko.sync.RecordList(genericModel);
+          model = TestData.model(),
+          recs = TestData.makeRecords(5),
+          list = new ko.sync.RecordList(model);
       // try one before we have any records
       it = list.iterator();
       ok(it instanceof ko.sync.RecordList.Iterator, 'instanceof iterator');
@@ -33,7 +31,7 @@ jQuery(function($) {
    });
 
    test('#isDirty', function() {
-      var recs = makeRecordList(genericModel, genericData, 5), list = new ko.sync.RecordList(genericModel, recs);
+      var recs = TestData.makeRecords(5), list = new ko.sync.RecordList(TestData.model(), recs);
       strictEqual(list.isDirty(), false);
       // changing a record should cascade out to the list
       recs[0].set('intOptional', 99);
@@ -41,8 +39,10 @@ jQuery(function($) {
    });
 
    test('#add', function() {
-      var data = makeRecordList(genericModel, genericData, 5), list = new ko.sync.RecordList(genericModel, data.slice(0, 4)),
-          newRec = makeRecord(genericModel, data.slice(4,5)[0]), key = newRec.hashKey();
+      var model = TestData.model(),
+          data = TestData.makeRecords(5),
+          list = new ko.sync.RecordList(model, data.slice(0, 4)),
+          newRec = TestData.makeRecord(model, data.slice(4,5)[0]), key = newRec.hashKey();
       list.checkpoint();
       strictEqual(list.isDirty(), false, 'list is not dirty before add');
       ok(_.indexOf(list.added, key) < 0, 'list.added does not contain record before add');
@@ -53,8 +53,10 @@ jQuery(function($) {
    });
 
    test('#load', function() {
-      var data = makeRecordList(genericModel, genericData, 5), list = new ko.sync.RecordList(genericModel, data.slice(0, 4)),
-         newRec = makeRecord(genericModel, data.slice(4,5)[0]), key = newRec.hashKey();
+      var model = TestData.model(),
+         data = TestData.makeRecords(5),
+         list = new ko.sync.RecordList(model, data.slice(0, 4)),
+         newRec = TestData.makeRecord(model, data.slice(4,5)[0]), key = newRec.hashKey();
       strictEqual(list.isDirty(), false, 'list is not dirty before push');
       ok(!(key in list.recs), 'list does not contain record before push');
       list.load(newRec);
@@ -64,7 +66,8 @@ jQuery(function($) {
    });
 
    test('#remove (using Record)', function() {
-      var data = makeRecordList(genericModel, genericData, 5), list = new ko.sync.RecordList(genericModel, data),
+      var data = TestData.makeRecords(5),
+         list = new ko.sync.RecordList(TestData.model(), data),
             key = 'record-5', recToDelete = list.recs[key];
       strictEqual(list.isDirty(), false, 'list is not dirty before remove');
       ok(key in list.recs, 'list should contain our record before remove');
@@ -75,7 +78,8 @@ jQuery(function($) {
    });
 
    test('#remove (using RecordId)', function() {
-      var data = makeRecordList(genericModel, genericData, 5), list = new ko.sync.RecordList(genericModel, data),
+      var data = TestData.makeRecords(5),
+         list = new ko.sync.RecordList(TestData.model(), data),
           key = 'record-5', recToDelete = list.recs[key];
       strictEqual(list.isDirty(), false, 'list is not dirty before remove');
       ok(key in list.recs, 'list should contain our record before remove');
@@ -86,7 +90,8 @@ jQuery(function($) {
    });
 
    test('#updated (dirty)', function() {
-      var data = makeRecordList(genericModel, genericData, 5), list = new ko.sync.RecordList(genericModel, data),
+      var data = TestData.makeRecords(5),
+         list = new ko.sync.RecordList(TestData.model(), data),
           key = 'record-4', rec = list.recs[key];
       rec.isDirty(true);
       strictEqual(list.isDirty(), false, 'list is not dirty before updated()');
@@ -95,7 +100,8 @@ jQuery(function($) {
    });
 
    test('#updated (not dirty)', function() {
-      var data = makeRecordList(genericModel, genericData, 5), list = new ko.sync.RecordList(genericModel, data),
+      var data = TestData.makeRecords(5),
+         list = new ko.sync.RecordList(TestData.model(), data),
             key = 'record-4', rec = list.recs[key];
       strictEqual(list.isDirty(), false, 'list is not dirty before updated()');
       list.updated(rec);
@@ -103,8 +109,9 @@ jQuery(function($) {
    });
 
    test('#updated (added status)', function() {
-      var data = makeRecordList(genericModel, genericData, 5), list = new ko.sync.RecordList(genericModel, data),
-          rec  = makeRecord(genericModel, genericData, 6);
+      var data = TestData.makeRecords(5),
+         list = new ko.sync.RecordList(TestData.model(), data),
+          rec  = TestData.makeRecord(TestData.model(), 6);
       strictEqual(list.isDirty(), false, 'list is not dirty before updated()');
       list.updated(rec, 'added');
       strictEqual(list.isDirty(), true, 'list is dirty after updated()');
@@ -112,7 +119,8 @@ jQuery(function($) {
    });
 
    test('#updated (deleted status)', function() {
-      var data = makeRecordList(genericModel, genericData, 5), list = new ko.sync.RecordList(genericModel, data),
+      var data = TestData.makeRecords(5),
+         list = new ko.sync.RecordList(TestData.model(), data),
           rec = list.recs['record-4'];
       strictEqual(list.isDirty(), false, 'list is not dirty before updated()');
       list.updated(rec, 'deleted');
@@ -121,7 +129,8 @@ jQuery(function($) {
    });
 
    test('#updated (invalid status)', function() {
-      var data = makeRecordList(genericModel, genericData, 5), list = new ko.sync.RecordList(genericModel, data),
+      var data = TestData.makeRecords(5),
+         list = new ko.sync.RecordList(TestData.model(), data),
             rec = list.recs['record-4'];
       raises(function() {
          list.updated(rec, 'not a valid status');
@@ -195,7 +204,7 @@ jQuery(function($) {
    });
 
    function _newIt(len) {
-      return new ko.sync.RecordList.Iterator({recs: makeRecordList(genericModel, genericData, len)});
+      return new ko.sync.RecordList.Iterator({recs: TestData.makeRecords(len)});
    }
 
 });

@@ -13,65 +13,17 @@ jQuery(function($) {
    });
 
    //todo data sorting
+   var TestData = ko.sync.TestData;
 
    module("RecordFactory");
    test("#create", function() {
-      var model = _buildAModel(), factory = model.factory,
-         baseData = ko.sync.TestData.genericDataWithoutId,
+      var model = TestData.model(), factory = model.factory,
+         baseData = TestData.genericData(),
          rec = factory.create(baseData),
-         data = _fullData(model, baseData);
-      Object.keys(data).forEach(function(k) {
-         strictEqual(rec.get(k), data[k]);
-      });
+         data = TestData.forCompare(TestData.fullData(baseData));
+         Object.keys(data).forEach(function(k) {
+            strictEqual(rec.get(k), data[k], k);
+         });
    });
-
-   /**
-    * @param {object} [addData]
-    * @param {boolean} [withId]
-    * @param {object} [modelProps]
-    * @return {ko.sync.Record}
-    * @private
-    */
-   function _buildARecord(addData, withId, modelProps) {
-      var args = _buildArgs(arguments), data;
-      if( args.withId ) { data = $.extend({}, ko.sync.TestData.genericData, args.data); }
-      else { data = $.extend({}, ko.sync.TestData.genericDataWithoutId, args.data); }
-      return new ko.sync.Record(_buildAModel(args.model), data);
-   }
-
-   function _buildAModel(modelProps) {
-      var props = $.extend({}, ko.sync.TestData.genericModelProps, modelProps);
-      return new ko.sync.Model(props);
-   }
-
-   function _buildArgs(argList) {
-      var args = $.makeArray(argList),
-          i = -1,
-          len = args.length,
-          out = {withId: false, data: null, model: null};
-      while(args.length && ++i < 3) {
-         switch(typeof(args[0])) {
-            case 'object':
-               if( out.data ) { out.model = args.shift(); }
-               else { out.data = args.shift(); }
-               break;
-            case 'boolean':
-               out.withId = args.shift();
-               break;
-            default:
-               throw new Error('Invalid argument type '+typeof(args[0]));
-         }
-      }
-      return out;
-   }
-
-   function _fullData(model, addData) {
-      var defaults = {};
-      // build test data sets
-      Object.keys(model.fields).forEach(function(k) {
-         defaults[k] = model.fields[k].default;
-      });
-      return $.extend({}, defaults, addData);
-   }
 
 });

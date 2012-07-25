@@ -57,7 +57,7 @@
    }
 
    function _applyDefault(o) {
-      if( !o.hasOwnProperty('default') || !exists(o.default) ) {
+      if( !o.hasOwnProperty('default') || !_.has(o, 'default') ) {
          switch(o.type) {
             case 'boolean':
                o.default = false;

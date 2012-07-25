@@ -19,22 +19,24 @@ jQuery(function($) {
       emailRequired:  'email@required.com'
    };
 
+   var TestData = ko.sync.TestData;
+
    module("Record");
 
    test("#getRecordId", function() {
-      var model = new ko.sync.Model(ko.sync.TestData.genericModelProps),
-         rec = new ko.sync.Record(model, ko.sync.TestData.genericData),
-         id  = new ko.sync.RecordId(model.key, ko.sync.TestData.genericData);
+      var model = TestData.model(),
+         rec = new ko.sync.Record(model, TestData.genericData()),
+         id  = new ko.sync.RecordId(model.key, TestData.genericData());
       ok(id.equals(rec.getRecordId()), 'id ('+id+')should equal what we put in record ('+rec.getRecordId()+')');
    });
 
    test("#getSortPriority", function() {
-      var data  = $.extend({}, ko.sync.TestData.genericDataWithoutId, {intRequired: 50}),
-         model = new ko.sync.Model(ko.sync.TestData.genericModelPropsWithSort),
+      var data  = $.extend({}, TestData.genericData(true), {intRequired: 50}),
+         model = TestData.model(true),
          rec   = new ko.sync.Record(model, data);
       strictEqual(rec.getSortPriority(), 50, 'sortPriority set correctly');
 
-      model = new ko.sync.Model(ko.sync.TestData.genericModelProps);
+      model = new ko.sync.Model(TestData.model());
       rec   = new ko.sync.Record(model, data);
       strictEqual(rec.getSortPriority(), false, 'sort priority not set');
    });
@@ -43,7 +45,7 @@ jQuery(function($) {
       var rec;
 
       // without key
-      strictEqual(_buildARecord().hasKey(), false, 'no key');
+      strictEqual(_buildARecord(false).hasKey(), false, 'no key');
 
       // with key
       strictEqual(_buildARecord(true).hasKey(), true, 'has a key');
@@ -62,11 +64,11 @@ jQuery(function($) {
       var rec;
 
       // without key
-      rec = _buildARecord();
+      rec = _buildARecord(false);
       ok(rec.hashKey().match(/^tmp[.][0-9]+/) && rec.hasKey() === false, 'no key');
 
       // with key
-      strictEqual(_buildARecord(true).hashKey(), 'record123', 'has a key');
+      strictEqual(_buildARecord().hashKey(), 'record123', 'has a key');
 
       // composite key with a null
       rec = _buildARecord(null, false, {primaryKey: ['id', 'intRequired']});
@@ -79,21 +81,20 @@ jQuery(function($) {
    });
 
    test("#getData", function() {
-      var model = _buildAModel(),
-         defaults = _fullData(model, {}),
-         genericData = _fullData(model, ko.sync.TestData.genericDataWithoutId),
+      var model = TestData.model(),
+         defaults = TestData.defaults(model),
+         genericData = TestData.fullData(),
          emptyRec = new ko.sync.Record(model, {});
 
       // make sure defaults are used
+      // dates should be null in this case
       deepEqual(emptyRec.getData(), defaults);
 
       // make sure setting data works
-      deepEqual(_buildARecord().getData(), genericData);
+      deepEqual(_buildARecord().getData(), TestData.forCompare(genericData));
    });
 
    test("#get/#set", function() {
-      var model = _buildAModel();
-
       var rec = _buildARecord(), origData = rec.getData();
       Object.keys(newData).forEach(function(k) {
          strictEqual(rec.get(k), origData[k], 'orig: get('+k+')');
@@ -144,22 +145,15 @@ jQuery(function($) {
     * @private
     */
    function _buildARecord(addData, withId, modelProps) {
-      var args = _buildArgs(arguments), data;
-      if( args.withId ) { data = $.extend({}, ko.sync.TestData.genericData, args.data); }
-      else { data = $.extend({}, ko.sync.TestData.genericDataWithoutId, args.data); }
-      return new ko.sync.Record(_buildAModel(args.model), data);
-   }
-
-   function _buildAModel(modelProps) {
-      var props = $.extend({}, ko.sync.TestData.genericModelProps, modelProps);
-      return new ko.sync.Model(props);
+      var args = _buildArgs(arguments), data = TestData.genericData(args.unkeyed, args.data);
+      return new ko.sync.Record(TestData.model(args.model), data);
    }
 
    function _buildArgs(argList) {
       var args = $.makeArray(argList),
          i = -1,
          len = args.length,
-         out = {withId: false, data: null, model: null};
+         out = {unkeyed: false, data: null, model: null};
       while(args.length && ++i < 3) {
          switch(typeof(args[0])) {
             case 'object':
@@ -167,22 +161,13 @@ jQuery(function($) {
                else { out.data = args.shift(); }
                break;
             case 'boolean':
-               out.withId = args.shift();
+               out.unkeyed = !args.shift();
                break;
             default:
                throw new Error('Invalid argument type '+typeof(args[0]));
          }
       }
       return out;
-   }
-
-   function _fullData(model, addData) {
-      var defaults = {};
-      // build test data sets
-      Object.keys(model.fields).forEach(function(k) {
-         defaults[k] = model.fields[k].default;
-      });
-      return $.extend({}, defaults, addData);
    }
 
 });
