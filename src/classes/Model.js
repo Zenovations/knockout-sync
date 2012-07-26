@@ -4,6 +4,7 @@
 (function(ko) {
    "use strict";
 
+   var modelInst = 1;
    var Model = Class.extend({
       /**
        * @param {object} props
@@ -17,6 +18,7 @@
          this.sort       = props.sortField;
          this.validator  = props.validator;
          this.auto       = props.autoSync;
+         this.inst       = modelInst++;
          this.fields     = _processFields(defaults, props.fields);
          this.factory    = props.recordFactory || new RecordFactory(this);
       },
@@ -29,6 +31,10 @@
        */
       newRecord: function(data) {
          return this.factory.create(data);
+      },
+
+      toString: function() {
+         return this.table+'['+this.inst+']';
       }
    });
    Model.FIELD_DEFAULTS = {

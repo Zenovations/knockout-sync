@@ -4,7 +4,7 @@
 (function() {
    var undef, ko = this.ko, Firebase = this.Firebase||window.Firebase, $ = this.jQuery;
 
-   var EVENT_TYPES = 'added deleted moved updated connected disconnected';
+   var EVENT_TYPES = ['added', 'deleted', 'moved', 'updated', 'connected', 'disconnected'];
 
    /** IDE CLUES
     **********************/
@@ -23,6 +23,7 @@
    var FirebaseStore = ko.sync.Store.extend({
       init: function(url, base) {
          this.base = _base(new Firebase(url), base);
+         this.watching = false;
       }
       // we don't need to include all the methods here because there is no _super to deal with
       // we're just inheriting for the "is a" behavior and to enforce the contract of Store
@@ -227,49 +228,128 @@
     */
    FirebaseStore.prototype.hasSync = function(model) { return true; };
 
-   FirebaseStore.prototype.sync = function(model, callback, type) {
-      var eventList = type || EVENT_TYPES;
-      if( !('FirebaseListeners' in model) ) {
-         var $e = $('<p />');
-         model.FirebaseListeners = {count: 0, events: $e};
-         var ref = this.base.child(model.table);
-         ref.on('child_added', function(snapshot, prevSiblingId) {
-            var data = snapshot.val();
-            if( data !== null ) { $e.trigger('added', [snapshot.name(), data, prevSiblingId]); }
-         });
-         ref.on('child_removed', function(snapshot) {
-            $e.trigger('deleted', [snapshot.name(), snapshot.val()]);
-         });
-         ref.on('child_changed', function(snapshot, prevSiblingId) {
-            $e.trigger('updated', [snapshot.name(), snapshot.val(), prevSiblingId]);
-         });
-         ref.on('child_moved', function(snapshot, prevSiblingId) {
-            $e.trigger('moved', [snapshot.name(), snapshot.val(), prevSiblingId]);
-         });
+   /**
+    * @param {ko.sync.Model} model
+    * @param {Function} callback
+    * @param {string} [types]
+    */
+   FirebaseStore.prototype.sync = function(model, callback, types) {
+      var eventList = types? types.split(' ') : EVENT_TYPES;
+      if( !('FirebaseSync' in model) ) {
+         model.FirebaseSync = new SyncManager(this, model, EVENT_TYPES);
       }
-      model.FirebaseListeners.count++;
-      model.FirebaseListeners.events.on(eventList, function(e) {
-         var args = $.makeArray(arguments), type = args.shift().type;
-         callback.apply(this, [type].concat(args));
-      })
+      model.FirebaseSync.on(eventList, callback);
    };
 
-   FirebaseStore.prototype.unsync = function(model, callback, type) {
-      var eventList = type || EVENT_TYPES;
-      if( 'FirebaseListeners' in model ) {
-         model.FirebaseListeners.count--;
-         if( model.FirebaseListeners.count < 1 ) {
-            //todo stop listening to Firebase events
-            //todo
-            //todo
-            //todo
+   /**
+    * @param {ko.sync.Model} model
+    * @param {Function} callback
+    * @param {string} [types]
+    */
+   FirebaseStore.prototype.unsync = function(model, callback, types) {
+      var eventList = types? types.split(' ') : EVENT_TYPES;
+      if( 'FirebaseSync' in model ) {
+         model.FirebaseSync.off(eventList, callback);
+      }
+   };
+
+   /** SYNC MANAGER
+    *****************************************************************************************/
+
+   /**
+    * @param {FirebaseStore} store
+    * @param {Array}         eventTypes
+    * @constructor
+    */
+   function SyncManager(store, model, eventTypes) {
+      var self    = this;
+      self.events = _emptyListeners(eventTypes);
+      self.table  = store.base.child(model.table);
+      self.count  = 0;
+      // these need to be declared with each instantiation so that the functions
+      // can be used as references for on/off; otherwise, calling off on one model
+      // could also turn off all the other models referencing the same table!
+      this.refs = {
+         child_added: function(snapshot, prevSiblingId) {
+            console.log('child_added'); //debug
+            var data = snapshot.val();
+            if( data !== null ) {
+               self.trigger('added', snapshot.name(), data, prevSiblingId);
+            }
+         },
+         child_removed: function(snapshot) {
+            console.log('child_removed'); //debug
+            self.trigger('deleted', snapshot.name(), snapshot.val());
+         },
+         child_changed: function(snapshot, prevSiblingId) {
+            console.log('child_changed'); //debug
+            self.trigger('updated', snapshot.name(), snapshot.val(), prevSiblingId);
+         },
+         child_moved: function(snapshot, prevSiblingId) {
+            console.log('child_moved'); //debug
+            self.trigger('moved', snapshot.name(), snapshot.val(), prevSiblingId);
          }
-         model.FirebaseListeners.events.off(eventList, callback);
+      };
+   }
+
+   SyncManager.prototype.on = function(types, callback) {
+      var events = this.events;
+      types || (types = EVENT_TYPES);
+
+      // store the listener
+      _.each(types, function(e) {
+         events[e].push(callback);
+         this.count++;
+      }, this);
+
+      // start observing Firebase when listeners are added
+      if( !this.watching && this.count > 0 ) {
+         this.watching = true;
+         watchFirebase(this.refs, this.table);
+      }
+   };
+
+   SyncManager.prototype.off = function(types, callback) {
+      var events = this.events;
+      types || (types = EVENT_TYPES);
+
+      // delete the listener
+      _.each(types, function(e) {
+         var list = events[e], i = _.indexOf(list, callback);
+         if( i >= 0 ) {
+            this.count--;
+            events[e].splice(i, 1);
+         }
+      }, this);
+
+      // stop observing Firebase is nobody is paying attention
+      if( this.count === 0 && this.watching ) {
+         this.watching = false;
+         unwatchFirebase(this.refs, this.table);
+      }
+   };
+
+   SyncManager.prototype.trigger = function(type) {
+      var args = $.makeArray(arguments), list = this.events[type], i = list.length;
+      while (i--) {
+         list[i].apply(null, args);
       }
    };
 
    /** UTILITIES
     *****************************************************************************************/
+
+   function watchFirebase(refs, table) {
+      _.each(refs, function(fx, key) {
+         table.on(key, fx);
+      });
+   }
+
+   function unwatchFirebase(refs, table) {
+      _.each(refs, function(fx, key) {
+         table.off(key, fx);
+      });
+   }
 
    /**
     * Create or load a record to receive data. If `key` is provided, then the record is created
@@ -623,6 +703,19 @@
             }
          });
       }
+   }
+
+   /**
+    * @param {Array} types
+    * @return {Object}
+    * @private
+    */
+   function _emptyListeners(types) {
+      var out = {};
+      _.each(types, function(v) {
+         out[v] = [];
+      });
+      return out;
    }
 
    /** ADD TO NAMESPACE

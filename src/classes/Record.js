@@ -134,4 +134,3 @@
    ko.sync.Record = Record;
 
 })(this.ko);
-

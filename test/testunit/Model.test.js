@@ -21,9 +21,10 @@ jQuery(function($) {
          baseData = TestData.genericData(),
          rec = factory.create(baseData),
          data = TestData.forCompare(TestData.fullData(baseData));
-         Object.keys(data).forEach(function(k) {
-            strictEqual(rec.get(k), data[k], k);
-         });
+         ok(rec instanceof ko.sync.Record, 'is a Record object');
+         console.log({rec: rec.getData()});
+         console.log({data: data});
+         deepEqual(rec.getData(), data, 'create record has all fields set');
    });
 
 });

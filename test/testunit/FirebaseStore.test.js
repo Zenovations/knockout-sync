@@ -7,10 +7,25 @@ jQuery(function($) {
    var FIREBASE_TEST_URL = 'GitHub/firebase-sync';
    var syncRoot = new window.Firebase(FIREBASE_URL+'/'+FIREBASE_TEST_URL);
    var TestData = ko.sync.TestData;
-   var genericModel = TestData.model();
-   var bigModel = TestData.bigData.model();
    //todo composite key
    var Util = ko.sync.stores.FirebaseStore.Util;
+
+   // override asyncTest for some logging
+   console.log({asyncTest: asyncTest});
+   var _asyncTest = asyncTest, currName;
+   asyncTest = function(name, fx) {
+      return _asyncTest(name, function() {
+         console.time(name);
+         currName = name;
+         fx();
+      });
+   };
+
+   var _start = start;
+   start = function() {
+      console.timeEnd(currName);
+      _start();
+   };
 
    var sequenceMethods = {
       create: function(store, model, data) {
@@ -83,30 +98,30 @@ jQuery(function($) {
 
    //todo-test test sort priorities (create/update/etc)
    asyncTest("#create (keyed record)", function() {
-      var store = resetStore(), data = TestData.fullData();
+      var store = resetStore(), data = TestData.fullData(), model = TestData.model();
 
       // we perform one assertion for each field plus one assertion for the id returned by create
-      expect(Object.keys(genericModel.fields).length+1);
+      expect(Object.keys(model.fields).length+1);
 
       startSequence()
-         .create(store, genericModel, data)
+         .create(store, model, data)
          .then(function(id) { equal(id, data.id, 'resolves with correct id'); })
-         .check(genericModel, data, $.Sequence.PREV)
+         .check(model, data, $.Sequence.PREV)
          .end()
          .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#create (unkeyed record)", function() {
-      var store = resetStore(), data = TestData.genericData(true);
+      var store = resetStore(), data = TestData.genericData(true), model = TestData.model();
 
       // we perform one assertion for each field plus one assertion for the id returned by create
-      expect(Object.keys(genericModel.fields).length+1);
+      expect(Object.keys(model.fields).length+1);
 
       startSequence()
-         .create(store, genericModel, data)
+         .create(store, model, data)
          .then(function(id) { ok(exists(id), 'resolves with an id'); })
-         .check(genericModel, data, $.Sequence.PREV)
+         .check(model, data, $.Sequence.PREV)
          .end()
          .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
@@ -114,27 +129,28 @@ jQuery(function($) {
    });
 
    asyncTest("#create (empty record)", function() {
-      var store = resetStore(), data = {};
+      var store = resetStore(), data = {}, model = TestData.model();
 
       // we perform one assertion for each field plus one assertion for the id returned by create
-      expect(Object.keys(genericModel.fields).length+1);
+      expect(Object.keys(model.fields).length+1);
 
       startSequence()
-         .create(store, genericModel, data)
+         .create(store, model, data)
          .then(function(id) { ok(exists(id), 'test1', 'resolves with correct id'); })
-         .check(genericModel, data, $.Sequence.PREV)
+         .check(model, data, $.Sequence.PREV)
          .end()
-            .fail(function(e) { console.error(e); ok(false, e.toString()); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#read", function() {
       expect(2);
       var store = resetStore(), data = {id: 'record123'},
-          recId = new ko.sync.RecordId('id', data);
+          recId = new ko.sync.RecordId('id', data),
+          model = TestData.model();
       startSequence()
-         .create(store, genericModel, data)
-         .read(store, genericModel, recId)
+         .create(store, model, data)
+         .read(store, model, recId)
          .then(function(rec) {
             ok(rec instanceof ko.sync.Record, 'is instanceof record');
             equal(rec.get('id'), 'record123', 'has the right id');
@@ -148,7 +164,7 @@ jQuery(function($) {
       expect(1);
       var store = resetStore(), recId = TestData.makeRecordId('i am not a record');
       startSequence()
-         .read(store, genericModel, recId)
+         .read(store, TestData.model(), recId)
          .then(function(rec) {
             strictEqual(rec, null, 'record should be null');
          })
@@ -158,7 +174,9 @@ jQuery(function($) {
    });
 
    asyncTest("#update", function() {
-      var store = resetStore(), data = {
+      var store = resetStore(),
+         model = TestData.model(),
+         data = {
          id:             'record123',
          stringRequired: '2-stringRequired',
          dateRequired:   moment().add('days', 7).toDate(),
@@ -168,13 +186,13 @@ jQuery(function($) {
          emailRequired:  'me2@me2.com'
       };
 
-      expect(Object.keys(genericModel.fields).length*2);
+      expect(Object.keys(model.fields).length*2);
 
       startSequence()
-         .create(store, genericModel, TestData.genericData())
-         .check(genericModel, TestData.genericData(), data.id)
-         .update(store, genericModel, data)
-         .check(genericModel, data, data.id)
+         .create(store, model, TestData.genericData())
+         .check(model, TestData.genericData(), data.id)
+         .update(store, model, data)
+         .check(model, data, data.id)
          .end()
          .fail(function(e) { console.error(e); ok(false, e.toString());})
          .always(start);
@@ -182,7 +200,9 @@ jQuery(function($) {
 
    asyncTest("#update without key", function() {
       expect(1);
-      var store = resetStore(), data = {
+      var store = resetStore(),
+         model = TestData.model(),
+         data = {
          stringRequired: '2-stringRequired',
          dateRequired:   moment().add('days', 7).toDate(),
          intRequired:    -2,
@@ -192,8 +212,8 @@ jQuery(function($) {
       };
 
       startSequence()
-         .create(store, genericModel, TestData.genericData())
-         .update(store, genericModel, data)
+         .create(store, model, TestData.genericData())
+         .update(store, model, data)
          .end()
          .fail(function(e) {
                equal(e, 'Invalid key', 'should fail with invalid key error');
@@ -203,7 +223,9 @@ jQuery(function($) {
 
    asyncTest('#update non-existing', function() {
       expect(1);
-      var store = resetStore(), data = {
+      var store = resetStore(),
+         model = TestData.model(),
+         data = {
          id: 'I am not a valid record id',
          stringRequired: '2-stringRequired',
          dateRequired:   moment().add('days', 7).toDate(),
@@ -214,8 +236,8 @@ jQuery(function($) {
       };
 
       startSequence()
-         .create(store, genericModel, TestData.genericData())
-         .update(store, genericModel, data)
+         .create(store, model, TestData.genericData())
+         .update(store, model, data)
          .end()
             .done(function() {
                ok(false, 'should not succeed (record does not exist)');
@@ -228,15 +250,15 @@ jQuery(function($) {
 
    asyncTest("#delete", function() {
       expect(2);
-      var store = resetStore();
+      var store = resetStore(), model = TestData.model();
       startSequence()
-         .create(store, genericModel, TestData.genericData())
-         .delete(store, genericModel, $.Sequence.PREV)
+         .create(store, model, TestData.genericData())
+         .delete(store, model, $.Sequence.PREV)
          .then(function(id) {
             // did we get return value?
             equal(id, 'record123', 'returned id of deleted record');
          })
-         .exists(genericModel.table, $.Sequence.PREV)
+         .exists(model.table, $.Sequence.PREV)
          .then(function(x) { strictEqual(x, false, 'does not exist'); })
          .end()
          .fail(function(e) { ok(false, e); })
@@ -245,11 +267,13 @@ jQuery(function($) {
 
    asyncTest("#delete followed by #update", function() {
       expect(1);
-      var store = resetStore(), newData = $.extend(TestData.genericData(), {intRequired: 99});
+      var store = resetStore(),
+         newData = $.extend(TestData.genericData(), {intRequired: 99}),
+         model = TestData.model();
       startSequence()
-         .create(store, genericModel, TestData.genericData())
-         .delete(store, genericModel, $.Sequence.PREV)
-         .update(store, genericModel, newData)
+         .create(store, model, TestData.genericData())
+         .delete(store, model, $.Sequence.PREV)
+         .update(store, model, newData)
          .end()
          .fail(function(e) {
             equal(e, 'Record does not exist', 'should fail because record does not exist');
@@ -259,7 +283,7 @@ jQuery(function($) {
 
    asyncTest("#count", function() {
       expect(2);
-      var store = resetStore();
+      var store = resetStore(), bigModel = TestData.bigData.model();
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.count(bigModel);
@@ -276,13 +300,13 @@ jQuery(function($) {
          .done(function(count) {
             strictEqual(count, TestData.bigData.COUNT-2, 'count correct after deletions');
          })
-         .fail(function(e) { ok(false, e); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#count limit", function() {
       expect(1);
-      var store = resetStore(), LIMIT = 25;
+      var store = resetStore(), LIMIT = 25, bigModel = TestData.bigData.model();
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.count(bigModel, {limit: LIMIT});
@@ -290,13 +314,13 @@ jQuery(function($) {
          .done(function(count) {
             strictEqual(count, LIMIT, 'found correct number of records');
          })
-         .fail(function(e) { ok(false, e); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#count limit (not reached)", function() {
       expect(1);
-      var store = resetStore(), LIMIT = 25, NUMRECS = 15;
+      var store = resetStore(), LIMIT = 25, NUMRECS = 15, bigModel = TestData.bigData.model();
       TestData.bigData.reset(syncRoot, NUMRECS)
          .pipe(function() {
             return store.count(bigModel, {limit: LIMIT});
@@ -304,13 +328,14 @@ jQuery(function($) {
          .done(function(count) {
             strictEqual(count, NUMRECS, 'found correct number of records');
          })
-         .fail(function(e) { ok(false, e); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#count where object", function() {
       expect(1);
-      var store = resetStore(), parms = {
+      var store = resetStore(), bigModel = TestData.bigData.model(),
+         parms = {
          where: { aBool: true, sortField: function(v) { return v < 51; } }
       };
       TestData.bigData.reset(syncRoot)
@@ -320,13 +345,13 @@ jQuery(function($) {
          .done(function(count) {
             strictEqual(count, 25, 'correct number of records (evens under 51) returned');
          })
-         .fail(function(e) { ok(false, e); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#count where+limit", function() {
       expect(2);
-      var store = resetStore(), parms = {
+      var store = resetStore(), bigModel = TestData.bigData.model(), parms = {
          where: { aBool: false },
          limit: 75
       };
@@ -334,7 +359,7 @@ jQuery(function($) {
          .pipe(function() {
             return store.count(bigModel, parms);
          })
-         .pipe(function(count) {
+         .then(function(count) {
             strictEqual(count, 75, 'correct number of records (odds up to 75) returned');
          })
          .pipe(function() {
@@ -344,13 +369,13 @@ jQuery(function($) {
          .done(function(count) {
             strictEqual(count, 100, 'correct number of records (limit never reached) returned');
          })
-         .fail(function(e) { ok(false, e); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#query", function() {
       expect(2);
-      var store = resetStore(), parms = {
+      var store = resetStore(), bigModel = TestData.bigData.model(), parms = {
          where: { aBool: true, sortField: function(v) { return v < 51; } }
       }, iteratorCalls = 0;
       TestData.bigData.reset(syncRoot)
@@ -363,13 +388,13 @@ jQuery(function($) {
             strictEqual(count, iteratorCalls, 'iterator called correct number of times');
             strictEqual(count, 25, 'correct number of records (evens under 51) returned');
          })
-         .fail(function(e) { ok(false, e); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#query where+limit", function() {
       expect(4);
-      var store = resetStore(), parms = {
+      var store = resetStore(), bigModel = TestData.bigData.model(), parms = {
          where: { aBool: false },
          limit: 75
       }, iteratorCalls = 0;
@@ -394,13 +419,14 @@ jQuery(function($) {
             strictEqual(count, iteratorCalls, 'iterator called correct number of times');
             strictEqual(count, 100, 'correct number of records (limit never reached) returned');
          })
-         .fail(function(e) { ok(false, e); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#query (no results)", function() {
       expect(2);
-      var store = resetStore(), parms = { where: { aString: 'not this' } }, iteratorCalls = 0;
+      var store = resetStore(), bigModel = TestData.bigData.model(),
+         parms = { where: { aString: 'not this' } }, iteratorCalls = 0;
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.query(bigModel, function(rec) {
@@ -411,15 +437,19 @@ jQuery(function($) {
             strictEqual(count, iteratorCalls, 'iterator called correct number of times');
             strictEqual(count, 0, 'no records returned');
          })
-         .fail(function(e) { ok(false, e); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#query function", function() {
       expect(2);
-      var store = resetStore(), parms = { where: function(v, k) {
-         return k.match(/^1\d$/);
-      } }, iteratorCalls = 0;
+      var store = resetStore(),
+         bigModel = TestData.bigData.model(),
+         parms = {
+            where: function(v, k) {
+               return k.match(/^1\d$/);
+            }
+         }, iteratorCalls = 0;
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.query(bigModel, function(rec) {
@@ -430,13 +460,14 @@ jQuery(function($) {
             strictEqual(count, iteratorCalls, 'iterator called correct number of times');
             strictEqual(count, 10, 'correct number of records returned');
          })
-         .fail(function(e) { ok(false, e); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
    asyncTest("#query function (no results)", function() {
       expect(2);
-      var store = resetStore(), parms = { where: function() { return false; } }, iteratorCalls = 0;
+      var store = resetStore(), bigModel = TestData.bigData.model(),
+         parms = { where: function() { return false; } }, iteratorCalls = 0;
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.query(bigModel, function(rec) {
@@ -447,7 +478,7 @@ jQuery(function($) {
             strictEqual(count, iteratorCalls, 'iterator called correct number of times');
             strictEqual(count, 0, 'correct number of records returned');
          })
-         .fail(function(e) { ok(false, e); })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
          .always(start);
    });
 
@@ -456,30 +487,63 @@ jQuery(function($) {
       strictEqual(store.hasSync(), true, 'store has sync');
    });
 
+   test('#unsync', function() {
+      ok(false, 'Implement me!');
+   });
+
    asyncTest("#sync added", function() {
       expect(3);
       var store = resetStore(),
          data = TestData.genericData(),
-         table = syncRoot.child(genericModel.table),
-         done = $.Deferred();
-      function fx(e, id, data) {
-         console.log('async fx called');
+         model = TestData.model(),
+         table = syncRoot.child(model.table),
+         done = $.Deferred(),
+         to = _timeout(done);
+
+      var fx = function(e, id, data) {
+         clearTimeout(to);
+         store.unsync(model, fx);
          strictEqual(e, 'added', 'event type is "added"');
          deepEqual(id, TestData.genericData().id, 'has correct id');
          deepEqual(data, TestData.genericData(), 'fields set correctly');
          done.resolve();
-      }
-      store.sync(genericModel, fx);
+      };
+      store.sync(model, fx);
 
       //todo-sort add with priority?
-      table.child(data.id).set(data, function() {
-         done.then(start);
-      });
+      table.child(data.id).set(data);
+      done
+         .fail(function(e) { ok(false, e); })
+         .always(start);
    });
 
    asyncTest("#sync updated", function() {
       expect(3);
-      start();
+      var store = resetStore(),
+         data = TestData.genericData(),
+         model = TestData.model(),
+         table = syncRoot.child(model.table),
+         newData = TestData.genericData({intOptional: 0, emailOptional: 'me@here.com'}),
+         done = $.Deferred(),
+         to = _timeout(done);
+
+      function fx2(e, id, data) {
+         clearTimeout(to);
+         store.unsync(model, fx2);
+         strictEqual(e, 'updated', 'event type is "updated"');
+         deepEqual(id, newData.id, 'has correct id');
+         deepEqual(data, newData, 'fields set correctly');
+         done.resolve();
+      }
+
+      table.child(data.id).set(data, function() {
+         store.sync(model, fx2);
+         table.child(data.id).set(newData);
+      });
+
+      done
+         .fail(function(e) { ok(false, e); })
+         .always(start);
    });
 
    test("#sync deleted", function() {
@@ -490,8 +554,8 @@ jQuery(function($) {
       ok(false, 'Implement me!');
    });
 
-   test('#unsync', function() {
-      ok(false, 'Implement me!');
+   test('#sync event list', function() {
+
    });
 
    test("#onConnect", function() {
@@ -536,7 +600,7 @@ jQuery(function($) {
     * @return {jQuery.Sequence}
     */
    function startSequence(timeout) {
-      timeout || (timeout = 5000);
+      timeout || (timeout = 2500);
       var seq = $.Sequence.start(sequenceMethods), timeoutRef;
 
       if( timeout ) {
@@ -584,6 +648,19 @@ jQuery(function($) {
 
    function exists(val) {
       return  val !== null && val !== undef;
+   }
+
+   /**
+    * @param def
+    * @param {int} [timeout]
+    * @return {Number}
+    * @private
+    */
+   function _timeout(def, timeout) {
+      timeout || (timeout = 2500);
+      return setTimeout(function() {
+         def.reject('timeout exceeded');
+      }, timeout)
    }
 
 });
