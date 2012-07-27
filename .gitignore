@@ -164,3 +164,4 @@ pip-log.txt
 /.idea
 /test/muck.html
 /muck.txt
+/test\lib/firebase-debug.js
