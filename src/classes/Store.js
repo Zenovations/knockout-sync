@@ -123,31 +123,51 @@
       count: function(model, parms) { throw new Error('Interface not implemented'); },
 
       /**
-       * True if this data layer provides push updates that can be monitored.
+       * True if this data layer provides push updates that can be monitored by the client.
        * @return {boolean}
        */
-      hasSync: function() { throw new Error('Interface not implemented'); },
+      hasTwoWaySync: function() { throw new Error('Interface not implemented'); },
 
       /**
-       * Given a particular data model, get notifications of any changes to the data. The change notifications will
-       * come in the form:
+       * Given a particular data model, apply any changes to the observableArray provided.
        *
-       *   - callback('added',   {string}record_id, {object}json)
-       *   - callback('deleted', {string}record_id)
-       *   - callback('updated', {string}record_id, {object}json)
-       *   - callback('moved',   {string}record_id, {string}prevRecordId)
-       *   - callback('connected')     // connected to database layer
-       *   - callback('disconnected')  // disconnected from database layer
-       *
-       *   For "moved" events, this indicates that the record has changed positions relative to its siblings
-       *   The `prevRecordId` is the child just before the record at its new position (or null if first)
+       * If the data layer provides two-way sync, then it will also send any updates to the
+       * server, assuming the model's autoSync property is set to true.
        *
        * @param {ko.sync.Model} model
-       * @param {Function}      callback
-       * @param {string}        [events]
+       * @param  observableArray
        * @return {Store} this
        */
-      sync: function(model, callback, events) { throw new Error('Interface not implemented'); }
+      syncModel: function(model, observableArray) { throw new Error('Interface not implemented'); },
+
+      /**
+       * Stop monitoring a data model, do not apply any more changes to the observableArray.
+       *
+       * @param {ko.sync.Model} model
+       * @param observableArray
+       * @return {Store} this
+       */
+      unsyncModel: function(model, observableArray) { throw new Error('Interface not implemented'); },
+
+      /**
+       * Given a particular data model, apply any changes to the observableArray provided. If the data layer
+       * provides two-way sync, then it will also send any updates to the server, assuming the model's
+       * autoSync property is set to true.
+       *
+       * @param {ko.sync.Model} model
+       * @param  observableArray
+       * @return {Store} this
+       */
+      syncRecord: function(model, record, observable) { throw new Error('Interface not implemented'); },
+
+      /**
+       * Stop monitoring a data model, do not apply any more changes to the observableArray.
+       *
+       * @param {ko.sync.Model} model
+       * @param observableArray
+       * @return {Store} this
+       */
+      unsyncRecord: function(model, record, observable) { throw new Error('Interface not implemented'); }
    });
 
    Store.EVENT_TYPES = 'added deleted moved updated connected disconnected';

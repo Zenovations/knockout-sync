@@ -143,6 +143,13 @@
       return new ko.sync.RecordId(['id'], {'id': value});
    };
 
+   var bigDataTemplate = {
+      id:             'record123',
+      aString:        'a big string',
+      sortField:      10,
+      aBool:          false
+   };
+
    exports.bigData = {
       COUNT: 200,
       props: {
@@ -156,6 +163,30 @@
             aBool:     { required: false, persist: true, type: 'boolean' }
          }
       },
+
+      /**
+       * @param {int} id
+       * @param {object} [moreData]
+       * @param {ko.sync.Model} [model] must be a model of bigData!
+       * @return {ko.sync.Record}
+       */
+      record: function(id, moreData, model) {
+         model || (model = exports.bigData.model());
+         return model.newRecord(exports.bigData.data(id, moreData));
+      },
+
+      /**
+       * @param {int} id
+       * @param {object} [moreData]
+       * @return {object}
+       */
+      data: function(id, moreData) {
+         return $.extend(
+            {id: id, aString: 'string-'+id, sortField: id, aBool: (id%2 === 0)},
+            moreData
+         )
+      },
+
       /**
        * @param firebaseRoot
        * @param {int} [numrecs]
@@ -175,6 +206,7 @@
          });
          return def.promise();
       },
+
       /**
        * @param {object} [moreOpts]
        * @return {ko.sync.Model}

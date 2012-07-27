@@ -36,6 +36,11 @@
       toString: function() {
          return this.table+'['+this.inst+']';
       }
+
+      //todo-api manual save
+
+      //todo-api manual sync
+
    });
    Model.FIELD_DEFAULTS = {
       type:      'string',

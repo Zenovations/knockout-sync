@@ -15,6 +15,7 @@ jQuery(function($) {
    var _asyncTest = asyncTest, currName;
    asyncTest = function(name, fx) {
       return _asyncTest(name, function() {
+         console.log('starting', name);
          console.time(name);
          currName = name;
          fx();
@@ -482,80 +483,82 @@ jQuery(function($) {
          .always(start);
    });
 
-   test("#hasSync", function() {
+   test("#hasTwoWaySync", function() {
       var store = resetStore();
-      strictEqual(store.hasSync(), true, 'store has sync');
+      strictEqual(store.hasTwoWaySync(), true, 'store has sync');
    });
 
-   test('#unsync', function() {
-      ok(false, 'Implement me!');
-   });
-
-   asyncTest("#sync added", function() {
-      expect(3);
-      var store = resetStore(),
-         data = TestData.genericData(),
-         model = TestData.model(),
-         table = syncRoot.child(model.table),
-         done = $.Deferred(),
-         to = _timeout(done);
-
-      var fx = function(e, id, data) {
-         clearTimeout(to);
-         store.unsync(model, fx);
-         strictEqual(e, 'added', 'event type is "added"');
-         deepEqual(id, TestData.genericData().id, 'has correct id');
-         deepEqual(data, TestData.genericData(), 'fields set correctly');
-         done.resolve();
-      };
-      store.sync(model, fx);
-
-      //todo-sort add with priority?
-      table.child(data.id).set(data);
-      done
-         .fail(function(e) { ok(false, e); })
-         .always(start);
-   });
-
-   asyncTest("#sync updated", function() {
-      expect(3);
-      var store = resetStore(),
-         data = TestData.genericData(),
-         model = TestData.model(),
-         table = syncRoot.child(model.table),
-         newData = TestData.genericData({intOptional: 0, emailOptional: 'me@here.com'}),
-         done = $.Deferred(),
-         to = _timeout(done);
-
-      function fx2(e, id, data) {
-         clearTimeout(to);
-         store.unsync(model, fx2);
-         strictEqual(e, 'updated', 'event type is "updated"');
-         deepEqual(id, newData.id, 'has correct id');
-         deepEqual(data, newData, 'fields set correctly');
-         done.resolve();
-      }
-
-      table.child(data.id).set(data, function() {
-         store.sync(model, fx2);
-         table.child(data.id).set(newData);
+   test("#syncModel up", function() {
+      var store = resetStore(), obs = ko.observableArray(),
+          model = TestData.bigData.model();
+      obs.subscribe(function() {
+         console.log.apply(console, _.toArray(arguments));
       });
-
-      done
-         .fail(function(e) { ok(false, e); })
-         .always(start);
+      store.syncModel(model, obs);
+//      expect(3);
+//      var store = resetStore(),
+//         data = TestData.genericData(),
+//         model = TestData.model(),
+//         table = syncRoot.child(model.table),
+//         done = $.Deferred(),
+//         to = _timeout(done);
+//
+//      var fx = function(e, id, data) {
+//         clearTimeout(to);
+//         store.unsync(model, fx);
+//         strictEqual(e, 'added', 'event type is "added"');
+//         deepEqual(id, TestData.genericData().id, 'has correct id');
+//         deepEqual(data, TestData.genericData(), 'fields set correctly');
+//         done.resolve();
+//      };
+//      store.sync(model, fx);
+//
+//      //todo-sort add with priority?
+//      table.child(data.id).set(data);
+//      done
+//         .fail(function(e) { ok(false, e); })
+//         .always(start);
    });
 
-   test("#sync deleted", function() {
+   test("#syncModel down", function() {
+//      expect(3);
+//      var store = TestData.bigData.reset(syncRoot),
+//         data = TestData.bigData.genericData(),
+//         model = TestData.bigData.model(),
+//         table = syncRoot.child(model.table),
+//         newData = TestData.genericData({id: 99, }),
+//         done = $.Deferred(),
+//         to = _timeout(done);
+//
+//      function fx2(e, id, data) {
+//         clearTimeout(to);
+//         store.unsync(model, fx2);
+//         strictEqual(e, 'updated', 'event type is "updated"');
+//         deepEqual(id, newData.id, 'has correct id');
+//         deepEqual(data, newData, 'fields set correctly');
+//         done.resolve();
+//      }
+//
+//      table.child(data.id).set(data, function() {
+//         store.sync(model, fx2);
+//         table.child(data.id).set(newData);
+//      });
+//
+//      done
+//         .fail(function(e) { ok(false, e); })
+//         .always(start);
+   });
+
+   test('#unsyncModel', function() {
       ok(false, 'Implement me!');
    });
 
-   test("#sync moved", function() {
-      ok(false, 'Implement me!');
+   test('#syncRecord', function() {
+      //todo
    });
 
-   test('#sync event list', function() {
-
+   test('#unsyncRecord', function() {
+      //todo
    });
 
    test("#onConnect", function() {

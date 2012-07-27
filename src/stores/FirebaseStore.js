@@ -23,7 +23,6 @@
    var FirebaseStore = ko.sync.Store.extend({
       init: function(url, base) {
          this.base = _base(new Firebase(url), base);
-         this.watching = false;
       }
       // we don't need to include all the methods here because there is no _super to deal with
       // we're just inheriting for the "is a" behavior and to enforce the contract of Store
@@ -133,7 +132,7 @@
                (success && cb(ref.name())) || eb(ref.name(), 'Unable to sync');
             });
          }
-      });
+      })
    };
 
    /**
@@ -166,7 +165,7 @@
     */
    FirebaseStore.prototype.query = function(model, iterator, criteria) {
       var def = $.Deferred();
-      var table = this.base.child(model.table);
+      var table = this.base.child(model.table); //todo-ref -> Util.ref()
       if( model.sort ) {
          //todo-sort
          //todo-sort
@@ -200,13 +199,13 @@
     * @param {object}        [parms] must be a hash ($.isPlainObject())
     */
    FirebaseStore.prototype.count = function(model, parms) {
-      var count = 0, table = this.base.child(model.table),
+      var count = 0, table = this.base.child(model.table), //todo-ref -> Util.ref()
           opts  = ko.utils.extend({limit: 0, offset: 0, where: null, sort: null}, parms),
           start = ~~opts.offset,
           end   = opts.limit? start + ~~opts.limit : 0,
           curr  = -1;
       _buildFilter(opts);
-      return Util.each(table, function(snapshot) {
+      return Util.each(table, function(snapshot) { //todo Util.filter instead?
          var data = snapshot.val();
          if( data !== null && (!opts.filter || opts.filter(data)) ) {
             curr++;
@@ -218,39 +217,68 @@
             }
          }
       }).pipe(function() {
-            return count;
-      });
+         return count;
+      })
    };
 
    /**
     * True if this data layer provides push updates that can be monitored for the given model
     * @return {boolean}
     */
-   FirebaseStore.prototype.hasSync = function(model) { return true; };
+   FirebaseStore.prototype.hasTwoWaySync = function(model) { return true; };
 
    /**
     * @param {ko.sync.Model} model
-    * @param {Function} callback
-    * @param {string} [types]
+    * @param observableArray
+    * @param {object} [parms]
     */
-   FirebaseStore.prototype.sync = function(model, callback, types) {
-      var eventList = types? types.split(' ') : EVENT_TYPES;
+   FirebaseStore.prototype.syncModel = function(model, observableArray, parms) {
       if( !('FirebaseSync' in model) ) {
-         model.FirebaseSync = new SyncManager(this, model, EVENT_TYPES);
+         model.FirebaseSync = new ModelSyncManager();
       }
-      model.FirebaseSync.on(eventList, callback);
+      var ref = Util.ref(this.base, model.table, parms);
+      model.FirebaseSync.on(observableArray, ref);
+      return this;
    };
 
    /**
     * @param {ko.sync.Model} model
-    * @param {Function} callback
-    * @param {string} [types]
+    * @param observableArray
     */
-   FirebaseStore.prototype.unsync = function(model, callback, types) {
-      var eventList = types? types.split(' ') : EVENT_TYPES;
+   FirebaseStore.prototype.unsyncModel = function(model, observableArray) {
       if( 'FirebaseSync' in model ) {
-         model.FirebaseSync.off(eventList, callback);
+         model.FirebaseSync.off(observableArray);
       }
+      return this;
+   };
+
+
+   /**
+    * Given a particular data model, apply any changes to the observableArray provided.
+    *
+    * @param {ko.sync.Model} model
+    * @param  observableArray
+    * @return {Store} this
+    */
+   FirebaseStore.prototype.syncRecord = function(model, record, observable) {
+      //todo
+      //todo
+      //todo
+      throw new Error('Interface not implemented');
+   };
+
+   /**
+    * Stop monitoring a data model, do not apply any more changes to the observableArray.
+    *
+    * @param {ko.sync.Model} model
+    * @param observableArray
+    * @return {Store} this
+    */
+   FirebaseStore.prototype.unsyncRecord = function(model, record, observable) {
+      //todo
+      //todo
+      //todo
+      throw new Error('Interface not implemented');
    };
 
    /** SYNC MANAGER
@@ -261,15 +289,14 @@
     * @param {Array}         eventTypes
     * @constructor
     */
-   function SyncManager(store, model, eventTypes) {
-      var self    = this;
-      self.events = _emptyListeners(eventTypes);
-      self.table  = store.base.child(model.table);
-      self.count  = 0;
+   function ModelSyncManager() {
+      var self       = this;
+      self.list      = [];
+      self.subs      = [];
       // these need to be declared with each instantiation so that the functions
       // can be used as references for on/off; otherwise, calling off on one model
       // could also turn off all the other models referencing the same table!
-      this.refs = {
+      this.events = {
          child_added: function(snapshot, prevSiblingId) {
             console.log('child_added'); //debug
             var data = snapshot.val();
@@ -292,61 +319,82 @@
       };
    }
 
-   SyncManager.prototype.on = function(types, callback) {
-      var events = this.events;
-      types || (types = EVENT_TYPES);
-
-      // store the listener
-      _.each(types, function(e) {
-         events[e].push(callback);
-         this.count++;
-      }, this);
-
-      // start observing Firebase when listeners are added
-      if( !this.watching && this.count > 0 ) {
-         this.watching = true;
-         watchFirebase(this.refs, this.table);
+   ModelSyncManager.prototype.on = function(observableArray, ref) {
+      var self = this, subscription, idx = _.indexOf(self.list, observableArray);
+      if( idx >= 0 ) {
+         throw new Error('Each observableArray may only be synced to one Store reference');
       }
-   };
-
-   SyncManager.prototype.off = function(types, callback) {
-      var events = this.events;
-      types || (types = EVENT_TYPES);
-
-      // delete the listener
-      _.each(types, function(e) {
-         var list = events[e], i = _.indexOf(list, callback);
-         if( i >= 0 ) {
-            this.count--;
-            events[e].splice(i, 1);
+      idx = self.list.push(observableArray);
+      subscription = observableArray.subscribe(function() {
+         //todo observeFunction
+         //todo
+         //todo
+         //todo
+         console.log('observableArray event', $.makeArray(arguments));
+      });
+      self.subs.push({
+         dispose: function() {
+            subscription.dispose();
+            unwatchFirebase(self.events, ref);
+            self.list.splice(idx, 1);
+            self.subs.splice(idx, 1);
          }
-      }, this);
-
-      // stop observing Firebase is nobody is paying attention
-      if( this.count === 0 && this.watching ) {
-         this.watching = false;
-         unwatchFirebase(this.refs, this.table);
-      }
+      });
+      watchFirebase(self.events, ref);
+      return self.subs[idx];
    };
 
-   SyncManager.prototype.trigger = function(type) {
-      var args = $.makeArray(arguments), list = this.events[type], i = list.length;
-      while (i--) {
-         list[i].apply(null, args);
+   ModelSyncManager.prototype.off = function(observableArray) {
+      var idx = _.indexOf(this.list, observableArray);
+      if( idx >= 0 ) {
+         this.subs[idx].dispose();
       }
+      return this;
+   };
+
+   ModelSyncManager.prototype.trigger = function(type, id, data, prev) {
+      var list = this.list, i = list.length, it;
+      switch(type) {
+         case 'added':
+            it = function(obsArray) {
+               //todo
+            };
+            break;
+         case 'updated':
+            it = function(obsArray) {
+               //todo
+            };
+            break;
+         case 'deleted':
+            it = function(obsArray) {
+               //todo
+            };
+            break;
+         case 'moved':
+            it = function(obsArray) {
+               //todo
+            };
+            break;
+         default:
+            throw new Error('Invalid event type '+type);
+      }
+      while (i--) {
+         it(list[i]);
+      }
+      return this;
    };
 
    /** UTILITIES
     *****************************************************************************************/
 
-   function watchFirebase(refs, table) {
-      _.each(refs, function(fx, key) {
+   function watchFirebase(events, table) {
+      _.each(events, function(fx, key) {
          table.on(key, fx);
       });
    }
 
-   function unwatchFirebase(refs, table) {
-      _.each(refs, function(fx, key) {
+   function unwatchFirebase(events, table) {
+      _.each(events, function(fx, key) {
          table.off(key, fx);
       });
    }
@@ -607,7 +655,7 @@
          }
          else {
             var def = $.Deferred();
-            this.filter(table, matchCriteria, function(snapshot) {
+            this.filter(table, {'where': matchCriteria}, function(snapshot) {
                def.resolve(snapshot);
                return true;
             });
@@ -621,20 +669,20 @@
        *
        * `filterCriteria` exactly matches the FirebaseStore.query and FirebaseStore.count() methods.
        *
-       * If recordMatchedCallback returns true, then the filter operation is ended immediately
+       * If iterator returns true, then the filter operation is ended immediately
        *
        * @param {Firebase}         table
-       * @param {Function|object}  filterCriteria see description
-       * @param {Function}         recordMatchedCallback called each time a match is found
+       * @param {Function|Object}  filterCriteria see description
+       * @param {Function}         iterator called each time a match is found
        * @return {jQuery.Deferred} resolves to number of records matched when operation completes
        */
-      filter: function(table, filterCriteria, recordMatchedCallback) {
+      filter: function(table, filterCriteria, iterator) {
          var opts    = ko.utils.extend({limit: 0, offset: 0, where: null, sort: null}, filterCriteria),
              start   = ~~opts.offset,
+             //todo utilize Util.ref() here
              end     = opts.limit? start + ~~opts.limit : 0,
              curr    = -1,
-             matches = 0,
-             def     = $.Deferred();
+             matches = 0;
          _buildFilter(opts);
          return Util.each(table, function(snapshot) {
             var data = snapshot.val();
@@ -645,10 +693,37 @@
                }
                else if( curr >= start ) {
                   matches++;
-                  return recordMatchedCallback(snapshot);
+                  return iterator(snapshot);
                }
             }
          }).pipe(function(ct) { return matches; });
+      },
+
+      ref: function(root, tableName, parms) {
+         parms || (parms = {});
+         var table = root.child(tableName),
+              limit = Math.abs(~~parms.limit);
+         if( parms.start ) {
+            // if a starting point is given, that's where we begin iterating
+            table = table.startAt(parms.start, parms.startId);
+         }
+         if( parms.end ) {
+            // if an ending point is given, that's where we stop iterating
+            table = table.endAt(parms.end, parms.endId);
+         }
+         if( limit ) {
+            if( !parms.start && !parms.end ) {
+               // if the list is open ended, we can use an offset, otherwise start/end are the offset
+               // we have a pretty big limitation with offset; we're depending on the caller to deal with that
+               // and we simply increase our limit to accommodate; sadly not much else we can do
+               limit += ~~parms.offset; //todo-test
+               if( parms.limit < 0 ) {
+                  table = table.endAt();
+               }
+            }
+            table = table.limit(limit);
+         }
+         return table;
       }
    };
 
@@ -703,19 +778,6 @@
             }
          });
       }
-   }
-
-   /**
-    * @param {Array} types
-    * @return {Object}
-    * @private
-    */
-   function _emptyListeners(types) {
-      var out = {};
-      _.each(types, function(v) {
-         out[v] = [];
-      });
-      return out;
    }
 
    /** ADD TO NAMESPACE
