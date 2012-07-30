@@ -488,76 +488,72 @@ jQuery(function($) {
       strictEqual(store.hasTwoWaySync(), true, 'store has sync');
    });
 
-   test("#syncModel up", function() {
-      var store = resetStore(), obs = ko.observableArray(),
+   asyncTest("#watch", function() {
+      expect(4);
+      var obs,
+          added = 0, updated = 0, removed = 0, moved = 0,
+          store = resetStore(),
+          done  = $.Deferred(),
+          to    = _timeout(done),
           model = TestData.bigData.model();
-      obs.subscribe(function() {
-         console.log.apply(console, _.toArray(arguments));
+      function watcher(type, id, val, prev) {
+         console.log(arguments);
+         switch(type) {
+            case 'added':   added++;   break;
+            case 'updated': updated++; break;
+            case 'deleted': removed++; break;
+            case 'moved':   moved++;   break;
+            default:
+               done.reject('Invalid event type', type);
+         }
+         if( added + moved + updated + removed == 207 ) {
+            clearTimeout(to);
+            done.resolve();
+         }
+      }
+
+      TestData.bigData.reset(syncRoot).then(function(ref) {
+         console.log('bigData reset');
+
+         // calling this twice should not double-add the listener
+         // and cause it to be invoked twice for each event
+         obs = store.watch(model, watcher);
+
+         // add a record locally
+         store.create(model, TestData.bigData.record(201, {aString: 'hello'}, model));
+
+         // do a remote update
+         ref.child('100')
+            .set(TestData.bigData.data(100,
+               {aString: 'this is SPARTA'}, model));
+
+         // do a local update
+         store.update(model, TestData.bigData.record(110, {aString: 'goodbye'}, model));
+
+         // do a remote delete
+         ref.child('201').remove();
+
+         // do a local delete
+         store.delete(model, TestData.bigData.record(25, {}, model));
+
       });
-      store.syncModel(model, obs);
-//      expect(3);
-//      var store = resetStore(),
-//         data = TestData.genericData(),
-//         model = TestData.model(),
-//         table = syncRoot.child(model.table),
-//         done = $.Deferred(),
-//         to = _timeout(done);
-//
-//      var fx = function(e, id, data) {
-//         clearTimeout(to);
-//         store.unsync(model, fx);
-//         strictEqual(e, 'added', 'event type is "added"');
-//         deepEqual(id, TestData.genericData().id, 'has correct id');
-//         deepEqual(data, TestData.genericData(), 'fields set correctly');
-//         done.resolve();
-//      };
-//      store.sync(model, fx);
-//
-//      //todo-sort add with priority?
-//      table.child(data.id).set(data);
-//      done
-//         .fail(function(e) { ok(false, e); })
-//         .always(start);
+
+      // sync to the bigData model right now while records are changing
+      store.watch(model, watcher);
+
+      done
+         .fail(function(e) { ok(false, e); })
+         .always(function() {
+            equal(added, 201, 'records added');
+            equal(updated, 2, 'records updated');
+            equal(removed, 2, 'records deleted');
+            equal(moved,   2, 'records moved');
+            obs && obs.dispose();
+            start();
+         });
    });
 
-   test("#syncModel down", function() {
-//      expect(3);
-//      var store = TestData.bigData.reset(syncRoot),
-//         data = TestData.bigData.genericData(),
-//         model = TestData.bigData.model(),
-//         table = syncRoot.child(model.table),
-//         newData = TestData.genericData({id: 99, }),
-//         done = $.Deferred(),
-//         to = _timeout(done);
-//
-//      function fx2(e, id, data) {
-//         clearTimeout(to);
-//         store.unsync(model, fx2);
-//         strictEqual(e, 'updated', 'event type is "updated"');
-//         deepEqual(id, newData.id, 'has correct id');
-//         deepEqual(data, newData, 'fields set correctly');
-//         done.resolve();
-//      }
-//
-//      table.child(data.id).set(data, function() {
-//         store.sync(model, fx2);
-//         table.child(data.id).set(newData);
-//      });
-//
-//      done
-//         .fail(function(e) { ok(false, e); })
-//         .always(start);
-   });
-
-   test('#unsyncModel', function() {
-      ok(false, 'Implement me!');
-   });
-
-   test('#syncRecord', function() {
-      //todo
-   });
-
-   test('#unsyncRecord', function() {
+   test('#watchRecord', function() {
       //todo
    });
 
@@ -660,7 +656,7 @@ jQuery(function($) {
     * @private
     */
    function _timeout(def, timeout) {
-      timeout || (timeout = 2500);
+      timeout || (timeout = 5000);
       return setTimeout(function() {
          def.reject('timeout exceeded');
       }, timeout)

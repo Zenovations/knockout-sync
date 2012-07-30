@@ -4,8 +4,6 @@
 (function() {
    var undef, ko = this.ko, Firebase = this.Firebase||window.Firebase, $ = this.jQuery;
 
-   var EVENT_TYPES = ['added', 'deleted', 'moved', 'updated', 'connected', 'disconnected'];
-
    /** IDE CLUES
     **********************/
    /** @var {jQuery.Deferred}  */ var Promise;
@@ -228,53 +226,26 @@
    FirebaseStore.prototype.hasTwoWaySync = function(model) { return true; };
 
    /**
-    * @param {ko.sync.Model} model
-    * @param observableArray
-    * @param {object} [parms]
+    * @param  {ko.sync.Model} model
+    * @param  {Function}     callback
+    * @param  {object}       [filterCriteria]
+    * @return {Object}
     */
-   FirebaseStore.prototype.syncModel = function(model, observableArray, parms) {
+   FirebaseStore.prototype.watch = function(model, callback, filterCriteria) {
       if( !('FirebaseSync' in model) ) {
          model.FirebaseSync = new ModelSyncManager();
       }
-      var ref = Util.ref(this.base, model.table, parms);
-      model.FirebaseSync.on(observableArray, ref);
-      return this;
+      var ref = Util.ref(this.base, model.table, filterCriteria);
+      return model.FirebaseSync.on(callback, ref);
    };
 
    /**
-    * @param {ko.sync.Model} model
-    * @param observableArray
+    * @param {ko.sync.Model}  model
+    * @param {ko.sync.Record} record
+    * @param  {Function}      callback
+    * @return {Object}
     */
-   FirebaseStore.prototype.unsyncModel = function(model, observableArray) {
-      if( 'FirebaseSync' in model ) {
-         model.FirebaseSync.off(observableArray);
-      }
-      return this;
-   };
-
-
-   /**
-    * Given a particular data model, apply any changes to the observableArray provided.
-    *
-    * @param {ko.sync.Model} model
-    * @param  observableArray
-    * @return {Store} this
-    */
-   FirebaseStore.prototype.syncRecord = function(model, record, observable) {
-      //todo
-      //todo
-      //todo
-      throw new Error('Interface not implemented');
-   };
-
-   /**
-    * Stop monitoring a data model, do not apply any more changes to the observableArray.
-    *
-    * @param {ko.sync.Model} model
-    * @param observableArray
-    * @return {Store} this
-    */
-   FirebaseStore.prototype.unsyncRecord = function(model, record, observable) {
+   FirebaseStore.prototype.watchRecord = function(model, record, callback) {
       //todo
       //todo
       //todo
@@ -298,88 +269,56 @@
       // could also turn off all the other models referencing the same table!
       this.events = {
          child_added: function(snapshot, prevSiblingId) {
-            console.log('child_added'); //debug
             var data = snapshot.val();
             if( data !== null ) {
                self.trigger('added', snapshot.name(), data, prevSiblingId);
             }
          },
          child_removed: function(snapshot) {
-            console.log('child_removed'); //debug
             self.trigger('deleted', snapshot.name(), snapshot.val());
          },
          child_changed: function(snapshot, prevSiblingId) {
-            console.log('child_changed'); //debug
             self.trigger('updated', snapshot.name(), snapshot.val(), prevSiblingId);
          },
          child_moved: function(snapshot, prevSiblingId) {
-            console.log('child_moved'); //debug
             self.trigger('moved', snapshot.name(), snapshot.val(), prevSiblingId);
          }
       };
    }
 
-   ModelSyncManager.prototype.on = function(observableArray, ref) {
-      var self = this, subscription, idx = _.indexOf(self.list, observableArray);
-      if( idx >= 0 ) {
-         throw new Error('Each observableArray may only be synced to one Store reference');
+   ModelSyncManager.prototype.on = function(callback, ref, scope) {
+      var self = this,
+          obs  = _.find(self.list, function(v) { return v.listener === callback && v.ref === ref && v.scope === scope });
+      if( !obs ) {
+         obs = {
+            listener: callback,
+            ref: ref,
+            scope: scope || null,
+            paused: false,
+            dispose: function() {
+               var idx = _.indexOf(self.subs, obs);
+               unwatchFirebase(self.events, ref);
+               self.subs.splice(idx, 1);
+            }
+         };
+         self.subs.push(obs);
+         //todo this is wrong! this notifies all callbacks on any change on any ref!
+         //todo link each watch/unwatch to the specific reference/callback set
+         //todo
+         //todo-bug
+         //todo
+         //todo
+         //todo
+         watchFirebase(self.events, ref);
       }
-      idx = self.list.push(observableArray);
-      subscription = observableArray.subscribe(function() {
-         //todo observeFunction
-         //todo
-         //todo
-         //todo
-         console.log('observableArray event', $.makeArray(arguments));
-      });
-      self.subs.push({
-         dispose: function() {
-            subscription.dispose();
-            unwatchFirebase(self.events, ref);
-            self.list.splice(idx, 1);
-            self.subs.splice(idx, 1);
-         }
-      });
-      watchFirebase(self.events, ref);
-      return self.subs[idx];
+      return obs;
    };
 
-   ModelSyncManager.prototype.off = function(observableArray) {
-      var idx = _.indexOf(this.list, observableArray);
-      if( idx >= 0 ) {
-         this.subs[idx].dispose();
-      }
-      return this;
-   };
-
-   ModelSyncManager.prototype.trigger = function(type, id, data, prev) {
-      var list = this.list, i = list.length, it;
-      switch(type) {
-         case 'added':
-            it = function(obsArray) {
-               //todo
-            };
-            break;
-         case 'updated':
-            it = function(obsArray) {
-               //todo
-            };
-            break;
-         case 'deleted':
-            it = function(obsArray) {
-               //todo
-            };
-            break;
-         case 'moved':
-            it = function(obsArray) {
-               //todo
-            };
-            break;
-         default:
-            throw new Error('Invalid event type '+type);
-      }
+   ModelSyncManager.prototype.trigger = function() {
+      var obs, observers = this.subs, i = observers.length, args = _.toArray(arguments);
       while (i--) {
-         it(list[i]);
+         obs = observers[i];
+         if( !obs.paused ) { obs.listener.apply(obs.scope, args); }
       }
       return this;
    };
