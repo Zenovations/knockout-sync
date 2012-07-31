@@ -376,9 +376,13 @@ jQuery(function($) {
 
    asyncTest("#query", function() {
       expect(2);
-      var store = resetStore(), bigModel = TestData.bigData.model(), parms = {
-         where: { aBool: true, sortField: function(v) { return v < 51; } }
-      }, iteratorCalls = 0;
+      //todo-sort
+      var store = resetStore(),
+         bigModel = TestData.bigData.model({sortField: null}),
+         parms = {
+            where: { aBool: true, sortField: function(v) { return v < 51; } }
+         },
+         iteratorCalls = 0;
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.query(bigModel, function(rec) {
@@ -395,7 +399,8 @@ jQuery(function($) {
 
    asyncTest("#query where+limit", function() {
       expect(4);
-      var store = resetStore(), bigModel = TestData.bigData.model(), parms = {
+      //todo-sort
+      var store = resetStore(), bigModel = TestData.bigData.model({sortField: null}), parms = {
          where: { aBool: false },
          limit: 75
       }, iteratorCalls = 0;
@@ -426,7 +431,8 @@ jQuery(function($) {
 
    asyncTest("#query (no results)", function() {
       expect(2);
-      var store = resetStore(), bigModel = TestData.bigData.model(),
+      //todo-sort
+      var store = resetStore(), bigModel = TestData.bigData.model({sortField: null}),
          parms = { where: { aString: 'not this' } }, iteratorCalls = 0;
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
@@ -445,7 +451,7 @@ jQuery(function($) {
    asyncTest("#query function", function() {
       expect(2);
       var store = resetStore(),
-         bigModel = TestData.bigData.model(),
+         bigModel = TestData.bigData.model({sortField: null}), //todo-sort
          parms = {
             where: function(v, k) {
                return k.match(/^1\d$/);
@@ -467,7 +473,8 @@ jQuery(function($) {
 
    asyncTest("#query function (no results)", function() {
       expect(2);
-      var store = resetStore(), bigModel = TestData.bigData.model(),
+      //todo-sort
+      var store = resetStore(), bigModel = TestData.bigData.model({sortField: null}),
          parms = { where: function() { return false; } }, iteratorCalls = 0;
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
@@ -489,46 +496,66 @@ jQuery(function($) {
    });
 
    asyncTest("#watch", function() {
-      expect(4);
-      var obs,
-          added = 0, updated = 0, removed = 0, moved = 0,
+      expect(5);
+      var obs1, obs2,
+          added = [], updated = [], deleted = [], moved = [],
           store = resetStore(),
           done  = $.Deferred(),
           to    = _timeout(done),
-          model = TestData.bigData.model();
-      function watcher(type, id, val, prev) {
-         console.log(arguments);
+          model = TestData.bigData.model(),
+          activity = false;
+
+      function watcher(type, id) {
+         activity = true;
          switch(type) {
-            case 'added':   added++;   break;
-            case 'updated': updated++; break;
-            case 'deleted': removed++; break;
-            case 'moved':   moved++;   break;
+            case 'added':
+               added.push(id);
+               break;
+            case 'updated':
+               updated.push(id);
+               break;
+            case 'deleted':
+               deleted.push(id);
+               break;
+            case 'moved':
+               moved.push(id);
+               break;
             default:
                done.reject('Invalid event type', type);
-         }
-         if( added + moved + updated + removed == 207 ) {
-            clearTimeout(to);
-            done.resolve();
          }
       }
 
       TestData.bigData.reset(syncRoot).then(function(ref) {
          console.log('bigData reset');
 
+         // this interval helps us to wait until all data arrives
+         // without assuming we'll get the correct number of records
+         // it literally waits until stuff stops showing up
+         var waitTo = setInterval(function() {
+            if( !activity ) {
+               clearTimeout(to);
+               clearInterval(waitTo);
+               done.resolve();
+            }
+            activity = false;
+         }, 250);
+
          // calling this twice should not double-add the listener
-         // and cause it to be invoked twice for each event
-         obs = store.watch(model, watcher);
+         obs2 = store.watch(model, watcher);
 
          // add a record locally
          store.create(model, TestData.bigData.record(201, {aString: 'hello'}, model));
 
          // do a remote update
          ref.child('100')
-            .set(TestData.bigData.data(100,
-               {aString: 'this is SPARTA'}, model));
+            .setWithPriority(TestData.bigData.data(100,
+               {aString: 'this is SPARTA'}, model), 100);
 
          // do a local update
          store.update(model, TestData.bigData.record(110, {aString: 'goodbye'}, model));
+
+         // move a record
+         ref.child('100').setPriority(101);
 
          // do a remote delete
          ref.child('201').remove();
@@ -536,25 +563,29 @@ jQuery(function($) {
          // do a local delete
          store.delete(model, TestData.bigData.record(25, {}, model));
 
-      });
+         console.log('all synced actions completed')
+      })
+      .fail(function(e) { ko(false, e.toString()); });
 
       // sync to the bigData model right now while records are changing
-      store.watch(model, watcher);
+      obs1 = store.watch(model, watcher);
 
       done
          .fail(function(e) { ok(false, e); })
          .always(function() {
-            equal(added, 201, 'records added');
-            equal(updated, 2, 'records updated');
-            equal(removed, 2, 'records deleted');
-            equal(moved,   2, 'records moved');
-            obs && obs.dispose();
+            obs1 && obs1.dispose();
+            obs2 && obs2.dispose();
+            ok(obs1 === obs2, 'should return original observer rather than creating a new one');
+            deepEqual(added, _.map(_.range(1, 202), function(v) { return v+''; }), 'records added');
+            deepEqual(updated, ['100', '110', '100'], 'records updated');
+            deepEqual(deleted, ['201', '25'], 'records deleted');
+            deepEqual(moved,   ['100'], 'records moved');
             start();
          });
    });
 
    test('#watchRecord', function() {
-      //todo
+      ok(false, 'Implement me!');
    });
 
    test("#onConnect", function() {

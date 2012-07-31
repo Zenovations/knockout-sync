@@ -20,7 +20,8 @@
     */
    var FirebaseStore = ko.sync.Store.extend({
       init: function(url, base) {
-         this.base = _base(new Firebase(url), base);
+         this.base      = _base(new Firebase(url), base);
+         this.listeners = [];
       }
       // we don't need to include all the methods here because there is no _super to deal with
       // we're just inheriting for the "is a" behavior and to enforce the contract of Store
@@ -39,15 +40,14 @@
     *   - model.sort:    provides a field in the record to use for setting priority (sorting) the data
     *
     * @param {Model}  model   the schema for a data model
-    * @param {Record} record  the data to be inserted
+    * @param {Record} rec  the data to be inserted
     * @return {Promise} resolves to the record's {string} id
     */
-   FirebaseStore.prototype.create = function(model, record) {
-      //todo-sort priorities
+   FirebaseStore.prototype.create = function(model, rec) {
       return ko.sync.handle(this, function(cb, eb) { // creates a promise
          var table = this.base.child(model.table);
-         // fetch the record using .child()
-         _createRecord(table, record.getKey(), cleanData(model.fields, record.getData())).then(function(success, recordId) {
+         _createRecord(table, rec.getKey(), cleanData(model.fields, rec.getData()), rec.getSortPriority())
+            .then(function(success, recordId) {
             (success && cb(recordId)) || eb(recordId);
          });
       });
@@ -67,8 +67,8 @@
     */
    FirebaseStore.prototype.read = function(model, recOrId) {
       var table = this.base.child(model.table),
-            key   = _keyFor(recOrId),
-            hash  = key.hashKey();
+          key   = _keyFor(recOrId),
+          hash  = key && key.hashKey();
       return Util.val(table, hash).pipe(function(snapshot) {
          var data = snapshot.val();
          return data? model.newRecord(data) : null;
@@ -82,20 +82,20 @@
     * @return {Promise} resolves to callback({string}id, {boolean}updated), where updated is true if an update occurred or false if data was not dirty
     */
    FirebaseStore.prototype.update = function(model, rec) {
-      //todo-sort priorities
       var base = this.base;
       //todo use .pipe instead of ko.sync.handle
       return ko.sync.handle(this, function(cb, eb) {
          if( !rec.hasKey() ) { eb('Invalid key'); }
          this.read(model, rec).done(function(origRec) {
-            if( origRec === null ) { eb('Record does not exist'); }
+            if( !origRec ) { eb('Record does not exist'); }
             else {
                origRec.updateAll(rec);
                if( origRec.isDirty() ) {
-                  var key = _keyFor(origRec), ref = base.child(model.table).child(key.hashKey());
-                  ref.set(cleanData(model.fields, rec.getData()), function(success) {
-                     (success && cb(ref.name(), true)) || eb('synchronize failed');
-                  });
+                  var key = _keyFor(origRec), table = base.child(model.table);
+                  _updateRecord(table, key, cleanData(model.fields, rec.getData()), rec.getSortPriority())
+                     .then(function(success, id) {
+                        (success && cb(id, true)) || eb('synchronize failed');
+                     });
                }
                else {
                   cb(origRec.getRecordId().hashKey(), false);
@@ -232,11 +232,13 @@
     * @return {Object}
     */
    FirebaseStore.prototype.watch = function(model, callback, filterCriteria) {
-      if( !('FirebaseSync' in model) ) {
-         model.FirebaseSync = new ModelSyncManager();
+      var props = { table: model.table, callback: callback, criteria: filterCriteria, scope: null };
+      var obs = _.find(this.listeners, function(o) { return o.matches(props) });
+      if( !obs ) {
+         obs = new SyncObserver(this.listeners, this.base, props);
+         this.listeners.push(obs);
       }
-      var ref = Util.ref(this.base, model.table, filterCriteria);
-      return model.FirebaseSync.on(callback, ref);
+      return obs;
    };
 
    /**
@@ -252,27 +254,28 @@
       throw new Error('Interface not implemented');
    };
 
-   /** SYNC MANAGER
+   /** SYNC OBSERVER
     *****************************************************************************************/
 
-   /**
-    * @param {FirebaseStore} store
-    * @param {Array}         eventTypes
-    * @constructor
-    */
-   function ModelSyncManager() {
-      var self       = this;
-      self.list      = [];
-      self.subs      = [];
+   function SyncObserver(list, base, props) {
+      var self = this;
+      self.table    = props.table;
+      self.criteria = props.criteria;
+      self.scope    = props.scope || null;
+      self.callback = props.callback;
+      self.disposed = false;
+      self.paused   = false;
+      var ref       = Util.ref(base, self.table, self.criteria);
       // these need to be declared with each instantiation so that the functions
       // can be used as references for on/off; otherwise, calling off on one model
       // could also turn off all the other models referencing the same table!
-      this.events = {
+      var events = {
          child_added: function(snapshot, prevSiblingId) {
             var data = snapshot.val();
             if( data !== null ) {
                self.trigger('added', snapshot.name(), data, prevSiblingId);
             }
+            else { console.log('child_added with null value'); } //debug
          },
          child_removed: function(snapshot) {
             self.trigger('deleted', snapshot.name(), snapshot.val());
@@ -284,43 +287,41 @@
             self.trigger('moved', snapshot.name(), snapshot.val(), prevSiblingId);
          }
       };
+
+      // a method to receive events and delegate them to the callback
+      self.trigger = function() {
+         if( !self.paused && !self.disposed ) {
+            self.callback.apply(self.scope, _.toArray(arguments));
+         }
+      };
+
+      // a method to stop listening for events and remove this observer from the list
+      self.dispose = function() {
+         if( !self.disposed ) {
+            self.disposed = true;
+            unwatchFirebase(events, ref);
+            var idx = _.indexOf(list, self);
+            if( idx >= 0 ) {
+               list.slice(idx, 1);
+            }
+         }
+      };
+      watchFirebase(events, ref);
    }
 
-   ModelSyncManager.prototype.on = function(callback, ref, scope) {
-      var self = this,
-          obs  = _.find(self.list, function(v) { return v.listener === callback && v.ref === ref && v.scope === scope });
-      if( !obs ) {
-         obs = {
-            listener: callback,
-            ref: ref,
-            scope: scope || null,
-            paused: false,
-            dispose: function() {
-               var idx = _.indexOf(self.subs, obs);
-               unwatchFirebase(self.events, ref);
-               self.subs.splice(idx, 1);
-            }
-         };
-         self.subs.push(obs);
-         //todo this is wrong! this notifies all callbacks on any change on any ref!
-         //todo link each watch/unwatch to the specific reference/callback set
-         //todo
-         //todo-bug
-         //todo
-         //todo
-         //todo
-         watchFirebase(self.events, ref);
-      }
-      return obs;
+   SyncObserver.prototype.equals = function(o) {
+      return o instanceof SyncObserver && this.matches(o);
    };
 
-   ModelSyncManager.prototype.trigger = function() {
-      var obs, observers = this.subs, i = observers.length, args = _.toArray(arguments);
-      while (i--) {
-         obs = observers[i];
-         if( !obs.paused ) { obs.listener.apply(obs.scope, args); }
-      }
-      return this;
+   SyncObserver.prototype.matches = function(o) {
+//      console.log('callback', this.callback === o.callback, this.callback, o.callback);
+//      console.log('table', this.table === o.table, this.table, o.table);
+//      console.log('criteria', _.isEqual(o.criteria, this.criteria), this.criteria, o.criteria);
+//      console.log('scope', this.scope === o.scope, this.scope, o.scope);
+      return this.callback === o.callback
+         && this.table === o.table
+         && _.isEqual(o.criteria, this.criteria)
+         && o.scope === this.scope;
    };
 
    /** UTILITIES
@@ -356,9 +357,25 @@
          ref = table.child(key.hashKey());
          (sortPriority && ref.setWithPriority(data, sortPriority, cb)) || ref.set(data, cb);
       }
+      else if( sortPriority ) {
+         ref = table.push(data);
+         ref.setPriority(sortPriority, cb);
+      }
       else {
          ref = table.push(data, cb);
-         if( sortPriority ) { ref.setPriority(sortPriority); }
+      }
+      return def.promise();
+   }
+
+   function _updateRecord(table, key, data, sortPriority) {
+      var def = $.Deferred(),
+          ref = table.child(key.hashKey()),
+          cb = function(success) { def.resolve(success, ref.name()); };
+      if( sortPriority ) {
+         ref.setWithPriority(data, sortPriority, cb);
+      }
+      else {
+         ref.set(data, cb);
       }
       return def.promise();
    }

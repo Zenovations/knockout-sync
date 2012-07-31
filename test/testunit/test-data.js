@@ -155,7 +155,7 @@
       props: {
          dataTable: 'BigData',
          primaryKey: 'id',
-         //sortField:  'sortField',
+         sortField:  'sortField',
          fields: {
             id:        { required: true,  persist: true, type: 'string'  },
             aString:   { required: false, persist: true, type: 'string'  },
@@ -172,7 +172,9 @@
        */
       record: function(id, moreData, model) {
          model || (model = exports.bigData.model());
-         return model.newRecord(exports.bigData.data(id, moreData));
+         var rec = model.newRecord(exports.bigData.data(id, moreData));
+         if( moreData ) { rec.isDirty(true); }
+         return rec;
       },
 
       /**
