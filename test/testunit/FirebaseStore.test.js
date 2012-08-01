@@ -9,6 +9,7 @@ jQuery(function($) {
    var TestData = ko.sync.TestData;
    //todo composite key
    var Util = ko.sync.stores.FirebaseStore.Util;
+   var TIMELIMIT = 10000; // 10 seconds
 
    // override asyncTest for some logging
    var _asyncTest = asyncTest, currName;
@@ -44,7 +45,9 @@ jQuery(function($) {
          return store.read(model, recordId);
       },
       update: function(store, model, data) {
-         return store.update(model, model.newRecord(data));
+         var rec = model.newRecord(data);
+         rec.isDirty(true);
+         return store.update(model, rec);
       },
       delete: function(store, model, recordId) {
          return store.delete(model, new ko.sync.RecordId('id', {id: recordId}));
@@ -216,7 +219,7 @@ jQuery(function($) {
          .update(store, model, data)
          .end()
          .fail(function(e) {
-               equal(e, 'Invalid key', 'should fail with invalid key error');
+             equal(e.toString(), 'invalid key', 'should fail with invalid key error');
          })
          .always(start);
    });
@@ -243,7 +246,7 @@ jQuery(function($) {
                ok(false, 'should not succeed (record does not exist)');
             })
          .fail(function(e) {
-            equal(e, 'Record does not exist', 'should fail because record does not exist');
+            equal(e.toString(), 'Record does not exist', 'should fail because record does not exist');
          })
          .always(start);
    });
@@ -261,7 +264,7 @@ jQuery(function($) {
          .exists(model.table, $.Sequence.PREV)
          .then(function(x) { strictEqual(x, false, 'does not exist'); })
          .end()
-         .fail(function(e) { ok(false, e); })
+         .fail(function(e) { ok(false, e.toString()); })
          .always(start);
    });
 
@@ -275,8 +278,11 @@ jQuery(function($) {
          .delete(store, model, $.Sequence.PREV)
          .update(store, model, newData)
          .end()
+         .done(function() {
+            equal(false, 'should fail but did not');
+         })
          .fail(function(e) {
-            equal(e, 'Record does not exist', 'should fail because record does not exist');
+            equal(e.toString(), 'Record does not exist', 'should fail because record does not exist');
          })
          .always(start);
    });
@@ -284,6 +290,7 @@ jQuery(function($) {
    asyncTest("#count", function() {
       expect(2);
       var store = resetStore(), bigModel = TestData.bigData.model(), def = $.Deferred(), timer = _timeout(def);
+
       TestData.bigData.reset(syncRoot)
             .pipe(function() {
                return store.count(bigModel);
@@ -299,10 +306,11 @@ jQuery(function($) {
             })
             .done(function(count) {
                strictEqual(count, TestData.bigData.COUNT-2, 'count correct after deletions');
+               def.resolve();
             })
-            .fail(function(e) { done.reject(e) });
+            .fail(function(e) { def.reject(e) });
 
-      def.fail(function(e) { console.error(e); ok(false, e); }).always(_restart(timer));
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(_restart(timer));
    });
 
    asyncTest("#count limit", function() {
@@ -316,10 +324,11 @@ jQuery(function($) {
          })
          .done(function(count) {
             strictEqual(count, LIMIT, 'found correct number of records');
+            def.resolve();
          })
          .fail(function(e) { def.reject(e); });
 
-      def.fail(function(e) { console.error(e); ok(false, e); }).always(_restart(timer));
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(_restart(timer));
    });
 
    asyncTest("#count limit (not reached)", function() {
@@ -333,10 +342,11 @@ jQuery(function($) {
             })
             .done(function(count) {
                strictEqual(count, NUMRECS, 'found correct number of records');
+               def.resolve();
             })
             .fail(function(e) { def.reject(e); });
 
-      def.fail(function(e) { console.error(e); ok(false, e); }).always(_restart(timer));
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(_restart(timer));
    });
 
    asyncTest("#count where object", function() {
@@ -345,42 +355,54 @@ jQuery(function($) {
           parms = { where: { aBool: true, sortField: function(v) { return v < 51; } } },
           def = $.Deferred(), timer = _timeout(def);
 
+      //todo-test need to test function, object, number, undefined, and "default"
+      //todo-test need to test where as object/string/function
+
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.count(bigModel, parms);
          })
          .done(function(count) {
             strictEqual(count, 25, 'correct number of records (evens under 51) returned');
+            def.resolve();
          })
          .fail(function(e) { def.reject(e); });
 
-      def.fail(function(e) { console.error(e); ok(false, e); }).always(_restart(timer));
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(_restart(timer));
    });
 
    asyncTest("#count where+limit", function() {
-      expect(2);
+      expect(4);
       var store = resetStore(), bigModel = TestData.bigData.model(), parms = {
          where: { aBool: false },
          limit: 75
-      }, def = $.Deferred(), timer = _timeout(def);
+      }, def = $.Deferred(), timer = _timeout(def), iteratorCount = 0;
 
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
-            return store.count(bigModel, parms);
+            return store.count(bigModel, parms, function() { iteratorCount++; });
          })
          .then(function(count) {
-            strictEqual(count, 75, 'correct number of records (odds up to 75) returned');
+            strictEqual(count, iteratorCount, 'iterator called for each match');
+            strictEqual(count, 75, 'correct number of records returned');
          })
          .pipe(function() {
             parms.limit = 175;
-            return store.count(bigModel, parms);
+            iteratorCount = 0;
+            return store.count(bigModel, parms, function(data, id) { iteratorCount++; });
          })
          .done(function(count) {
+            strictEqual(count, iteratorCount, 'iterator called for each match');
             strictEqual(count, 100, 'correct number of records (limit never reached) returned');
+            def.resolve();
          })
          .fail(function(e) { def.reject(e); });
 
-      def.fail(function(e) { console.error(e); ok(false, e); }).always(_restart(timer));
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(_restart(timer));
+   });
+
+   test('#count with start/end', function() {
+      //todo test
    });
 
    asyncTest("#query", function() {
@@ -395,6 +417,7 @@ jQuery(function($) {
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.query(bigModel, function(rec) {
+               //todo-test check the iterator values (data, id, index, model)
                iteratorCalls++;
             }, parms);
          })
@@ -421,7 +444,7 @@ jQuery(function($) {
          })
          .pipe(function(count) {
             strictEqual(count, iteratorCalls, 'iterator called correct number of times');
-            strictEqual(count, 75, 'correct number of records (odds up to 75) returned');
+            strictEqual(count, 37, 'correct number of records (odds up to 75) returned');
          })
          .pipe(function() {
             parms.limit = 175;
@@ -635,7 +658,7 @@ jQuery(function($) {
     * @return {jQuery.Sequence}
     */
    function startSequence(timeout) {
-      timeout || (timeout = 2500);
+      timeout || (timeout = TIMELIMIT);
       var seq = $.Sequence.start(sequenceMethods), timeoutRef;
 
       if( timeout ) {
@@ -692,7 +715,7 @@ jQuery(function($) {
     * @private
     */
    function _timeout(def, timeout) {
-      timeout || (timeout = 7500);
+      timeout || (timeout = TIMELIMIT);
       return setTimeout(function() {
          def.reject('timeout exceeded');
       }, timeout)

@@ -65,19 +65,25 @@
       delete: function(model, recOrId) { throw new Error('Interface not implemented'); },
 
       /**
-       * Perform a query against the database. The options for query are fairly limited:
+       * Perform a query against the database. The `filterCriteria` options are fairly limited:
        *
        * - limit:   {int=100}         number of records to return, use 0 for all
        * - offset:  {int=0}           exclusive starting point in records, e.g.: {limit: 100, offset: 100} would return records 101-200 (the first record is 1 not 0)
+       * - start:   {int=0}           using the sortField's integer values, this will start us at record matching this sort value
+       * - end:     {int=-1}          using the sortField's integer values, this will end us at record matching this sort value
        * - where:   {function|object} filter rows using this function or value map
        * - sort:    {array|string}    Sort returned results by this field or fields. Each field specified in sort
        *                              array could also be an object in format {field: 'field_name', desc: true} to obtain
        *                              reversed sort order
        *
+       * Start/end are more useful with sorted records (and faster). Limit/offset are slower but can be used with
+       * unsorted records. Additionally, limit/offset will work with where conditions. Obviously, `start`/`end` are hard
+       * limits and only records within this range, matching `where`, up to a maximum of `limit` could be returned.
+       *
        * USE OF WHERE
        * -------------
        * If `where` is a function, it is always applied after the results are returned. Thus, when used in conjunction
-       * with `limit`, there may (and probably will) be less results than `limit` en toto.
+       * with `limit`, the server may still need to retrieve all records before applying limit.
        *
        * If `where` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
        * the store. For SQL-like databases, it may be part of the query. For data stores like Firebase, or
@@ -86,12 +92,12 @@
        *
        * THE ITERATOR
        * ---------------------
-       * Each record received is handled by `iterator`. When no limit is set, all records in the database
-       * are guaranteed to be loaded. However, even with limit set, some data layers may load all the records,
-       * particularly when using `where` parameters. This is a very important point to keep in mind.
+       * Each record received is handled by `iterator`. If iterator returns true, then the iteration is stopped. The
+       * iterator should be in the format `function(data, id, index)` where data is the record and index is the count
+       * of the record starting from 0
        *
-       * In the case of a failure, the fail() method on the promise will always be notified immediately, and the load
-       * operation will end immediately.
+       * In the case of a failure, the fail() method on the promise will always be notified immediately,
+       * and the load operation will end immediately.
        *
        * PERFORMANCE
        * -----------
@@ -106,21 +112,22 @@
        *
        * @param {Function} iterator
        * @param {ko.sync.Model}  model
-       * @param {object} [parms]
+       * @param {object} [filterCriteria]
        * @return {Promise}
        */
-      query: function(model, iterator, parms) { throw new Error('Interface not implemented'); },
+      query: function(model, iterator, filterCriteria) { throw new Error('Interface not implemented'); },
 
       /**
        * Given a particular data model, get a count of all records in the database matching
-       * the parms provided. Parms is the same as query() method. This could be a very high-cost
-       * operation depending on the data size and the data source (it could require iterating
-       * every record in the table) for some data layers.
+       * the parms provided. The `filterCriteria` object is the same as query() method, in the format `function(data, id, index)`.
+       *
+       * This could be a very high-cost operation depending on the data size and the data source (it could require
+       * iterating every record in the table) for some data layers.
        *
        * @param {ko.sync.Model} model
-       * @param {object}        [parms]
+       * @param {object}        [filterCriteria]
        */
-      count: function(model, parms) { throw new Error('Interface not implemented'); },
+      count: function(model, filterCriteria) { throw new Error('Interface not implemented'); },
 
       /**
        * True if this data layer provides push updates that can be monitored by the client.
@@ -136,10 +143,10 @@
        *
        * @param  {ko.sync.Model} model
        * @param  {Function}     callback
-       * @param  {object}       [parms]
+       * @param  {object}       [filterCriteria]
        * @return {Object}
        */
-      watch: function(model, callback, parms) { throw new Error('Interface not implemented'); },
+      watch: function(model, callback, filterCriteria) { throw new Error('Interface not implemented'); },
 
       /**
        * Given a particular record, invoke `callback` any time the data changes. This does not get invoked for

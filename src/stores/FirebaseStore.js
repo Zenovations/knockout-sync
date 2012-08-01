@@ -78,28 +78,30 @@
     * @return {Promise} resolves to callback({string}id, {boolean}updated), where updated is true if an update occurred or false if data was not dirty
     */
    FirebaseStore.prototype.update = function(model, rec) {
-      var base = this.base;
-      //todo use .pipe instead of ko.sync.handle
-      return ko.sync.handle(this, function(cb, eb) {
-         if( !rec.hasKey() ) { eb('Invalid key'); }
-         //todo-perf this isn't necessary is it? we can assume if they made a record it's valid?
-         this.read(model, rec).done(function(origRec) {
-            if( !origRec ) { eb('Record does not exist'); }
-            else {
-               origRec.updateAll(rec);
-               if( origRec.isDirty() ) {
-                  var key = _keyFor(origRec), table = base.child(model.table);
-                  _updateRecord(table, key, cleanData(model.fields, rec.getData()), rec.getSortPriority())
-                     .then(function(success, id) {
-                        (success && cb(id, true)) || eb('synchronize failed');
-                     });
+      var hashKey = rec.hashKey();
+      // was the record actually modified?
+      if( !rec.hasKey() ) {
+         return $.Deferred().reject('invalid key', hashKey).promise();
+      }
+      else if( rec.isDirty() ) { //todo should we check to see if the record exists?
+         var table = this.base.child(model.table);
+         // does it exist?
+         return Util.has(table, hashKey)
+            .pipe(function(exists) {
+               if( exists ) {
+                  // if so perform the update
+                  return _updateRecord(table, hashKey, cleanData(model.fields, rec.getData()), rec.getSortPriority())
+                     .pipe(_pipedSync(hashKey));
                }
                else {
-                  cb(origRec.getRecordId().hashKey(), false);
+                  return $.Deferred(function(def) { def.reject('Record does not exist'); }).promise();
                }
-            }
-         }).fail(function(e) { eb(e); });
-      });
+            });
+      }
+      else {
+         // no update occurred
+         return $.Deferred().resolve(hashKey, false).promise();
+      }
    };
 
    /**
@@ -111,34 +113,39 @@
     * @return {Promise} resolves with record's {string}id
     */
    FirebaseStore.prototype.delete = function(model, recOrId) {
+      var base = this.base;
       if(_.isArray(recOrId)) {
          return $.when(_.map(recOrId, function(id) {
             return this.delete(model, id);
          }, this));
       }
-      return ko.sync.handle(this, function(cb, eb) {
+      return $.Deferred(function(def) {
          var key = _keyFor(recOrId);
          if( !key.isSet() ) {
-            eb('no key set on record; cannot delete it');
+            def.reject('no key set on record; cannot delete it');
          }
          else {
-            var ref = this.base.child(model.table).child(key.hashKey());
-            ref.remove(function(success) {
-               (success && cb(ref.name())) || eb(ref.name(), 'Unable to sync');
-            });
+            var ref = base.child(model.table).child(key.hashKey());
+            ref.remove(processSync(def));
          }
-      })
+      });
    };
 
    /**
-    * Perform a query against the database and get a snapshot of current matching records. To perform
-    * a query that is synchronized and updated whenever the records change, try `sync` instead.
+    * Perform a query against the database. The `filterCriteria` options are fairly limited:
     *
-    * The options for query are fairly limited:
-    *  - limit:   {int=100}         number of records to return, use 0 for all records in table
-    *  - offset:  {int=0}           start after this record, e.g.: {limit: 100, offset: 100} would return records 101-200
-    *  - where:   {function|object} filter returned results using this function (true=include, false=exclude) or a map of key/values
-    *  - sort:    {string|object|array}
+    * - limit:   {int=100}         number of records to return, use 0 for all
+    * - offset:  {int=0}           exclusive starting point in records, e.g.: {offset: 100, limit: 100} would return records 101-200 (the first record is 1 not 0)
+    * - start:   {int=0}           using the sortField's integer values, this will start us at record matching this sort value
+    * - end:     {int=-1}          using the sortField's integer values, this will end us at record matching this sort value
+    * - where:   {function|object} filter rows using this function or value map
+    * - sort:    {array|string}    Sort returned results by this field or fields. Each field specified in sort
+    *                              array could also be an object in format {field: 'field_name', desc: true} to obtain
+    *                              reversed sort order
+    *
+    * Start/end are more useful with sorted records (and faster). Limit/offset are slower but can be used with
+    * unsorted records. Additionally, limit/offset will work with where conditions. Obviously, `start`/`end` are hard
+    * limits and only records within this range, matching `where`, up to a maximum of `limit` could be returned.
     *
     * USE OF WHERE
     * -------------
@@ -147,7 +154,7 @@
     * THE ITERATOR
     * ---------------------
     * Each record received is handled by `iterator`. If iterator returns true, then the iteration is stopped. The
-    * iterator should be in the format `function(data, index, model)` where data is the record and index is the count
+    * iterator should be in the format `function(data, id, index)` where data is the record and index is the count
     * of the record starting from 0
     *
     * In the case of a failure, the fail() method on the promise will always be notified immediately,
@@ -159,61 +166,37 @@
     * @return {Promise} fulfilled when all records have been fetched with {int} total number
     */
    FirebaseStore.prototype.query = function(model, iterator, criteria) {
-      var def = $.Deferred();
-      var table = this.base.child(model.table); //todo-ref -> Util.ref()
-      if( model.sort ) {
-         //todo-sort
-         //todo-sort
-         //todo-sort
-         throw new Error('I\'m not ready for sort priorities yet');
-      }
-      else if( criteria && criteria.sort ) {
-         //todo-sort
-         //todo-sort
-         //todo-sort
-         throw new Error('I\'m not ready for sorting yet');
-      }
-      else {
-         var count = 0;
-         return Util.filter(table, criteria, function(snapshot) {
-            return iterator(snapshot.val(), count++, model);
-         });
-      }
+      return Util.filter(model, this.base, criteria, iterator);
    };
 
    /**
     * Given a particular data model, get a count of all records in the database matching
-    * the parms provided. Parms is the same as query() method.
+    * the `filterCriteria` provided, which uses the same format as query().
     *
     * The sole difference is that the default limit is 0. A limit may still be used and
     * useful in some cases, but is not set by default.
     *
-    * This operation requires iterating all records in the table for Firebase.
+    * `iterator` is the same as query() method, using the format `function(data, id, index)`
+    *
+    * This operation may require iterating all records in the table.
     *
     * @param {ko.sync.Model} model
-    * @param {object}        [parms] must be a hash ($.isPlainObject())
+    * @param {object}        [filterCriteria] must be a hash ($.isPlainObject())
+    * @param {Function}      [iterator] if provided, receives each record as it is evaluated
+    * @return {jQuery.Deferred} promise resolving to total number of records matched
     */
-   FirebaseStore.prototype.count = function(model, parms) {
-      var count = 0, table = this.base.child(model.table), //todo-ref -> Util.ref()
-          opts  = ko.utils.extend({limit: 0, offset: 0, where: null, sort: null}, parms),
-          start = ~~opts.offset,
-          end   = opts.limit? start + ~~opts.limit : 0,
-          curr  = -1;
-      _buildFilter(opts);
-      return Util.each(table, function(snapshot) { //todo Util.filter instead?
-         var data = snapshot.val();
-         if( data !== null && (!opts.filter || opts.filter(data)) ) {
-            curr++;
-            if( end && curr == end ) {
-               return true;
-            }
-            else if( curr >= start ) {
-               count++;
-            }
-         }
-      }).pipe(function() {
-         return count;
-      })
+   FirebaseStore.prototype.count = function(model, filterCriteria, iterator) {
+      if( arguments.length == 2 && typeof(filterCriteria) == 'function' ) {
+         iterator = filterCriteria; filterCriteria = null;
+      }
+
+      if( filterCriteria ) {
+         var opts  = ko.utils.extend({limit: 0, offset: 0, where: null, sort: null}, filterCriteria);
+         return Util.filter(model, this.base, opts, iterator);
+      }
+      else {
+         return Util.each(this.base.child(model.table), iterator);
+      }
    };
 
    /**
@@ -370,15 +353,14 @@
       return def.promise();
    }
 
-   function _updateRecord(table, key, data, sortPriority) {
+   function _updateRecord(table, hashKey, data, sortPriority) {
       var def = $.Deferred(),
-          ref = table.child(key.hashKey()),
-          cb = function(success) { def.resolve(success, ref.name()); };
+          ref = table.child(hashKey);
       if( sortPriority ) {
-         ref.setWithPriority(data, sortPriority, cb);
+         ref.setWithPriority(data, sortPriority, def.resolve);
       }
       else {
-         ref.set(data, cb);
+         ref.set(data, def.resolve);
       }
       return def.promise();
    }
@@ -514,6 +496,69 @@
    }
 
    var Util = FirebaseStore.Util = {
+
+      /**
+       * Returns a promise which resolves to number of records iterated. The snapshots for each record are passed into
+       * `fx`. The iteration of values stops if `fx` returns true.
+       *
+       * @param {Firebase}         table
+       * @param {Function} [fx]    passed into forEach() on each iteration, see http://www.firebase.com/docs/datasnapshot/foreach.html
+       * @return {jQuery.Deferred} a promise resolved to number of records iterated
+       */
+      each: function(table, fx) {
+         return this.snap(table).pipe(function(snapshot) {
+            var def = $.Deferred(), count = 0;
+            try {
+               snapshot.forEach(function(snapshot) {
+                  count++;
+                  return fx && fx(snapshot.val(), snapshot.name());
+               });
+               def.resolve(count);
+            }
+            catch(e) {
+               def.reject(e);
+            }
+            return def.promise();
+         });
+      },
+
+
+      /**
+       * Retrieves all child snapshots from the table which match given criteria.
+       *
+       * `filterCriteria` exactly matches the FirebaseStore.query and FirebaseStore.count() methods.
+       *
+       * If iterator returns true, then the filter operation is ended immediately
+       *
+       * @param {Model}            model
+       * @param {Firebase}         base
+       * @param {Function|Object}  filterCriteria see description
+       * @param {Function}         [iterator] called each time a match is found with function(recordData, recordId)
+       * @return {jQuery.Deferred} resolves to number of records matched when operation completes
+       */
+      filter: function(model, base, filterCriteria, iterator) {
+         var opts    = ko.utils.extend({limit: 0, offset: 0, where: null, sort: null}, filterCriteria),
+            table    = Util.ref(base, model.table, opts),
+            start    = ~~opts.offset,
+            end      = opts.limit? start + ~~opts.limit : 0,
+            curr     = -1,
+            matches  = 0;
+         _buildFilter(opts);
+         return Util.each(table, function(data, id) {
+            if( data !== null && (!opts.filter || opts.filter(data, id)) ) {
+               curr++;
+               //todo-sort
+               if( end && curr == end ) {
+                  return true;
+               }
+               else if( curr >= start ) {
+                  matches++;
+                  return iterator && iterator(data, id);
+               }
+            }
+         }).pipe(function(ct) { return matches; });
+      },
+
       /**
        * Returns a snapshot of the current reference
        * @param {Firebase} ref
@@ -526,31 +571,6 @@
             def.resolve(snapshot);
          });
          return def.promise();
-      },
-
-      /**
-       * Returns a promise which resolves to number of records iterated. The snapshots for each record are passed into
-       * `fx`. The iteration of values stops if `fx` returns true.
-       *
-       * @param {Firebase} table
-       * @param {Function} [fx]    passed into forEach() on each iteration, see http://www.firebase.com/docs/datasnapshot/foreach.html
-       * @return {jQuery.Deferred} a promise resolved to number of records iterated
-       */
-      each: function(table, fx) {
-         return this.snap(table).pipe(function(snapshot) {
-            var def = $.Deferred(), count = 0;
-            try {
-               snapshot.forEach(function(snapshot) {
-                  count++;
-                  return fx? fx(snapshot) : undef;
-               });
-               def.resolve(count);
-            }
-            catch(e) {
-               def.reject(e);
-            }
-            return def.promise();
-         });
       },
 
       /**
@@ -604,11 +624,13 @@
        * If the criteria is a Function, then the object is passed in to that function to be compared. It must return
        * true or false.
        *
-       * @param {Firebase} table
+       * @param {Model}            model
+       * @param {Firebase}         base
        * @param {string|Function|object} matchCriteria see description
        * @return {jQuery.Deferred} a promise which resolves to the snapshot of child or null if not found
        */
-      find: function(table, matchCriteria) {
+      find: function(model, base, matchCriteria) {
+         var table = Util.ref(base, model.table, matchCriteria);
          if( typeof(matchCriteria) === 'string' ) {
             return Util.val(table, matchCriteria);
          }
@@ -624,59 +646,49 @@
       },
 
       /**
-       * Retrieves all child snapshots from the table which match given criteria.
+       * This method retrieves a reference to a data path. It attempts to apply start/end/offset/limit at the Firebase
+       * level to speed things up a bit. However, there are a couple very significant limitations and coupling
+       * issues to keep in mind.
        *
-       * `filterCriteria` exactly matches the FirebaseStore.query and FirebaseStore.count() methods.
+       * Firstly, when using `criteria.when`, then `limit` is not applied, as this would prevent the filter
+       * operations from working correctly.
        *
-       * If iterator returns true, then the filter operation is ended immediately
+       * Secondly, `offset` is not handled here and is the duty of the caller to enforce. All we do here is apply
+       * a limit that accounts for offset (by adding offset onto the limit amount) so that enough records are retrieved
+       * to account for the offset. The caller must still manually strip off the offset amount (unh).
        *
-       * @param {Firebase}         table
-       * @param {Function|Object}  filterCriteria see description
-       * @param {Function}         iterator called each time a match is found
-       * @return {jQuery.Deferred} resolves to number of records matched when operation completes
+       * //todo improve this somehow when Firebase adds some more query related API features
+       *
+       * @param {Firebase} root
+       * @param {string} tableName
+       * @param {object} [criteria]
+       * @return {*}
        */
-      filter: function(table, filterCriteria, iterator) {
-         var opts    = ko.utils.extend({limit: 0, offset: 0, where: null, sort: null}, filterCriteria),
-             start   = ~~opts.offset,
-             //todo utilize Util.ref() here
-             end     = opts.limit? start + ~~opts.limit : 0,
-             curr    = -1,
-             matches = 0;
-         _buildFilter(opts);
-         return Util.each(table, function(snapshot) {
-            var data = snapshot.val();
-            if( data !== null && (!opts.filter || opts.filter(data, snapshot.name())) ) {
-               curr++;
-               if( end && curr == end ) {
-                  return true;
-               }
-               else if( curr >= start ) {
-                  matches++;
-                  return iterator(snapshot);
-               }
-            }
-         }).pipe(function(ct) { return matches; });
-      },
-
-      ref: function(root, tableName, parms) {
-         parms || (parms = {});
+      ref: function(root, tableName, criteria) {
+         criteria || (criteria = {});
          var table = root.child(tableName),
-              limit = Math.abs(~~parms.limit);
-         if( parms.start ) {
-            // if a starting point is given, that's where we begin iterating
-            table = table.startAt(parms.start, parms.startId);
+              limit = Math.abs(~~criteria.limit);
+         // if a starting point is given, that's where we begin iterating
+         if( criteria.start ) {
+            table = table.startAt(criteria.start, criteria.startId);
          }
-         if( parms.end ) {
-            // if an ending point is given, that's where we stop iterating
-            table = table.endAt(parms.end, parms.endId);
+         // if an ending point is given, that's where we stop iterating
+         if( criteria.end ) {
+            table = table.endAt(criteria.end, criteria.endId);
          }
-         if( limit ) {
-            if( !parms.start && !parms.end ) {
+         // we can't apply limit from here if we're going to filter the results (we want 100 filtered records,
+         // not 100 minus those that don't match) so we skip the limit from here. Le sigh. This is yet another
+         // very significant bit of coupling
+         if( limit && !criteria.where ) {
+            if( !criteria.start && !criteria.end ) {
                // if the list is open ended, we can use an offset, otherwise start/end are the offset
                // we have a pretty big limitation with offset; we're depending on the caller to deal with that
-               // and we simply increase our limit to accommodate; sadly not much else we can do
-               limit += ~~parms.offset; //todo-test
-               if( parms.limit < 0 ) {
+               // and we simply increase our limit to accommodate; sadly not much else we can do until someone
+               // brighter reads this and invents something genius to replace it
+               limit += ~~criteria.offset; //todo-test
+               if( criteria.limit < 0 ) {
+                  // if the limit is negative, it means to work backwards from the end instead of
+                  // upwards from the start, so adding an endAt() will have this effect (right?) //todo-test
                   table = table.endAt();
                }
             }
@@ -735,6 +747,26 @@
                default:
                   return v == data[k];
             }
+         });
+      }
+   }
+
+   function processSync(def, id) {
+      return function(success) {
+         if( success ) {
+            def.resolve(id);
+         }
+         else {
+            def.reject('synchronize failed');
+         }
+      }
+   }
+
+   function _pipedSync(key) {
+      return function(success) {
+         return $.Deferred(function(def) {
+            if( success ) { def.resolve(key, true); }
+            else { def.reject('synchronize failed'); }
          });
       }
    }
