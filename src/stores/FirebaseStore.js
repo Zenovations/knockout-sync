@@ -44,13 +44,9 @@
     * @return {Promise} resolves to the record's {string} id
     */
    FirebaseStore.prototype.create = function(model, rec) {
-      return ko.sync.handle(this, function(cb, eb) { // creates a promise
-         var table = this.base.child(model.table);
-         _createRecord(table, rec.getKey(), cleanData(model.fields, rec.getData()), rec.getSortPriority())
-            .then(function(success, recordId) {
-            (success && cb(recordId)) || eb(recordId);
-         });
-      });
+      var base = this.base;
+      var table = base.child(model.table);
+      return _createRecord(table, rec.getKey(), cleanData(model.fields, rec.getData()), rec.getSortPriority());
    };
 
    /**
@@ -86,6 +82,7 @@
       //todo use .pipe instead of ko.sync.handle
       return ko.sync.handle(this, function(cb, eb) {
          if( !rec.hasKey() ) { eb('Invalid key'); }
+         //todo-perf this isn't necessary is it? we can assume if they made a record it's valid?
          this.read(model, rec).done(function(origRec) {
             if( !origRec ) { eb('Record does not exist'); }
             else {
@@ -352,10 +349,16 @@
     * @private
     */
    function _createRecord(table, key, data, sortPriority) {
-      var def = $.Deferred(), ref, cb = function(success) { def.resolve(success, ref.name()); };
+      var def = $.Deferred(), ref,
+          cb = function(success) { success? def.resolve(ref.name()) : def.reject(ref.name()); };
       if( key.isSet() ) {
          ref = table.child(key.hashKey());
-         (sortPriority && ref.setWithPriority(data, sortPriority, cb)) || ref.set(data, cb);
+         if( sortPriority ) {
+            ref.setWithPriority(data, sortPriority, cb);
+         }
+         else {
+            ref.set(data, cb);
+         }
       }
       else if( sortPriority ) {
          ref = table.push(data);

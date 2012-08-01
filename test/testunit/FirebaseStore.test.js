@@ -11,7 +11,6 @@ jQuery(function($) {
    var Util = ko.sync.stores.FirebaseStore.Util;
 
    // override asyncTest for some logging
-   console.log({asyncTest: asyncTest});
    var _asyncTest = asyncTest, currName;
    asyncTest = function(name, fx) {
       return _asyncTest(name, function() {
@@ -284,30 +283,33 @@ jQuery(function($) {
 
    asyncTest("#count", function() {
       expect(2);
-      var store = resetStore(), bigModel = TestData.bigData.model();
+      var store = resetStore(), bigModel = TestData.bigData.model(), def = $.Deferred(), timer = _timeout(def);
       TestData.bigData.reset(syncRoot)
-         .pipe(function() {
-            return store.count(bigModel);
-         })
-         .pipe(function(count) {
-            strictEqual(count, TestData.bigData.COUNT, 'found correct number of records');
-         })
-         .pipe(function() {
-            return store.delete(bigModel, [TestData.makeRecordId(2), TestData.makeRecordId(3)]);
-         })
-         .pipe(function() {
-            return store.count(bigModel);
-         })
-         .done(function(count) {
-            strictEqual(count, TestData.bigData.COUNT-2, 'count correct after deletions');
-         })
-         .fail(function(e) { console.error(e); ok(false, e.toString()); })
-         .always(start);
+            .pipe(function() {
+               return store.count(bigModel);
+            })
+            .pipe(function(count) {
+               strictEqual(count, TestData.bigData.COUNT, 'found correct number of records');
+            })
+            .pipe(function() {
+               return store.delete(bigModel, [TestData.makeRecordId(2), TestData.makeRecordId(3)]);
+            })
+            .pipe(function() {
+               return store.count(bigModel);
+            })
+            .done(function(count) {
+               strictEqual(count, TestData.bigData.COUNT-2, 'count correct after deletions');
+            })
+            .fail(function(e) { done.reject(e) });
+
+      def.fail(function(e) { console.error(e); ok(false, e); }).always(_restart(timer));
    });
 
    asyncTest("#count limit", function() {
       expect(1);
-      var store = resetStore(), LIMIT = 25, bigModel = TestData.bigData.model();
+      var store = resetStore(), LIMIT = 25, bigModel = TestData.bigData.model(),
+            def = $.Deferred(), timer = _timeout(def);
+
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.count(bigModel, {limit: LIMIT});
@@ -315,30 +317,34 @@ jQuery(function($) {
          .done(function(count) {
             strictEqual(count, LIMIT, 'found correct number of records');
          })
-         .fail(function(e) { console.error(e); ok(false, e.toString()); })
-         .always(start);
+         .fail(function(e) { def.reject(e); });
+
+      def.fail(function(e) { console.error(e); ok(false, e); }).always(_restart(timer));
    });
 
    asyncTest("#count limit (not reached)", function() {
       expect(1);
-      var store = resetStore(), LIMIT = 25, NUMRECS = 15, bigModel = TestData.bigData.model();
+      var store = resetStore(), LIMIT = 25, NUMRECS = 15, bigModel = TestData.bigData.model(),
+            def = $.Deferred(), timer = _timeout(def);
+
       TestData.bigData.reset(syncRoot, NUMRECS)
-         .pipe(function() {
-            return store.count(bigModel, {limit: LIMIT});
-         })
-         .done(function(count) {
-            strictEqual(count, NUMRECS, 'found correct number of records');
-         })
-         .fail(function(e) { console.error(e); ok(false, e.toString()); })
-         .always(start);
+            .pipe(function() {
+               return store.count(bigModel, {limit: LIMIT});
+            })
+            .done(function(count) {
+               strictEqual(count, NUMRECS, 'found correct number of records');
+            })
+            .fail(function(e) { def.reject(e); });
+
+      def.fail(function(e) { console.error(e); ok(false, e); }).always(_restart(timer));
    });
 
    asyncTest("#count where object", function() {
       expect(1);
       var store = resetStore(), bigModel = TestData.bigData.model(),
-         parms = {
-         where: { aBool: true, sortField: function(v) { return v < 51; } }
-      };
+          parms = { where: { aBool: true, sortField: function(v) { return v < 51; } } },
+          def = $.Deferred(), timer = _timeout(def);
+
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.count(bigModel, parms);
@@ -346,8 +352,9 @@ jQuery(function($) {
          .done(function(count) {
             strictEqual(count, 25, 'correct number of records (evens under 51) returned');
          })
-         .fail(function(e) { console.error(e); ok(false, e.toString()); })
-         .always(start);
+         .fail(function(e) { def.reject(e); });
+
+      def.fail(function(e) { console.error(e); ok(false, e); }).always(_restart(timer));
    });
 
    asyncTest("#count where+limit", function() {
@@ -355,7 +362,8 @@ jQuery(function($) {
       var store = resetStore(), bigModel = TestData.bigData.model(), parms = {
          where: { aBool: false },
          limit: 75
-      };
+      }, def = $.Deferred(), timer = _timeout(def);
+
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.count(bigModel, parms);
@@ -370,8 +378,9 @@ jQuery(function($) {
          .done(function(count) {
             strictEqual(count, 100, 'correct number of records (limit never reached) returned');
          })
-         .fail(function(e) { console.error(e); ok(false, e.toString()); })
-         .always(start);
+         .fail(function(e) { def.reject(e); });
+
+      def.fail(function(e) { console.error(e); ok(false, e); }).always(_restart(timer));
    });
 
    asyncTest("#query", function() {
@@ -526,8 +535,6 @@ jQuery(function($) {
       }
 
       TestData.bigData.reset(syncRoot).then(function(ref) {
-         console.log('bigData reset');
-
          // this interval helps us to wait until all data arrives
          // without assuming we'll get the correct number of records
          // it literally waits until stuff stops showing up
@@ -562,8 +569,6 @@ jQuery(function($) {
 
          // do a local delete
          store.delete(model, TestData.bigData.record(25, {}, model));
-
-         console.log('all synced actions completed')
       })
       .fail(function(e) { ko(false, e.toString()); });
 
@@ -687,10 +692,17 @@ jQuery(function($) {
     * @private
     */
    function _timeout(def, timeout) {
-      timeout || (timeout = 5000);
+      timeout || (timeout = 7500);
       return setTimeout(function() {
          def.reject('timeout exceeded');
       }, timeout)
+   }
+
+   function _restart(to) {
+      return function() {
+         if( to ) { clearTimeout(to); }
+         start();
+      }
    }
 
 });
