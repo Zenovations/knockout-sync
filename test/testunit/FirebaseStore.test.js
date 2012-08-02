@@ -201,7 +201,7 @@ jQuery(function($) {
          .always(start);
    });
 
-   asyncTest("#update without key", function() {
+   asyncTest("#update with invalid key", function() {
       expect(1);
       var store = resetStore(),
          model = TestData.model(),
@@ -219,7 +219,7 @@ jQuery(function($) {
          .update(store, model, data)
          .end()
          .fail(function(e) {
-             equal(e.toString(), 'invalid key', 'should fail with invalid key error');
+             equal(e[0].toString(), 'invalid key', 'should fail with invalid key error');
          })
          .always(start);
    });
@@ -246,7 +246,7 @@ jQuery(function($) {
                ok(false, 'should not succeed (record does not exist)');
             })
          .fail(function(e) {
-            equal(e.toString(), 'Record does not exist', 'should fail because record does not exist');
+            equal(e.toString(), 'record does not exist', 'should fail because record does not exist');
          })
          .always(start);
    });
@@ -282,7 +282,7 @@ jQuery(function($) {
             equal(false, 'should fail but did not');
          })
          .fail(function(e) {
-            equal(e.toString(), 'Record does not exist', 'should fail because record does not exist');
+            equal(e.toString(), 'record does not exist', 'should fail because record does not exist');
          })
          .always(start);
    });
@@ -444,7 +444,7 @@ jQuery(function($) {
          })
          .pipe(function(count) {
             strictEqual(count, iteratorCalls, 'iterator called correct number of times');
-            strictEqual(count, 37, 'correct number of records (odds up to 75) returned');
+            strictEqual(count, 75, 'correct number of records (odds up to 75) returned');
          })
          .pipe(function() {
             parms.limit = 175;

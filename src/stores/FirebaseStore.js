@@ -94,7 +94,7 @@
                      .pipe(_pipedSync(hashKey));
                }
                else {
-                  return $.Deferred(function(def) { def.reject('Record does not exist'); }).promise();
+                  return $.Deferred(function(def) { def.reject('record does not exist'); }).promise();
                }
             });
       }
@@ -125,8 +125,8 @@
             def.reject('no key set on record; cannot delete it');
          }
          else {
-            var ref = base.child(model.table).child(key.hashKey());
-            ref.remove(processSync(def));
+            var hashKey = key.hashKey(), ref = base.child(model.table).child(hashKey);
+            ref.remove(processSync(def, hashKey));
          }
       });
    };
