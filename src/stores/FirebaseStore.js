@@ -20,8 +20,9 @@
     */
    var FirebaseStore = ko.sync.Store.extend({
       init: function(url, base) {
-         this.base      = _base(new Firebase(url), base);
-         this.listeners = [];
+         this.base         = _base(new Firebase(url), base);
+         this.listeners    = [];
+         this.observedRecs = [];
       }
       // we don't need to include all the methods here because there is no _super to deal with
       // we're just inheriting for the "is a" behavior and to enforce the contract of Store
@@ -59,12 +60,11 @@
     *
     * @param {Model}           model
     * @param {RecordId|Record} recOrId
-    * @return {Promise} resolves to the Record object or null if not found
+    * @return {Promise} resolves to the updated Record object or null if not found
     */
    FirebaseStore.prototype.read = function(model, recOrId) {
       var table = this.base.child(model.table),
-          key   = _keyFor(recOrId),
-          hash  = key && key.hashKey();
+          hash  = recOrId.hashKey();
       return Util.val(table, hash).pipe(function(snapshot) {
          var data = snapshot.val();
          return data? model.newRecord(data) : null;
@@ -75,7 +75,7 @@
     * Update an existing record in the database. If the record does not already exist, the promise is rejected.
     * @param {Model}  model
     * @param {Record} rec
-    * @return {Promise} resolves to callback({string}id, {boolean}updated), where updated is true if an update occurred or false if data was not dirty
+    * @return {Promise} resolves to callback({string}id, {boolean}changed) where changed is false if data was not dirty, rejected if record does not exist
     */
    FirebaseStore.prototype.update = function(model, rec) {
       var hashKey = rec.hashKey();
@@ -216,7 +216,6 @@
       var obs = _.find(this.listeners, function(o) { return o.matches(props) });
       if( !obs ) {
          obs = new SyncObserver(this.listeners, this.base, props);
-         this.listeners.push(obs);
       }
       return obs;
    };
@@ -228,10 +227,12 @@
     * @return {Object}
     */
    FirebaseStore.prototype.watchRecord = function(model, record, callback) {
-      //todo
-      //todo
-      //todo
-      throw new Error('Interface not implemented');
+      var props = { table: model.table, key: record.hashKey(), callback: callback };
+      var obs = _.find(this.observedRecs, function(o) { return o.matches(props); });
+      if( !obs ) {
+         obs = new RecordObserver(this.observedRecs, this.base, props);
+      }
+      return obs;
    };
 
    /** SYNC OBSERVER
@@ -255,7 +256,6 @@
             if( data !== null ) {
                self.trigger('added', snapshot.name(), data, prevSiblingId);
             }
-            else { console.log('child_added with null value'); } //debug
          },
          child_removed: function(snapshot) {
             self.trigger('deleted', snapshot.name(), snapshot.val());
@@ -286,6 +286,8 @@
             }
          }
       };
+
+      list.push(self);
       watchFirebase(events, ref);
    }
 
@@ -298,11 +300,63 @@
 //      console.log('table', this.table === o.table, this.table, o.table);
 //      console.log('criteria', _.isEqual(o.criteria, this.criteria), this.criteria, o.criteria);
 //      console.log('scope', this.scope === o.scope, this.scope, o.scope);
-      return this.callback === o.callback
+      return o
+         && this.callback === o.callback
          && this.table === o.table
          && _.isEqual(o.criteria, this.criteria)
          && o.scope === this.scope;
    };
+
+   /** RECORD OBSERVER
+    *****************************************************************************************/
+
+   function RecordObserver(list, base, props) {
+      var self = this;
+      self.paused   = false;
+      self.disposed = false;
+      self.callback = props.callback;
+      self.scope    = props.scope || null;
+      self.table    = props.table;
+      self.key      = props.key;
+
+      // this must be local so that function is unique and can be referenced by off()
+      // if we try to call off() on a prototype function, all listeners (not just this instance) will be turned off
+      self.trigger = function(snapshot) {
+         if( !self.paused && !self.disposed ) {
+            self.callback.apply(self.scope, [snapshot.name(), snapshot.val(), snapshot.getPriority()]);
+         }
+      };
+
+      // this is locally scoped because it is referencing list
+      // the performance of this could be improved by reducing these closure scopes
+      self.dispose = function() {
+         if( !self.disposed ) {
+            self.disposed = true;
+            base.child(self.table).child(self.key).off('value', self.trigger);
+            var idx = _.indexOf(list, self);
+            if( idx >= 0 ) {
+               list.slice(idx, 1);
+            }
+         }
+      };
+
+      list.push(self);
+      base.child(self.table).child(self.key).on('value', self.trigger);
+   }
+
+   RecordObserver.prototype.equals = function(o) {
+      return o instanceof RecordObserver && this.matches(o);
+   };
+
+   RecordObserver.prototype.matches = function(o) {
+      return o
+         && this.callback === o.callback
+         && this.table === o.table
+         && this.key === o.key;
+   };
+
+
+
 
    /** UTILITIES
     *****************************************************************************************/

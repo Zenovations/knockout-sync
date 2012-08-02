@@ -5,14 +5,55 @@
     * Create some dummy functions if we need to, so we don't have to if/else everything
     *********************************************************************************************/
    console||(console = window.console = {
-      /** @param {...*} */
-      log: function() {},
-      /** @param {...*} */
-      info: function() {},
-      /** @param {...*} */
-      warn: function() {},
-      /** @param {...*} */
-      error: function() {}
+      // all this "a, b, c, d, e" garbage is to make the IDEs happy, since they can't do variable argument lists
+      /**
+       * @param a
+       * @param [b]
+       * @param [c]
+       * @param [d]
+       * @param [e]
+       */
+      log: function(a, b, c, d, e) {},
+      /**
+       * @param a
+       * @param [b]
+       * @param [c]
+       * @param [d]
+       * @param [e]
+       */
+      info: function(a, b, c, d, e) {},
+      /**
+       * @param a
+       * @param [b]
+       * @param [c]
+       * @param [d]
+       * @param [e]
+       */
+      warn: function(a, b, c, d, e) {},
+      /**
+       * @param a
+       * @param [b]
+       * @param [c]
+       * @param [d]
+       * @param [e]
+       */
+      error: function(a, b, c, d, e) {},
+      /**
+       * @param a
+       * @param [b]
+       * @param [c]
+       * @param [d]
+       * @param [e]
+       */
+      time: function(label) {},
+      /**
+       * @param a
+       * @param [b]
+       * @param [c]
+       * @param [d]
+       * @param [e]
+       */
+      timeEnd: function(label) {}
    });
 
    // le sigh, IE, oh IE, how we fight... fix Function.prototype.bind as needed
@@ -53,10 +94,12 @@
    /**
     * Support group and groupEnd functions
     */
-   ('group' in console) || (console.group = function(msg) {
-      console.log("\n------------\n"+msg+"\n------------");
+   ('group' in console) ||
+   (console.group = function(msg) {
+      console.info("\n------------\n"+msg+"\n------------");
    });
-   ('groupEnd' in console) || (console.groupEnd = function() {
+   ('groupEnd' in console) ||
+   (console.groupEnd = function() {
       //console.log("\n\n");
    });
 

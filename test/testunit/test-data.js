@@ -195,6 +195,7 @@
        * @return {jQuery.Deferred}
        */
       reset: function(firebaseRoot, numrecs) {
+         console.time('bigData.reset()');
          var i, def = $.Deferred(), count = 0, ref = firebaseRoot.child('BigData');
          ref.set(null, function() {
             var ref = firebaseRoot.child('BigData'), max = numrecs || exports.bigData.COUNT;
@@ -202,7 +203,10 @@
                ref.child(i).setWithPriority(
                   {id: i, aString: 'string-'+i, sortField: i, aBool: (i%2 === 0)},
                   i,
-                  function() { if( ++count == max ) { def.resolve(ref); } }
+                  function() { if( ++count == max ) {
+                     console.timeEnd('bigData.reset()');
+                     def.resolve(ref);
+                  }}
                );
             }
          });

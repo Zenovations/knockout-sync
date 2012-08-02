@@ -26,7 +26,7 @@
        *
        * @param {ko.sync.Model} model
        * @param {ko.sync.Record} record
-       * @return {Promise} a jQuery.Deferred().promise() object
+       * @return {Promise} resolves to the new record's ID or rejects if it could not be created
        */
       create: function(model, record) { throw new Error('Interface not implemented'); },
 
@@ -50,7 +50,7 @@
        *
        * @param {ko.sync.Model}  model
        * @param {ko.sync.Record} rec
-       * @return {Promise} resolves to true if an update occurred or false if data was not dirty
+       * @return {Promise} resolves to callback({string}id, {boolean}changed) where changed is false if data was not dirty, rejected if record does not exist
        */
       update: function(model, rec) { throw new Error('Interface not implemented'); },
 

@@ -82,10 +82,6 @@
          delete this.recs[key];
          ko.utils.arrayRemoveItem(this.recs, record);
       }
-      else {
-         console.log('could not find record', recordOrId);
-         console.log(this.recs);
-      }
    };
 
    /**
@@ -141,11 +137,9 @@
    function _findRecord(list, recOrId) {
       var key = _keyFor(recOrId);
       if( key === null ) {
-         console.log('no key for '+recOrId);
          return null;
       }
       else {
-         console.log('key for '+recOrId);
          return list[ key.hashKey() ];
       }
    }

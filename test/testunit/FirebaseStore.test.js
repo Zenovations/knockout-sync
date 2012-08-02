@@ -289,7 +289,7 @@ jQuery(function($) {
 
    asyncTest("#count", function() {
       expect(2);
-      var store = resetStore(), bigModel = TestData.bigData.model(), def = $.Deferred(), timer = _timeout(def);
+      var store = resetStore(), bigModel = TestData.bigData.model(), def = _deferWithTimeout();
 
       TestData.bigData.reset(syncRoot)
             .pipe(function() {
@@ -310,13 +310,13 @@ jQuery(function($) {
             })
             .fail(function(e) { def.reject(e) });
 
-      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(_restart(timer));
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(start);
    });
 
    asyncTest("#count limit", function() {
       expect(1);
       var store = resetStore(), LIMIT = 25, bigModel = TestData.bigData.model(),
-            def = $.Deferred(), timer = _timeout(def);
+            def = _deferWithTimeout();
 
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
@@ -328,13 +328,13 @@ jQuery(function($) {
          })
          .fail(function(e) { def.reject(e); });
 
-      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(_restart(timer));
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(start);
    });
 
    asyncTest("#count limit (not reached)", function() {
       expect(1);
       var store = resetStore(), LIMIT = 25, NUMRECS = 15, bigModel = TestData.bigData.model(),
-            def = $.Deferred(), timer = _timeout(def);
+            def =_deferWithTimeout();
 
       TestData.bigData.reset(syncRoot, NUMRECS)
             .pipe(function() {
@@ -346,14 +346,14 @@ jQuery(function($) {
             })
             .fail(function(e) { def.reject(e); });
 
-      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(_restart(timer));
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(start);
    });
 
    asyncTest("#count where object", function() {
       expect(1);
       var store = resetStore(), bigModel = TestData.bigData.model(),
           parms = { where: { aBool: true, sortField: function(v) { return v < 51; } } },
-          def = $.Deferred(), timer = _timeout(def);
+          def =_deferWithTimeout();
 
       //todo-test need to test function, object, number, undefined, and "default"
       //todo-test need to test where as object/string/function
@@ -368,7 +368,7 @@ jQuery(function($) {
          })
          .fail(function(e) { def.reject(e); });
 
-      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(_restart(timer));
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(start);
    });
 
    asyncTest("#count where+limit", function() {
@@ -376,7 +376,7 @@ jQuery(function($) {
       var store = resetStore(), bigModel = TestData.bigData.model(), parms = {
          where: { aBool: false },
          limit: 75
-      }, def = $.Deferred(), timer = _timeout(def), iteratorCount = 0;
+      }, def =_deferWithTimeout(), iteratorCount = 0;
 
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
@@ -398,11 +398,41 @@ jQuery(function($) {
          })
          .fail(function(e) { def.reject(e); });
 
-      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(_restart(timer));
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(start);
    });
 
-   test('#count with start/end', function() {
-      //todo test
+   asyncTest('#count with start/end', function() {
+      var store = resetStore(), bigModel = TestData.bigData.model(),
+          def =_deferWithTimeout(), iteratorCount = 0;
+
+      TestData.bigData.reset(syncRoot)
+         .pipe(function() {
+            return store.count(bigModel, {
+               start: 101,
+               end: 120
+            }, function() { iteratorCount++; });
+         })
+         .then(function(count) {
+            strictEqual(count, iteratorCount, 'iterator called for each match');
+            strictEqual(count, 20, 'correct number of records returned');
+         })
+         .pipe(function() {
+            iteratorCount = 0;
+            return store.count(bigModel, {
+               start: 99,
+               end:   199,
+               limit: 50,
+               where: {aBool: true}
+            }, function() { iteratorCount++; });
+         })
+         .done(function(count) {
+            strictEqual(count, iteratorCount, 'iterator called for each match');
+            strictEqual(count, 50, 'correct number of records (with a limit and where clause) returned');
+            def.resolve();
+         })
+         .fail(function(e) { def.reject(e); });
+
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(start);
    });
 
    asyncTest("#query", function() {
@@ -413,7 +443,8 @@ jQuery(function($) {
          parms = {
             where: { aBool: true, sortField: function(v) { return v < 51; } }
          },
-         iteratorCalls = 0;
+         iteratorCalls = 0, def = _deferWithTimeout();
+
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.query(bigModel, function(rec) {
@@ -424,9 +455,11 @@ jQuery(function($) {
          .done(function(count) {
             strictEqual(count, iteratorCalls, 'iterator called correct number of times');
             strictEqual(count, 25, 'correct number of records (evens under 51) returned');
+            def.resolve();
          })
-         .fail(function(e) { console.error(e); ok(false, e.toString()); })
-         .always(start);
+         .fail(function(e) { def.reject(e); });
+
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(start);
    });
 
    asyncTest("#query where+limit", function() {
@@ -435,7 +468,8 @@ jQuery(function($) {
       var store = resetStore(), bigModel = TestData.bigData.model({sortField: null}), parms = {
          where: { aBool: false },
          limit: 75
-      }, iteratorCalls = 0;
+      }, iteratorCalls = 0, def = _deferWithTimeout();
+
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.query(bigModel, function(rec) {
@@ -456,16 +490,19 @@ jQuery(function($) {
          .done(function(count) {
             strictEqual(count, iteratorCalls, 'iterator called correct number of times');
             strictEqual(count, 100, 'correct number of records (limit never reached) returned');
+            def.resolve();
          })
-         .fail(function(e) { console.error(e); ok(false, e.toString()); })
-         .always(start);
+         .fail(function(e) { def.reject(e); });
+
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(start);
    });
 
    asyncTest("#query (no results)", function() {
       expect(2);
       //todo-sort
       var store = resetStore(), bigModel = TestData.bigData.model({sortField: null}),
-         parms = { where: { aString: 'not this' } }, iteratorCalls = 0;
+         parms = { where: { aString: 'not this' } }, iteratorCalls = 0, def = _deferWithTimeout();
+
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.query(bigModel, function(rec) {
@@ -475,9 +512,11 @@ jQuery(function($) {
          .done(function(count) {
             strictEqual(count, iteratorCalls, 'iterator called correct number of times');
             strictEqual(count, 0, 'no records returned');
+            def.resolve();
          })
-         .fail(function(e) { console.error(e); ok(false, e.toString()); })
-         .always(start);
+         .fail(function(e) { def.reject(e); });
+
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(start);
    });
 
    asyncTest("#query function", function() {
@@ -488,7 +527,8 @@ jQuery(function($) {
             where: function(v, k) {
                return k.match(/^1\d$/);
             }
-         }, iteratorCalls = 0;
+         }, iteratorCalls = 0, def = _deferWithTimeout();
+
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.query(bigModel, function(rec) {
@@ -498,16 +538,20 @@ jQuery(function($) {
          .done(function(count) {
             strictEqual(count, iteratorCalls, 'iterator called correct number of times');
             strictEqual(count, 10, 'correct number of records returned');
+            def.resolve();
          })
-         .fail(function(e) { console.error(e); ok(false, e.toString()); })
-         .always(start);
+         .fail(function(e) { def.reject(e); });
+
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(start);
    });
 
    asyncTest("#query function (no results)", function() {
       expect(2);
       //todo-sort
       var store = resetStore(), bigModel = TestData.bigData.model({sortField: null}),
-         parms = { where: function() { return false; } }, iteratorCalls = 0;
+         parms = { where: function() { return false; } }, iteratorCalls = 0,
+         def = _deferWithTimeout();
+
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
             return store.query(bigModel, function(rec) {
@@ -517,9 +561,11 @@ jQuery(function($) {
          .done(function(count) {
             strictEqual(count, iteratorCalls, 'iterator called correct number of times');
             strictEqual(count, 0, 'correct number of records returned');
+            def.resolve();
          })
-         .fail(function(e) { console.error(e); ok(false, e.toString()); })
-         .always(start);
+         .fail(function(e) { def.reject(e); });
+
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(start);
    });
 
    test("#hasTwoWaySync", function() {
@@ -532,8 +578,7 @@ jQuery(function($) {
       var obs1, obs2,
           added = [], updated = [], deleted = [], moved = [],
           store = resetStore(),
-          done  = $.Deferred(),
-          to    = _timeout(done),
+          done  = _deferWithTimeout(),
           model = TestData.bigData.model(),
           activity = false;
 
@@ -563,7 +608,6 @@ jQuery(function($) {
          // it literally waits until stuff stops showing up
          var waitTo = setInterval(function() {
             if( !activity ) {
-               clearTimeout(to);
                clearInterval(waitTo);
                done.resolve();
             }
@@ -584,7 +628,7 @@ jQuery(function($) {
          // do a local update
          store.update(model, TestData.bigData.record(110, {aString: 'goodbye'}, model));
 
-         // move a record
+         // move a record remotely
          ref.child('100').setPriority(101);
 
          // do a remote delete
@@ -592,14 +636,20 @@ jQuery(function($) {
 
          // do a local delete
          store.delete(model, TestData.bigData.record(25, {}, model));
+
+         // turn off the listener and then do another update to make sure it's not tracked
+         obs2.dispose();
+         obs1 && obs1.dispose();
+         ref.child('999').set({aString: 'I should not create a notification'});
+         ref.child('999').remove();
       })
-      .fail(function(e) { ko(false, e.toString()); });
+      .fail(function(e) { done.reject(e); });
 
       // sync to the bigData model right now while records are changing
       obs1 = store.watch(model, watcher);
 
       done
-         .fail(function(e) { ok(false, e); })
+         .fail(function(e) { console.error(e); ok(false, e); })
          .always(function() {
             obs1 && obs1.dispose();
             obs2 && obs2.dispose();
@@ -612,29 +662,137 @@ jQuery(function($) {
          });
    });
 
-   test('#watchRecord', function() {
-      ok(false, 'Implement me!');
+   asyncTest('#watchRecord', function() {
+      expect(5);
+      var obs1, obs2,
+         calls = 0,
+         store = resetStore(),
+         def   = _deferWithTimeout(),
+         model = TestData.bigData.model(),
+         rec   = TestData.bigData.record('100'),
+         // make sure things only get called once
+         activity = false,
+         nullCalled = false,
+         changeCalled = false;
+
+      function watcher(id, data, priority) {
+         calls++;
+         if( id !== '100' ) {
+            ok(false, 'wrong ID received, should only be listening to record with ID 100');
+         }
+         else if( priority == '101' ) {
+            ok(true, 'priority set to 101 and notification received');
+         }
+         else if( data === null && !nullCalled ) {
+            nullCalled = true;
+            ok(true, 'called once with null');
+         }
+         else if( data.aString == 'i was changed' && !changeCalled ) {
+            changeCalled = true;
+            deepEqual(data, {aString: 'i was changed', aBool: true, sortField: 100, id: '100a'});
+         }
+         else {
+            console.warn('what is this?', id, data);
+            ok(false, 'Received a change I wasn\'t looking for): '+ id + '::' + ko.toJSON(data));
+         }
+         console.log(arguments);
+      }
+
+      TestData.bigData.reset(syncRoot).then(function(ref) {
+         // this interval helps us to wait until all data arrives
+         // without assuming we'll get the correct number of records
+         // it literally waits until stuff stops showing up
+         var waitTo = setInterval(function() {
+            if( !activity ) {
+               clearInterval(waitTo);
+               def.resolve();
+            }
+            activity = false;
+         }, 250), recRef = ref.child('100');
+
+         // we observe the model for changes
+         obs1 = store.watchRecord(model, rec, watcher);
+
+         // we add the same observer again, which should just return the first reference and not cause duplicate notifications
+         obs2 = store.watchRecord(model, rec, watcher);
+         recRef.set(TestData.bigData.data(100, {aString: 'i was changed', id: '100a'}));
+         recRef.setPriority(101);
+         recRef.remove();
+      });
+
+      def
+         .done(function() {
+            ok(obs1 === obs2, 'should not get two references if the same listener added twice');
+            equal(calls, 3, 'should be 3 calls invoked');
+         })
+         .fail(function(e) { console.error(e); ok(false, e.toString()); })
+         .always(function() {
+            obs1 && obs1.dispose();
+            obs2 && obs2.dispose();
+            start();
+         });
    });
 
-   test("#onConnect", function() {
-      ok(false, 'Implement me!');
+   asyncTest("composite keys", function() {
+      expect(5);
+      var store = resetStore(),
+          model = TestData.model({primaryKey: ['id', 'stringRequired', 'intRequired']}),
+          data = TestData.genericData({id: 'one', stringRequired: 'two', intRequired: 3}),
+          record = model.newRecord(data),
+          def = _deferWithTimeout(),
+          key = record.hashKey();
+
+      $.Deferred().resolve()
+         .pipe(function() {
+            return store.create(model, record).then(function(id) {
+               equal(id, key, 'created with correct id');
+            });
+         })
+         .pipe(function() {
+            var recordId = new ko.sync.RecordId(model.key, data);
+            return store.read(model, recordId).then(function(returnedRec) {
+               deepEqual(returnedRec.getData(), record.getData(), 'read() returns expected data');
+            });
+         })
+         .pipe(function() {
+            record.set('intRequired', 12);
+            return store.update(model, record).then(function(id, success) {
+               equal(success, true, 'record updated successfully');
+               equal(id, key, 'has correct id');
+            });
+         })
+         .pipe(function() {
+            return store.delete(model, record).then(function(id) {
+               equal(id, record.hashKey(), 'deleted correct id');
+               return $.Deferred(function(def) {
+                  // make sure it's actually gone
+                  syncRoot.child(model.table).child(key).on('value', function(ss) {
+                     if( ss.val() === null ) {
+                        def.resolve();
+                     }
+                     else {
+                        def.reject('record not deleted: '+key);
+                     }
+                  })
+               });
+            });
+         })
+         .done(function() {
+            def.resolve();
+         })
+         .fail(function(e) { def.reject(e); });
+
+      def.fail(function(e) { console.error(e); ok(false, e.toString()); }).always(start);
    });
 
-   test("#onDisconnect", function() {
-      ok(false, 'Implement me!');
-   });
-
-   test('sorted records', function() {
-      ok(false, 'Implement me');
-   });
-
-   test("composite keys", function() {
-      ok(false, 'Implement me!');
-   });
-
-   test("#assignTempId", function() {
-      ok(false, 'Implement me!');
-   });
+   //todo-test how to simulate connection loss for testing?
+//   test("#onConnect", function() {
+//      ok(false, 'Implement me!');
+//   });
+//
+//   test("#onDisconnect", function() {
+//      ok(false, 'Implement me!');
+//   });
 
    function watchForEntry(table, hashKey) {
       var tableRef = syncRoot.child(table);
@@ -714,11 +872,23 @@ jQuery(function($) {
     * @return {Number}
     * @private
     */
-   function _timeout(def, timeout) {
+   function _deferWithTimeout(timeout) {
+      return _applyTimeout($.Deferred(), timeout);
+   }
+
+   function _applyTimeout(def, timeout) {
       timeout || (timeout = TIMELIMIT);
-      return setTimeout(function() {
+
+      var to = setTimeout(function() {
+         to = null;
          def.reject('timeout exceeded');
-      }, timeout)
+      }, timeout);
+
+      def.always(function() {
+         to && clearTimeout(to);
+      });
+
+      return def;
    }
 
    function _restart(to) {
