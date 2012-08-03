@@ -2,7 +2,8 @@
 <div class="container">
    <div class="row">
       <div class="span12" data-bind="with: EditPanel">
-         <button data-bind="click: modal, enabled: $root.hasStores" class="btn btn-small btn-primary">Add a Model</button>
+         <div id="addModel" class="row hide" data-bind="template: 'form-create-model'"></div>
+         <button data-bind="slideToggle: {target: '#addModel'}, enable: $root.hasStores" class="btn btn-small btn-primary">Add a Model</button>
       </div>
    </div>
    <div class="row">
@@ -26,7 +27,7 @@
          <option>thread</option>
          <option>message</option>
       </select>
-      <button type="submit" class="btn btn-mini">load template</button>
+      <button type="submit" class="btn">load template</button>
    </form>
    <form class="form-horizontal" data-bind="submit: createModel, validate: true">
       <fieldset>
@@ -40,14 +41,15 @@
          <div class="control-group">
             <label class="control-label" for="storeName">Store</label>
             <div class="controls">
-               <select class="input-medium" name="storeName"
-                       data-bind="options: storeNames"></select>
+               <select class="input-medium" name="storeName" data-bind="options: storeNames"></select>
             </div>
          </div>
          <div class="control-group">
             <label class="control-label" for="tableName">Table/Path</label>
             <div class="controls">
-               <input type="text" name="modelName" id="tableName" class="input-medium" />
+               <div class="input-append">
+                   <input type="text" name="modelName" id="tableName" /><a class="btn"><i class="icon-chevron-down"></i></a>
+               </div>
                <p class="help-block">Where the data is store (i.e. the database table)</p>
             </div>
          </div>

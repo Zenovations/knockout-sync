@@ -1,0 +1,32 @@
+
+Hello! Thanks for this awesome package! It's great to get less into my grunt build files. A quick thought for a rainy evening project:
+
+It would be wonderful if I could use the &lt;banner:meta.header/footer&gt; tags to pull in my existing header/footer content (already set up to work with the built-in grunt.concat and grunt.min tasks) instead of having to duplicate that content into a .less file (which doesn't have access to my package variables and, yanno, isn't DRY).
+
+    grunt.initConfig({
+       pkg: '<json:grunt.json>',
+       meta: {
+          banner: '/*! <%= pkg.title || pkg.name %> - v<%= pkg.version %> - <%= grunt.template.today("yyyy-mm-dd") %> */\n'
+       }
+       , less: {
+          default: {
+             src: [ '<banner:meta.banner>', 'src.css' ]
+             , dest: 'dist/compiled.css'
+             , options: {compress: true}
+          }
+       }
+       , concat: {
+          default: {
+             src: ['<banner:meta.banner>', 'js/project-*.js']
+             , dest: 'dist/compiled.js'
+          }
+       }
+       , min: {
+          default: {
+             src: ['<banner:meta.banner>', '<config:concat.default.dest>']
+             , dest: 'dist/compiled.min.js'
+          }
+       }
+    });
+
+Cheers!

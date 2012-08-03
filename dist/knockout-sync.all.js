@@ -1,4 +1,4 @@
-/*! Knockout Sync - v0.1.0 - 2012-07-19
+/*! Knockout Sync - v0.1.0 - 2012-08-03
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL */
 
@@ -170,7 +170,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
             _resolve(def, shared, args);
          });
       }, function() {
-         def.reject.apply(def, _result(arguments));
+         def.reject.apply(def, $.makeArray(arguments));
       });
       return this;
    };
@@ -1477,69 +1477,6 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
 
 })(jQuery);
 
-
-(function(console) {
-   /*********************************************************************************************
-    * Make sure console exists because IE blows up if it's not open and you attempt to access it
-    * Create some dummy functions if we need to, so we don't have to if/else everything
-    *********************************************************************************************/
-   console||(console = window.console = {
-      /** @param {...*} */
-      log: function() {},
-      /** @param {...*} */
-      info: function() {},
-      /** @param {...*} */
-      warn: function() {},
-      /** @param {...*} */
-      error: function() {}
-   });
-
-   // le sigh, IE, oh IE, how we fight... fix Function.prototype.bind as needed
-   if (!Function.prototype.bind) {
-      Function.prototype.bind = function (oThis) {
-         if (typeof this !== "function") {
-            // closest thing possible to the ECMAScript 5 internal IsCallable function
-            throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable");
-         }
-
-         var aArgs = Array.prototype.slice.call(arguments, 1),
-               fToBind = this,
-               fNOP = function () {},
-               fBound = function () {
-                  return fToBind.apply(this instanceof fNOP
-                        ? this
-                        : oThis || window,
-                        aArgs.concat(Array.prototype.slice.call(arguments)));
-               };
-
-         fNOP.prototype = this.prototype;
-         fBound.prototype = new fNOP();
-
-         return fBound;
-      };
-   }
-
-   // IE 9 won't allow us to call console.log.apply (WTF IE!) It also reports typeof(console.log) as 'object' (UNH!)
-   // but together, those two errors can be useful in allowing us to fix stuff so it works right
-   if( typeof(console.log) === 'object' ) {
-      // Array.forEach doesn't work in IE 8 so don't try that :(
-      console.log = Function.prototype.call.bind(console.log, console);
-      console.info = Function.prototype.call.bind(console.info, console);
-      console.warn = Function.prototype.call.bind(console.warn, console);
-      console.error = Function.prototype.call.bind(console.error, console);
-   }
-
-   /**
-    * Support group and groupEnd functions
-    */
-   ('group' in console) || (console.group = function(msg) {
-      console.log("\n------------\n"+msg+"\n------------");
-   });
-   ('groupEnd' in console) || (console.groupEnd = function() {
-      //console.log("\n\n");
-   });
-
-})(window.console);
 //     Underscore.js 1.3.3
 //     (c) 2009-2012 Jeremy Ashkenas, DocumentCloud Inc.
 //     Underscore is freely distributable under the MIT license.
@@ -2849,6 +2786,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
 (function(ko) {
    "use strict";
 
+   var modelInst = 1;
    var Model = Class.extend({
       /**
        * @param {object} props
@@ -2862,6 +2800,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
          this.sort       = props.sortField;
          this.validator  = props.validator;
          this.auto       = props.autoSync;
+         this.inst       = modelInst++;
          this.fields     = _processFields(defaults, props.fields);
          this.factory    = props.recordFactory || new RecordFactory(this);
       },
@@ -2874,7 +2813,16 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        */
       newRecord: function(data) {
          return this.factory.create(data);
+      },
+
+      toString: function() {
+         return this.table+'['+this.inst+']';
       }
+
+      //todo-api manual save
+
+      //todo-api manual sync
+
    });
    Model.FIELD_DEFAULTS = {
       type:      'string',
@@ -2883,7 +2831,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       observe:   true,
       minLength: 0,
       maxLength: 0,
-      sortField: null,
+      sortField: null, //todo unused?
       valid:     null, //todo tie this to this.validator?
       updateCounter: 'update_counter',
       autoSync:  false,
@@ -2902,7 +2850,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    }
 
    function _applyDefault(o) {
-      if( !o.hasOwnProperty('default') || !exists(o.default) ) {
+      if( !o.hasOwnProperty('default') || !_.has(o, 'default') ) {
          switch(o.type) {
             case 'boolean':
                o.default = false;
@@ -3028,17 +2976,35 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    });
 
    function _setFields(fields, data) {
+      //todo validate the data before applying it somehow
       var k, out = {}, keys = _.keys(fields), i = keys.length;
       while(i--) {
          k = keys[i];
-         if( data.hasOwnProperty(k) && exists(data[k]) ) {
-            out[k] = data[k];
-         }
-         else {
-            out[k] = fields[k].default;
-         }
+         out[k] = _value(k, fields, data);
       }
       return out;
+   }
+
+   function _value(k, fields, data) {
+      var field = fields[k];
+      if( data.hasOwnProperty(k) && exists(data[k]) ) {
+         var v = data[k];
+         switch(field.type) {
+            case 'date':
+               return moment(v).utc().toDate();
+            case 'int':
+               return ~~v;
+            case 'float':
+               v = parseFloat(v);
+               if( isNaN(v) ) { return field.default; }
+               else { return v; }
+            default:
+               return v;
+         }
+     }
+      else {
+         return field.default;
+      }
    }
 
    function exists(v) {
@@ -3052,11 +3018,9 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       }
    }
 
-   ko.sync || (ko.sync = {});
    ko.sync.Record = Record;
 
 })(this.ko);
-
 
 /*******************************************
  * RecordId class for knockout-sync
@@ -3219,10 +3183,6 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
          delete this.recs[key];
          ko.utils.arrayRemoveItem(this.recs, record);
       }
-      else {
-         console.log('could not find record', recordOrId);
-         console.log(this.recs);
-      }
    };
 
    /**
@@ -3278,11 +3238,9 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    function _findRecord(list, recOrId) {
       var key = _keyFor(recOrId);
       if( key === null ) {
-         console.log('no key for '+recOrId);
          return null;
       }
       else {
-         console.log('key for '+recOrId);
          return list[ key.hashKey() ];
       }
    }
@@ -3321,7 +3279,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        *
        * @param {ko.sync.Model} model
        * @param {ko.sync.Record} record
-       * @return {Promise} a jQuery.Deferred().promise() object
+       * @return {Promise} resolves to the new record's ID or rejects if it could not be created
        */
       create: function(model, record) { throw new Error('Interface not implemented'); },
 
@@ -3345,7 +3303,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        *
        * @param {ko.sync.Model}  model
        * @param {ko.sync.Record} rec
-       * @return {Promise} resolves to true if an update occurred or false if data was not dirty
+       * @return {Promise} resolves to callback({string}id, {boolean}changed) where changed is false if data was not dirty, rejected if record does not exist
        */
       update: function(model, rec) { throw new Error('Interface not implemented'); },
 
@@ -3360,35 +3318,39 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       delete: function(model, recOrId) { throw new Error('Interface not implemented'); },
 
       /**
-       * Perform a query against the database. The options for query are fairly limited:
+       * Perform a query against the database. The `filterCriteria` options are fairly limited:
        *
        * - limit:   {int=100}         number of records to return, use 0 for all
-       * - offset:  {int=0}           starting point in records, e.g.: {limit: 100, start: 101} would return records 101-200
-       * - when:    {function|object} filter rows using this function or value map
+       * - offset:  {int=0}           exclusive starting point in records, e.g.: {limit: 100, offset: 100} would return records 101-200 (the first record is 1 not 0)
+       * - start:   {int=0}           using the sortField's integer values, this will start us at record matching this sort value
+       * - end:     {int=-1}          using the sortField's integer values, this will end us at record matching this sort value
+       * - where:   {function|object} filter rows using this function or value map
        * - sort:    {array|string}    Sort returned results by this field or fields. Each field specified in sort
        *                              array could also be an object in format {field: 'field_name', desc: true} to obtain
        *                              reversed sort order
        *
-       * USE OF WHEN
-       * -------------
-       * If `when` is a function, it is always applied after the results are returned. Thus, when used in conjunction
-       * with `limit`, there may (and probably will) be less results than `limit` en toto.
+       * Start/end are more useful with sorted records (and faster). Limit/offset are slower but can be used with
+       * unsorted records. Additionally, limit/offset will work with where conditions. Obviously, `start`/`end` are hard
+       * limits and only records within this range, matching `where`, up to a maximum of `limit` could be returned.
        *
-       * If `filter` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
+       * USE OF WHERE
+       * -------------
+       * If `where` is a function, it is always applied after the results are returned. Thus, when used in conjunction
+       * with `limit`, the server may still need to retrieve all records before applying limit.
+       *
+       * If `where` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
        * the store. For SQL-like databases, it may be part of the query. For data stores like Firebase, or
        * other No-SQL types, it could require fetching all results from the table and filtering them on return. So
        * use this with discretion.
        *
-       * THE PROGRESS FUNCTION
+       * THE ITERATOR
        * ---------------------
-       * Each record received is handled by `progressFxn`. When no limit is set, stores may never fulfill
-       * the promise. This is a very important point to keep in mind.
+       * Each record received is handled by `iterator`. If iterator returns true, then the iteration is stopped. The
+       * iterator should be in the format `function(data, id, index)` where data is the record and index is the count
+       * of the record starting from 0
        *
-       * Additionally, even if a limit is set, if the number of results is less than limit, the promise may
-       * still never fulfill (as stores will not fulfill until the required number of results is reached).
-       *
-       * In the case of a failure, the fail() method on the promise will always be notified immediately, and the load
-       * operation will end immediately.
+       * In the case of a failure, the fail() method on the promise will always be notified immediately,
+       * and the load operation will end immediately.
        *
        * PERFORMANCE
        * -----------
@@ -3401,26 +3363,57 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        * Alternately, very sophisticated queries could be done external to the knockout-sync module and then
        * injected into the synced data after.
        *
-       * @param {Function} progressFxn
+       * @param {Function} iterator
        * @param {ko.sync.Model}  model
-       * @param {object} [parms]
+       * @param {object} [filterCriteria]
        * @return {Promise}
        */
-      query: function(progressFxn, model, parms) { throw new Error('Interface not implemented'); },
+      query: function(model, iterator, filterCriteria) { throw new Error('Interface not implemented'); },
 
       /**
-       * Given a particular data model, get notifications of any changes to the data. The change notifications will
-       * come in the form:
+       * Given a particular data model, get a count of all records in the database matching
+       * the parms provided. The `filterCriteria` object is the same as query() method, in the format `function(data, id, index)`.
        *
-       *   - callback('added', {string}record_id, {object}hash_of_name_value_pairs)
-       *   - callback('deleted', {string}record_id)
-       *   - callback('updated', {string}record_id, {object}hash_of_name_value_pairs)
+       * This could be a very high-cost operation depending on the data size and the data source (it could require
+       * iterating every record in the table) for some data layers.
        *
        * @param {ko.sync.Model} model
-       * @param {Function} callback
-       * @return {Store} this
+       * @param {object}        [filterCriteria]
        */
-      sync: function(model, callback) { throw new Error('Interface not implemented'); }
+      count: function(model, filterCriteria) { throw new Error('Interface not implemented'); },
+
+      /**
+       * True if this data layer provides push updates that can be monitored by the client.
+       * @return {boolean}
+       */
+      hasTwoWaySync: function() { throw new Error('Interface not implemented'); },
+
+      /**
+       * Given a particular data model, notify `callback` any time any record is added, updated, deleted, or moved.
+       *
+       * The return value is an Object which contains a dispose() method to stop observing the data layer's
+       * changes.
+       *
+       * @param  {ko.sync.Model} model
+       * @param  {Function}     callback
+       * @param  {object}       [filterCriteria]
+       * @return {Object}
+       */
+      watch: function(model, callback, filterCriteria) { throw new Error('Interface not implemented'); },
+
+      /**
+       * Given a particular record, invoke `callback` any time the data changes. This does not get invoked for
+       * add/delete/moved events. We must monitor the entire model for that.
+       *
+       * The return value is an Object which contains a dispose() method to stop observing the data layer's
+       * changes.
+       *
+       * @param {ko.sync.Model}  model
+       * @param {ko.sync.Record} record
+       * @param  {Function}      callback
+       * @return {Object}
+       */
+      watchRecord: function(model, record, callback) { throw new Error('Interface not implemented'); }
 
    });
 
@@ -3453,8 +3446,12 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
     */
    var FirebaseStore = ko.sync.Store.extend({
       init: function(url, base) {
-         this.base = _base(new Firebase(url), base);
+         this.base         = _base(new Firebase(url), base);
+         this.listeners    = [];
+         this.observedRecs = [];
       }
+      // we don't need to include all the methods here because there is no _super to deal with
+      // we're just inheriting for the "is a" behavior and to enforce the contract of Store
    });
 
    /**
@@ -3470,18 +3467,13 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
     *   - model.sort:    provides a field in the record to use for setting priority (sorting) the data
     *
     * @param {Model}  model   the schema for a data model
-    * @param {Record} record  the data to be inserted
+    * @param {Record} rec  the data to be inserted
     * @return {Promise} resolves to the record's {string} id
     */
-   FirebaseStore.prototype.create = function(model, record) {
-      //todo sort priorities
-      return ko.sync.handle(this, function(cb, eb) { // creates a promise
-         var table = this.base.child(model.table);
-             // fetch the record using .child()
-         _createRecord(table, record.getKey(), cleanData(model.fields, record.getData())).then(function(success, recordId) {
-            (success && cb(recordId)) || eb(recordId);
-         });
-      });
+   FirebaseStore.prototype.create = function(model, rec) {
+      var base = this.base;
+      var table = base.child(model.table);
+      return _createRecord(table, rec.getKey(), cleanData(model.fields, rec.getData()), rec.getSortPriority());
    };
 
    /**
@@ -3494,13 +3486,13 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
     *
     * @param {Model}           model
     * @param {RecordId|Record} recOrId
-    * @return {Promise} resolves to the Record object or null if not found
+    * @return {Promise} resolves to the updated Record object or null if not found
     */
    FirebaseStore.prototype.read = function(model, recOrId) {
       var table = this.base.child(model.table),
-            key   = _keyFor(recOrId),
-            hash  = key.hashKey();
-      return Util.val(table, hash).pipe(function(data) {
+          hash  = recOrId.hashKey();
+      return Util.val(table, hash).pipe(function(snapshot) {
+         var data = snapshot.val();
          return data? model.newRecord(data) : null;
       });
    };
@@ -3509,29 +3501,33 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
     * Update an existing record in the database. If the record does not already exist, the promise is rejected.
     * @param {Model}  model
     * @param {Record} rec
-    * @return {Promise} resolves to callback({string}id, {boolean}updated), where updated is true if an update occurred or false if data was not dirty
+    * @return {Promise} resolves to callback({string}id, {boolean}changed) where changed is false if data was not dirty, rejected if record does not exist
     */
    FirebaseStore.prototype.update = function(model, rec) {
-      //todo sort priorities
-      var base = this.base;
-      return ko.sync.handle(this, function(cb, eb) {
-         if( !rec.hasKey() ) { eb('Invalid key'); }
-         this.read(model, rec).done(function(origRec) {
-            if( origRec === null ) { eb('Record does not exist'); }
-            else {
-               origRec.updateAll(rec);
-               if( origRec.isDirty() ) {
-                  var key = _keyFor(origRec), ref = base.child(model.table).child(key.hashKey());
-                  ref.set(cleanData(model.fields, rec.getData()), function(success) {
-                     (success && cb(ref.name(), true)) || eb('synchronize failed');
-                  });
+      var hashKey = rec.hashKey();
+      // was the record actually modified?
+      if( !rec.hasKey() ) {
+         return $.Deferred().reject('invalid key', hashKey).promise();
+      }
+      else if( rec.isDirty() ) { //todo should we check to see if the record exists?
+         var table = this.base.child(model.table);
+         // does it exist?
+         return Util.has(table, hashKey)
+            .pipe(function(exists) {
+               if( exists ) {
+                  // if so perform the update
+                  return _updateRecord(table, hashKey, cleanData(model.fields, rec.getData()), rec.getSortPriority())
+                     .pipe(_pipedSync(hashKey));
                }
                else {
-                  cb(origRec.getRecordId().hashKey(), false);
+                  return $.Deferred(function(def) { def.reject('record does not exist'); }).promise();
                }
-            }
-         }).fail(function(e) { eb(e); });
-      });
+            });
+      }
+      else {
+         // no update occurred
+         return $.Deferred().resolve(hashKey, false).promise();
+      }
    };
 
    /**
@@ -3543,92 +3539,265 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
     * @return {Promise} resolves with record's {string}id
     */
    FirebaseStore.prototype.delete = function(model, recOrId) {
-      return ko.sync.handle(this, function(cb, eb) {
+      var base = this.base;
+      if(_.isArray(recOrId)) {
+         return $.when(_.map(recOrId, function(id) {
+            return this.delete(model, id);
+         }, this));
+      }
+      return $.Deferred(function(def) {
          var key = _keyFor(recOrId);
          if( !key.isSet() ) {
-            eb('no key set on record; cannot delete it');
+            def.reject('no key set on record; cannot delete it');
          }
          else {
-            var ref = this.base.child(model.table).child(key.hashKey());
-            ref.remove(function(success) {
-               (success && cb(ref.name())) || eb(ref.name(), 'Unable to sync');
-            });
+            var hashKey = key.hashKey(), ref = base.child(model.table).child(hashKey);
+            ref.remove(processSync(def, hashKey));
          }
       });
    };
 
    /**
-    * Perform a query against the database. The options for query are fairly limited:
+    * Perform a query against the database. The `filterCriteria` options are fairly limited:
     *
     * - limit:   {int=100}         number of records to return, use 0 for all
-    * - offset:  {int=0}           start after this record, e.g.: {limit: 100, offset: 100} would return records 101-200
-    * - when:    {function|object} filter returned results using this function (true=include, false=exclude) or a map of key/values
-    * - sort:    {string|object|array}
+    * - offset:  {int=0}           exclusive starting point in records, e.g.: {offset: 100, limit: 100} would return records 101-200 (the first record is 1 not 0)
+    * - start:   {int=0}           using the sortField's integer values, this will start us at record matching this sort value
+    * - end:     {int=-1}          using the sortField's integer values, this will end us at record matching this sort value
+    * - where:   {function|object} filter rows using this function or value map
+    * - sort:    {array|string}    Sort returned results by this field or fields. Each field specified in sort
+    *                              array could also be an object in format {field: 'field_name', desc: true} to obtain
+    *                              reversed sort order
     *
-    * The use of `filter` is applied by stores after `limit`. Thus, when using `filter` it is important to note that
-    * less results may (and probably will) be returned than `limit`.
+    * Start/end are more useful with sorted records (and faster). Limit/offset are slower but can be used with
+    * unsorted records. Additionally, limit/offset will work with where conditions. Obviously, `start`/`end` are hard
+    * limits and only records within this range, matching `where`, up to a maximum of `limit` could be returned.
     *
-    * Each record received is handled by the progressFxn, not by the fulfilled promise. The fulfilled promise simply
-    * notifies listeners that it is done retrieving records.
+    * USE OF WHERE
+    * -------------
+    * See Store::query for options and details
     *
-    * There are no guarantees on how a store will optimize the query. It may apply the constraints before or after
-    * retrieving data, depending on the capabilities and structure of the data layer. To ensure high performance
-    * for very large data sets, and maintain store-agnostic design, implementations should use some sort of
-    * pre-built query data in an index instead of directly querying records (think NoSQL databases like
-    * DynamoDB and Firebase, not MySQL queries)
+    * THE ITERATOR
+    * ---------------------
+    * Each record received is handled by `iterator`. If iterator returns true, then the iteration is stopped. The
+    * iterator should be in the format `function(data, id, index)` where data is the record and index is the count
+    * of the record starting from 0
     *
-    * Alternately, very sophisticated queries could be done external to the knockout-sync module and then
-    * injected into the synced data after.
+    * In the case of a failure, the fail() method on the promise will always be notified immediately,
+    * and the load operation will end immediately.
     *
-    * @param {Function} progressFxn called once for each record received
-    * @param {Model}  model
-    * @param {object} [params]
-    * @return {Promise} fulfilled with callback('tableName', limit) if limit is reached
+    * @param {Model}    model
+    * @param {Function} iterator called once for each record received
+    * @param {object}   [criteria]
+    * @return {Promise} fulfilled when all records have been fetched with {int} total number
     */
-   FirebaseStore.prototype.query = function(progressFxn, model, params) {
-      var def = $.Deferred();
-      var opts = ko.utils.extend({limit: 100, offset: 0, filter: null, sort: null}, params);
-      var table = this.base.child(model.table);
-      var count = 0, offset = ~~opts.offset, limit = opts.limit? ~~opts.offset + ~~opts.limit : 0;
-      if( limit ) { table.limit(limit); }
-      if( model.sort ) {
-         //todo
-         //todo
-         //todo
-         throw new Error('I\'m not ready for sort priorities yet');
-      }
-      else if( params.sort ) {
-         //todo
-         //todo
-         //todo
-         throw new Error('I\'m not ready for sorting yet');
-      }
-      else {
-         var vals = [];
-         Util.each(table, function(snapshot) {
-            var data = snapshot.val();
-            if( data !== null ) {
-               count++;
-               if( count <= start ) { return; }
-               else if( limit && count > limit ) {
-                  def.resolve(model.table, opts.limit);
-                  return true;
-               }
-               if( !opts.filter || opts.filter(data) ) {
-                  vals.push(data);
-                  progressFxn(data);
-               }
-            }
-         });
-         if( !def.isResolved() ) { def.resolve(vals); }
-      }
-      return def.promise();
+   FirebaseStore.prototype.query = function(model, iterator, criteria) {
+      return Util.filter(model, this.base, criteria, iterator);
    };
 
-   FirebaseStore.prototype.sync = function(model, callback) {}; //todo
+   /**
+    * Given a particular data model, get a count of all records in the database matching
+    * the `filterCriteria` provided, which uses the same format as query().
+    *
+    * The sole difference is that the default limit is 0. A limit may still be used and
+    * useful in some cases, but is not set by default.
+    *
+    * `iterator` is the same as query() method, using the format `function(data, id, index)`
+    *
+    * This operation may require iterating all records in the table.
+    *
+    * @param {ko.sync.Model} model
+    * @param {object}        [filterCriteria] must be a hash ($.isPlainObject())
+    * @param {Function}      [iterator] if provided, receives each record as it is evaluated
+    * @return {jQuery.Deferred} promise resolving to total number of records matched
+    */
+   FirebaseStore.prototype.count = function(model, filterCriteria, iterator) {
+      if( arguments.length == 2 && typeof(filterCriteria) == 'function' ) {
+         iterator = filterCriteria; filterCriteria = null;
+      }
+
+      if( filterCriteria ) {
+         var opts  = ko.utils.extend({limit: 0, offset: 0, where: null, sort: null}, filterCriteria);
+         return Util.filter(model, this.base, opts, iterator);
+      }
+      else {
+         return Util.each(this.base.child(model.table), iterator);
+      }
+   };
+
+   /**
+    * True if this data layer provides push updates that can be monitored for the given model
+    * @return {boolean}
+    */
+   FirebaseStore.prototype.hasTwoWaySync = function(model) { return true; };
+
+   /**
+    * @param  {ko.sync.Model} model
+    * @param  {Function}     callback
+    * @param  {object}       [filterCriteria]
+    * @return {Object}
+    */
+   FirebaseStore.prototype.watch = function(model, callback, filterCriteria) {
+      var props = { table: model.table, callback: callback, criteria: filterCriteria, scope: null };
+      var obs = _.find(this.listeners, function(o) { return o.matches(props) });
+      if( !obs ) {
+         obs = new SyncObserver(this.listeners, this.base, props);
+      }
+      return obs;
+   };
+
+   /**
+    * @param {ko.sync.Model}  model
+    * @param {ko.sync.Record} record
+    * @param  {Function}      callback
+    * @return {Object}
+    */
+   FirebaseStore.prototype.watchRecord = function(model, record, callback) {
+      var props = { table: model.table, key: record.hashKey(), callback: callback };
+      var obs = _.find(this.observedRecs, function(o) { return o.matches(props); });
+      if( !obs ) {
+         obs = new RecordObserver(this.observedRecs, this.base, props);
+      }
+      return obs;
+   };
+
+   /** SYNC OBSERVER
+    *****************************************************************************************/
+
+   function SyncObserver(list, base, props) {
+      var self = this;
+      self.table    = props.table;
+      self.criteria = props.criteria;
+      self.scope    = props.scope || null;
+      self.callback = props.callback;
+      self.disposed = false;
+      self.paused   = false;
+      var ref       = Util.ref(base, self.table, self.criteria);
+      // these need to be declared with each instantiation so that the functions
+      // can be used as references for on/off; otherwise, calling off on one model
+      // could also turn off all the other models referencing the same table!
+      var events = {
+         child_added: function(snapshot, prevSiblingId) {
+            var data = snapshot.val();
+            if( data !== null ) {
+               self.trigger('added', snapshot.name(), data, prevSiblingId);
+            }
+         },
+         child_removed: function(snapshot) {
+            self.trigger('deleted', snapshot.name(), snapshot.val());
+         },
+         child_changed: function(snapshot, prevSiblingId) {
+            self.trigger('updated', snapshot.name(), snapshot.val(), prevSiblingId);
+         },
+         child_moved: function(snapshot, prevSiblingId) {
+            self.trigger('moved', snapshot.name(), snapshot.val(), prevSiblingId);
+         }
+      };
+
+      // a method to receive events and delegate them to the callback
+      self.trigger = function() {
+         if( !self.paused && !self.disposed ) {
+            self.callback.apply(self.scope, _.toArray(arguments));
+         }
+      };
+
+      // a method to stop listening for events and remove this observer from the list
+      self.dispose = function() {
+         if( !self.disposed ) {
+            self.disposed = true;
+            unwatchFirebase(events, ref);
+            var idx = _.indexOf(list, self);
+            if( idx >= 0 ) {
+               list.slice(idx, 1);
+            }
+         }
+      };
+
+      list.push(self);
+      watchFirebase(events, ref);
+   }
+
+   SyncObserver.prototype.equals = function(o) {
+      return o instanceof SyncObserver && this.matches(o);
+   };
+
+   SyncObserver.prototype.matches = function(o) {
+//      console.log('callback', this.callback === o.callback, this.callback, o.callback);
+//      console.log('table', this.table === o.table, this.table, o.table);
+//      console.log('criteria', _.isEqual(o.criteria, this.criteria), this.criteria, o.criteria);
+//      console.log('scope', this.scope === o.scope, this.scope, o.scope);
+      return o
+         && this.callback === o.callback
+         && this.table === o.table
+         && _.isEqual(o.criteria, this.criteria)
+         && o.scope === this.scope;
+   };
+
+   /** RECORD OBSERVER
+    *****************************************************************************************/
+
+   function RecordObserver(list, base, props) {
+      var self = this;
+      self.paused   = false;
+      self.disposed = false;
+      self.callback = props.callback;
+      self.scope    = props.scope || null;
+      self.table    = props.table;
+      self.key      = props.key;
+
+      // this must be local so that function is unique and can be referenced by off()
+      // if we try to call off() on a prototype function, all listeners (not just this instance) will be turned off
+      self.trigger = function(snapshot) {
+         if( !self.paused && !self.disposed ) {
+            self.callback.apply(self.scope, [snapshot.name(), snapshot.val(), snapshot.getPriority()]);
+         }
+      };
+
+      // this is locally scoped because it is referencing list
+      // the performance of this could be improved by reducing these closure scopes
+      self.dispose = function() {
+         if( !self.disposed ) {
+            self.disposed = true;
+            base.child(self.table).child(self.key).off('value', self.trigger);
+            var idx = _.indexOf(list, self);
+            if( idx >= 0 ) {
+               list.slice(idx, 1);
+            }
+         }
+      };
+
+      list.push(self);
+      base.child(self.table).child(self.key).on('value', self.trigger);
+   }
+
+   RecordObserver.prototype.equals = function(o) {
+      return o instanceof RecordObserver && this.matches(o);
+   };
+
+   RecordObserver.prototype.matches = function(o) {
+      return o
+         && this.callback === o.callback
+         && this.table === o.table
+         && this.key === o.key;
+   };
+
+
+
 
    /** UTILITIES
     *****************************************************************************************/
+
+   function watchFirebase(events, table) {
+      _.each(events, function(fx, key) {
+         table.on(key, fx);
+      });
+   }
+
+   function unwatchFirebase(events, table) {
+      _.each(events, function(fx, key) {
+         table.off(key, fx);
+      });
+   }
 
    /**
     * Create or load a record to receive data. If `key` is provided, then the record is created
@@ -3643,14 +3812,35 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
     * @private
     */
    function _createRecord(table, key, data, sortPriority) {
-      var def = $.Deferred(), ref, cb = function(success) { def.resolve(success, ref.name()); };
+      var def = $.Deferred(), ref,
+          cb = function(success) { success? def.resolve(ref.name()) : def.reject(ref.name()); };
       if( key.isSet() ) {
          ref = table.child(key.hashKey());
-         (sortPriority && ref.setWithPriority(data, sortPriority, cb)) || ref.set(data, cb);
+         if( sortPriority ) {
+            ref.setWithPriority(data, sortPriority, cb);
+         }
+         else {
+            ref.set(data, cb);
+         }
+      }
+      else if( sortPriority ) {
+         ref = table.push(data);
+         ref.setPriority(sortPriority, cb);
       }
       else {
          ref = table.push(data, cb);
-         if( sortPriority ) { ref.setPriority(sortPriority); }
+      }
+      return def.promise();
+   }
+
+   function _updateRecord(table, hashKey, data, sortPriority) {
+      var def = $.Deferred(),
+          ref = table.child(hashKey);
+      if( sortPriority ) {
+         ref.setWithPriority(data, sortPriority, def.resolve);
+      }
+      else {
+         ref.set(data, def.resolve);
       }
       return def.promise();
    }
@@ -3714,15 +3904,23 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    }
 
    function _formatDate(v) {
-      if( typeof(v) === 'object' ) {
-         if( v.toISOString ) {
-            return v.toISOString();
-         }
-         else if( typeof(moment) === 'object' && moment.isMoment && moment.isMoment(v) ) {
-            return moment.defaultFormat()
-         }
+      switch(typeof(v)) {
+         case 'object':
+            if( typeof(moment) === 'object' && moment.isMoment && moment.isMoment(v) ) {
+               return v.utc().format();
+            }
+            else if( 'toISOString' in v ) {
+               return v.toISOString();
+            }
+            else {
+               return getDefaultValue('date');
+            }
+         case 'string':
+         case 'number':
+            return moment(v).format();
+         default:
+            return getDefaultValue('date');
       }
-      return getDefaultValue('date');
    }
 
    function _keyFor(recOrId) {
@@ -3734,16 +3932,27 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       }
    }
 
-   if (!Date.prototype.toISOString) {
-      Date.prototype.toISOString = function() {
-         function pad(n) { return n < 10 ? '0' + n : n }
-         return this.getUTCFullYear() + '-'
-               + pad(this.getUTCMonth() + 1) + '-'
-               + pad(this.getUTCDate()) + 'T'
-               + pad(this.getUTCHours()) + ':'
-               + pad(this.getUTCMinutes()) + ':'
-               + pad(this.getUTCSeconds()) + 'Z';
-      };
+   if ( !Date.prototype.toISOString ) {
+      (function() {
+         function pad(number) {
+            var r = String(number);
+            if ( r.length === 1 ) {
+               r = '0' + r;
+            }
+            return r;
+         }
+
+         Date.prototype.toISOString = function() {
+            return this.getUTCFullYear()
+               + '-' + pad( this.getUTCMonth() + 1 )
+               + '-' + pad( this.getUTCDate() )
+               + 'T' + pad( this.getUTCHours() )
+               + ':' + pad( this.getUTCMinutes() )
+               + ':' + pad( this.getUTCSeconds() )
+               + '.' + String( (this.getUTCMilliseconds()/1000).toFixed(3) ).slice( 2, 5 )
+               + 'Z';
+         };
+      }());
    }
 
    /**
@@ -3767,6 +3976,69 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    }
 
    var Util = FirebaseStore.Util = {
+
+      /**
+       * Returns a promise which resolves to number of records iterated. The snapshots for each record are passed into
+       * `fx`. The iteration of values stops if `fx` returns true.
+       *
+       * @param {Firebase}         table
+       * @param {Function} [fx]    passed into forEach() on each iteration, see http://www.firebase.com/docs/datasnapshot/foreach.html
+       * @return {jQuery.Deferred} a promise resolved to number of records iterated
+       */
+      each: function(table, fx) {
+         return this.snap(table).pipe(function(snapshot) {
+            var def = $.Deferred(), count = 0;
+            try {
+               snapshot.forEach(function(snapshot) {
+                  count++;
+                  return fx && fx(snapshot.val(), snapshot.name());
+               });
+               def.resolve(count);
+            }
+            catch(e) {
+               def.reject(e);
+            }
+            return def.promise();
+         });
+      },
+
+
+      /**
+       * Retrieves all child snapshots from the table which match given criteria.
+       *
+       * `filterCriteria` exactly matches the FirebaseStore.query and FirebaseStore.count() methods.
+       *
+       * If iterator returns true, then the filter operation is ended immediately
+       *
+       * @param {Model}            model
+       * @param {Firebase}         base
+       * @param {Function|Object}  filterCriteria see description
+       * @param {Function}         [iterator] called each time a match is found with function(recordData, recordId)
+       * @return {jQuery.Deferred} resolves to number of records matched when operation completes
+       */
+      filter: function(model, base, filterCriteria, iterator) {
+         var opts    = ko.utils.extend({limit: 0, offset: 0, where: null, sort: null}, filterCriteria),
+            table    = Util.ref(base, model.table, opts),
+            start    = ~~opts.offset,
+            end      = opts.limit? start + ~~opts.limit : 0,
+            curr     = -1,
+            matches  = 0;
+         _buildFilter(opts);
+         return Util.each(table, function(data, id) {
+            if( data !== null && (!opts.filter || opts.filter(data, id)) ) {
+               curr++;
+               //todo-sort
+               if( end && curr == end ) {
+                  return true;
+               }
+               else if( curr >= start ) {
+                  matches++;
+                  return iterator && iterator(data, id);
+               }
+            }
+         }).pipe(function(ct) { return matches; });
+      },
+
       /**
        * Returns a snapshot of the current reference
        * @param {Firebase} ref
@@ -3782,51 +4054,26 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       },
 
       /**
-       * Returns a promise which resolves to a hash containing name/val for each record. Also accepts an optional
-       * function which is invoked for each snapshot value. The iteration of values stops if `fx` returns true.
-       *
-       * @param {Firebase} parentRef
-       * @param {Function} [fx] passed into forEach() on each iteration, see http://www.firebase.com/docs/datasnapshot/foreach.html
-       * @return {jQuery.Deferred} a promise
-       */
-      each: function(parentRef, fx) {
-         return this.snap(parentRef).pipe(function(snapshot) {
-            var def = $.Deferred(), vals = [], ret;
-            try {
-               snapshot.forEach(function(childSnapshot) {
-                  vals.push({name: childSnapshot.name(), val: childSnapshot.val()});
-                  return fx && fx(childSnapshot);
-               });
-               def.resolve(vals);
-            }
-            catch(e) {
-               def.reject(e);
-            }
-            return def.promise();
-         });
-      },
-
-      /**
-       * @param {Firebase} parentRef
+       * @param {Firebase} table
        * @param {String}   childPath the child object to retrieve and get the value for
        * @return {jQuery.Deferred} a promise
        */
-      val: function(parentRef, childPath) {
+      val: function(table, childPath) {
          var def = $.Deferred(), to = _timeout(def);
-         parentRef.child(childPath).once('value', function(snapshot) {
+         table.child(childPath).once('value', function(snapshot) {
             clearTimeout(to);
-            def.resolve(snapshot.val());
+            def.resolve(snapshot);
          });
          return def.promise();
       },
 
       /**
-       * @param {Firebase} parentRef
+       * @param {Firebase} table
        * @param {string|object|function} childPath
        * @return {jQuery.Deferred} resolves with child snapshot if it exists or fails if it does not
        */
-      require: function(parentRef, childPath) {
-         return this.find(parentRef, childPath).pipe(function(snapshot) {
+      require: function(table, childPath) {
+         return this.find(table, childPath).pipe(function(snapshot) {
             if( snapshot === null ) {
                return $.Deferred().reject('child not found: '+childPath);
             }
@@ -3837,17 +4084,14 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       },
 
       /**
-       * @param {Firebase} parentRef
+       * @param {Firebase} table
        * @param {string} childPath
        * @return {jQuery.Deferred} resolves to true if childPath exists or false if not
        */
-      has: function(parentRef, childPath) {
-         var def = $.Deferred(), to = _timeout(def);
-         parentRef.child(childPath).once('value', function(snapshot) {
-            clearTimeout(to);
-            def.resolve(snapshot.val() !== null);
+      has: function(table, childPath) {
+         return Util.val(table, childPath).pipe(function(ss) {
+            return ss.val() !== null;
          });
-         return def.promise();
       },
 
       /**
@@ -3860,21 +4104,21 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        * If the criteria is a Function, then the object is passed in to that function to be compared. It must return
        * true or false.
        *
-       * @param {Firebase} parentRef
+       * @param {Model}            model
+       * @param {Firebase}         base
        * @param {string|Function|object} matchCriteria see description
        * @return {jQuery.Deferred} a promise which resolves to the snapshot of child or null if not found
        */
-      find: function(parentRef, matchCriteria) {
+      find: function(model, base, matchCriteria) {
+         var table = Util.ref(base, model.table, matchCriteria);
          if( typeof(matchCriteria) === 'string' ) {
-            return this.val(parentRef, matchCriteria);
+            return Util.val(table, matchCriteria);
          }
          else {
-            var matchFxn = _matchFxn(matchCriteria), def = $.Deferred();
-            this.each(parentRef, function(snapshot) {
-               if( matchFxn(snapshot) ) {
-                  def.resolve(snapshot);
-                  return true;
-               }
+            var def = $.Deferred();
+            this.filter(table, {'where': matchCriteria}, function(snapshot) {
+               def.resolve(snapshot);
+               return true;
             });
             if( !def.isResolved() ) { def.resolve(null); }
             return def.promise();
@@ -3882,49 +4126,57 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       },
 
       /**
-       * Retrieves all child snapshots from the parentRef which match criteria.
+       * This method retrieves a reference to a data path. It attempts to apply start/end/offset/limit at the Firebase
+       * level to speed things up a bit. However, there are a couple very significant limitations and coupling
+       * issues to keep in mind.
        *
-       * If the criteria is a Function, then the snapshot is passed in to that function to be compared. It must return
-       * true or false.
+       * Firstly, when using `criteria.when`, then `limit` is not applied, as this would prevent the filter
+       * operations from working correctly.
        *
-       * If the criteria is an Object, it's treated as key/value pairs representing fields on the child which must
-       * match. Objects are compared with _.isEqual(...), strings/numbers/null/booleans are compared with ===.
-       * Functions are invoked with arguments `value, key, snapshot` and must return true (keep) or false (discard).
+       * Secondly, `offset` is not handled here and is the duty of the caller to enforce. All we do here is apply
+       * a limit that accounts for offset (by adding offset onto the limit amount) so that enough records are retrieved
+       * to account for the offset. The caller must still manually strip off the offset amount (unh).
        *
-       * @param {Firebase} parentRef
-       * @param {Function|object}  filterCriteria see description
-       * @return {jQuery.Deferred} a promise which resolves to the {object} record after it is retrieved (or null if not found)
+       * //todo improve this somehow when Firebase adds some more query related API features
+       *
+       * @param {Firebase} root
+       * @param {string} tableName
+       * @param {object} [criteria]
+       * @return {*}
        */
-      filter: function(parentRef, filterCriteria) {
-         var matchFxn = _matchFxn(filterCriteria), def = $.Deferred();
-         return $.when(function() {
-            var vals = [];
-            this.each(parentRef, function(snapshot) {
-               matchFxn(snapshot) && vals.push(snapshot);
-            });
-            return vals;
-         });
+      ref: function(root, tableName, criteria) {
+         criteria || (criteria = {});
+         var table = root.child(tableName),
+              limit = Math.abs(~~criteria.limit);
+         // if a starting point is given, that's where we begin iterating
+         if( criteria.start ) {
+            table = table.startAt(criteria.start, criteria.startId);
+         }
+         // if an ending point is given, that's where we stop iterating
+         if( criteria.end ) {
+            table = table.endAt(criteria.end, criteria.endId);
+         }
+         // we can't apply limit from here if we're going to filter the results (we want 100 filtered records,
+         // not 100 minus those that don't match) so we skip the limit from here. Le sigh. This is yet another
+         // very significant bit of coupling
+         if( limit && !criteria.where ) {
+            if( !criteria.start && !criteria.end ) {
+               // if the list is open ended, we can use an offset, otherwise start/end are the offset
+               // we have a pretty big limitation with offset; we're depending on the caller to deal with that
+               // and we simply increase our limit to accommodate; sadly not much else we can do until someone
+               // brighter reads this and invents something genius to replace it
+               limit += ~~criteria.offset; //todo-test
+               if( criteria.limit < 0 ) {
+                  // if the limit is negative, it means to work backwards from the end instead of
+                  // upwards from the start, so adding an endAt() will have this effect (right?) //todo-test
+                  table = table.endAt();
+               }
+            }
+            table = table.limit(limit);
+         }
+         return table;
       }
    };
-
-   function _matchFxn(criteria) {
-      if(_.isFunction(criteria)) {
-         return criteria;
-      }
-      else {
-         return function(snapshot) {
-            var val = snapshot.val();
-            if( val === null ) { return false; }
-            _.any(val, function(v, k) {
-               if( k in this ) {
-                  switch(typeof(this[k])) {
-
-                  }
-               }
-            }, criteria);
-         }
-      }
-   }
 
    /**
     * @param {jQuery.Deferred} def
@@ -3936,6 +4188,67 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       return setTimeout(function() {
          def.reject('timed out');
       }, timeout||15000);
+   }
+
+   function _buildFilter(opts) {
+      var w =  'where' in opts? opts.where : null;
+      if( w ) {
+         switch(typeof(w)) {
+            case 'object':
+               // convert to a function
+               opts.filter = _filterFromParms(w);
+               break;
+            case 'function':
+               opts.filter = opts.where;
+               break;
+            default:
+               throw new Error('Invalid `when` type ('+typeof(opts.when)+')');
+         }
+      }
+      else {
+         opts.filter = null;
+      }
+   }
+
+   function _filterFromParms(where) {
+      return function(data, key) {
+         return _.every(where, function(v, k) {
+            if( !(k in data) ) { return false; }
+            switch(typeof(v)) {
+               case 'function':
+                  return v(data[k], k, key);
+               case 'object':
+                  if( v === null ) { return data[k] === null; }
+                  return _.isEqual(v, data[k]);
+               case 'number':
+                  return v === ~~data[k];
+               case 'undefined':
+                  return data[k] === undef;
+               default:
+                  return v == data[k];
+            }
+         });
+      }
+   }
+
+   function processSync(def, id) {
+      return function(success) {
+         if( success ) {
+            def.resolve(id);
+         }
+         else {
+            def.reject('synchronize failed');
+         }
+      }
+   }
+
+   function _pipedSync(key) {
+      return function(success) {
+         return $.Deferred(function(def) {
+            if( success ) { def.resolve(key, true); }
+            else { def.reject('synchronize failed'); }
+         });
+      }
    }
 
    /** ADD TO NAMESPACE

@@ -1,4 +1,4 @@
-/*! Knockout Sync - v0.1.0 - 2012-07-19
+/*! Knockout Sync - v0.1.0 - 2012-08-03
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL */
 
@@ -170,7 +170,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
             _resolve(def, shared, args);
          });
       }, function() {
-         def.reject.apply(def, _result(arguments));
+         def.reject.apply(def, $.makeArray(arguments));
       });
       return this;
    };
@@ -1477,69 +1477,6 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
 
 })(jQuery);
 
-
-(function(console) {
-   /*********************************************************************************************
-    * Make sure console exists because IE blows up if it's not open and you attempt to access it
-    * Create some dummy functions if we need to, so we don't have to if/else everything
-    *********************************************************************************************/
-   console||(console = window.console = {
-      /** @param {...*} */
-      log: function() {},
-      /** @param {...*} */
-      info: function() {},
-      /** @param {...*} */
-      warn: function() {},
-      /** @param {...*} */
-      error: function() {}
-   });
-
-   // le sigh, IE, oh IE, how we fight... fix Function.prototype.bind as needed
-   if (!Function.prototype.bind) {
-      Function.prototype.bind = function (oThis) {
-         if (typeof this !== "function") {
-            // closest thing possible to the ECMAScript 5 internal IsCallable function
-            throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable");
-         }
-
-         var aArgs = Array.prototype.slice.call(arguments, 1),
-               fToBind = this,
-               fNOP = function () {},
-               fBound = function () {
-                  return fToBind.apply(this instanceof fNOP
-                        ? this
-                        : oThis || window,
-                        aArgs.concat(Array.prototype.slice.call(arguments)));
-               };
-
-         fNOP.prototype = this.prototype;
-         fBound.prototype = new fNOP();
-
-         return fBound;
-      };
-   }
-
-   // IE 9 won't allow us to call console.log.apply (WTF IE!) It also reports typeof(console.log) as 'object' (UNH!)
-   // but together, those two errors can be useful in allowing us to fix stuff so it works right
-   if( typeof(console.log) === 'object' ) {
-      // Array.forEach doesn't work in IE 8 so don't try that :(
-      console.log = Function.prototype.call.bind(console.log, console);
-      console.info = Function.prototype.call.bind(console.info, console);
-      console.warn = Function.prototype.call.bind(console.warn, console);
-      console.error = Function.prototype.call.bind(console.error, console);
-   }
-
-   /**
-    * Support group and groupEnd functions
-    */
-   ('group' in console) || (console.group = function(msg) {
-      console.log("\n------------\n"+msg+"\n------------");
-   });
-   ('groupEnd' in console) || (console.groupEnd = function() {
-      //console.log("\n\n");
-   });
-
-})(window.console);
 //     Underscore.js 1.3.3
 //     (c) 2009-2012 Jeremy Ashkenas, DocumentCloud Inc.
 //     Underscore is freely distributable under the MIT license.
@@ -2849,6 +2786,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
 (function(ko) {
    "use strict";
 
+   var modelInst = 1;
    var Model = Class.extend({
       /**
        * @param {object} props
@@ -2862,6 +2800,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
          this.sort       = props.sortField;
          this.validator  = props.validator;
          this.auto       = props.autoSync;
+         this.inst       = modelInst++;
          this.fields     = _processFields(defaults, props.fields);
          this.factory    = props.recordFactory || new RecordFactory(this);
       },
@@ -2874,7 +2813,16 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        */
       newRecord: function(data) {
          return this.factory.create(data);
+      },
+
+      toString: function() {
+         return this.table+'['+this.inst+']';
       }
+
+      //todo-api manual save
+
+      //todo-api manual sync
+
    });
    Model.FIELD_DEFAULTS = {
       type:      'string',
@@ -2883,7 +2831,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       observe:   true,
       minLength: 0,
       maxLength: 0,
-      sortField: null,
+      sortField: null, //todo unused?
       valid:     null, //todo tie this to this.validator?
       updateCounter: 'update_counter',
       autoSync:  false,
@@ -2902,7 +2850,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    }
 
    function _applyDefault(o) {
-      if( !o.hasOwnProperty('default') || !exists(o.default) ) {
+      if( !o.hasOwnProperty('default') || !_.has(o, 'default') ) {
          switch(o.type) {
             case 'boolean':
                o.default = false;
@@ -3028,17 +2976,35 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    });
 
    function _setFields(fields, data) {
+      //todo validate the data before applying it somehow
       var k, out = {}, keys = _.keys(fields), i = keys.length;
       while(i--) {
          k = keys[i];
-         if( data.hasOwnProperty(k) && exists(data[k]) ) {
-            out[k] = data[k];
-         }
-         else {
-            out[k] = fields[k].default;
-         }
+         out[k] = _value(k, fields, data);
       }
       return out;
+   }
+
+   function _value(k, fields, data) {
+      var field = fields[k];
+      if( data.hasOwnProperty(k) && exists(data[k]) ) {
+         var v = data[k];
+         switch(field.type) {
+            case 'date':
+               return moment(v).utc().toDate();
+            case 'int':
+               return ~~v;
+            case 'float':
+               v = parseFloat(v);
+               if( isNaN(v) ) { return field.default; }
+               else { return v; }
+            default:
+               return v;
+         }
+     }
+      else {
+         return field.default;
+      }
    }
 
    function exists(v) {
@@ -3052,11 +3018,9 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       }
    }
 
-   ko.sync || (ko.sync = {});
    ko.sync.Record = Record;
 
 })(this.ko);
-
 
 /*******************************************
  * RecordId class for knockout-sync
@@ -3219,10 +3183,6 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
          delete this.recs[key];
          ko.utils.arrayRemoveItem(this.recs, record);
       }
-      else {
-         console.log('could not find record', recordOrId);
-         console.log(this.recs);
-      }
    };
 
    /**
@@ -3278,11 +3238,9 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    function _findRecord(list, recOrId) {
       var key = _keyFor(recOrId);
       if( key === null ) {
-         console.log('no key for '+recOrId);
          return null;
       }
       else {
-         console.log('key for '+recOrId);
          return list[ key.hashKey() ];
       }
    }
@@ -3321,7 +3279,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        *
        * @param {ko.sync.Model} model
        * @param {ko.sync.Record} record
-       * @return {Promise} a jQuery.Deferred().promise() object
+       * @return {Promise} resolves to the new record's ID or rejects if it could not be created
        */
       create: function(model, record) { throw new Error('Interface not implemented'); },
 
@@ -3345,7 +3303,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        *
        * @param {ko.sync.Model}  model
        * @param {ko.sync.Record} rec
-       * @return {Promise} resolves to true if an update occurred or false if data was not dirty
+       * @return {Promise} resolves to callback({string}id, {boolean}changed) where changed is false if data was not dirty, rejected if record does not exist
        */
       update: function(model, rec) { throw new Error('Interface not implemented'); },
 
@@ -3360,35 +3318,39 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       delete: function(model, recOrId) { throw new Error('Interface not implemented'); },
 
       /**
-       * Perform a query against the database. The options for query are fairly limited:
+       * Perform a query against the database. The `filterCriteria` options are fairly limited:
        *
        * - limit:   {int=100}         number of records to return, use 0 for all
-       * - offset:  {int=0}           starting point in records, e.g.: {limit: 100, start: 101} would return records 101-200
-       * - when:    {function|object} filter rows using this function or value map
+       * - offset:  {int=0}           exclusive starting point in records, e.g.: {limit: 100, offset: 100} would return records 101-200 (the first record is 1 not 0)
+       * - start:   {int=0}           using the sortField's integer values, this will start us at record matching this sort value
+       * - end:     {int=-1}          using the sortField's integer values, this will end us at record matching this sort value
+       * - where:   {function|object} filter rows using this function or value map
        * - sort:    {array|string}    Sort returned results by this field or fields. Each field specified in sort
        *                              array could also be an object in format {field: 'field_name', desc: true} to obtain
        *                              reversed sort order
        *
-       * USE OF WHEN
-       * -------------
-       * If `when` is a function, it is always applied after the results are returned. Thus, when used in conjunction
-       * with `limit`, there may (and probably will) be less results than `limit` en toto.
+       * Start/end are more useful with sorted records (and faster). Limit/offset are slower but can be used with
+       * unsorted records. Additionally, limit/offset will work with where conditions. Obviously, `start`/`end` are hard
+       * limits and only records within this range, matching `where`, up to a maximum of `limit` could be returned.
        *
-       * If `filter` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
+       * USE OF WHERE
+       * -------------
+       * If `where` is a function, it is always applied after the results are returned. Thus, when used in conjunction
+       * with `limit`, the server may still need to retrieve all records before applying limit.
+       *
+       * If `where` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
        * the store. For SQL-like databases, it may be part of the query. For data stores like Firebase, or
        * other No-SQL types, it could require fetching all results from the table and filtering them on return. So
        * use this with discretion.
        *
-       * THE PROGRESS FUNCTION
+       * THE ITERATOR
        * ---------------------
-       * Each record received is handled by `progressFxn`. When no limit is set, stores may never fulfill
-       * the promise. This is a very important point to keep in mind.
+       * Each record received is handled by `iterator`. If iterator returns true, then the iteration is stopped. The
+       * iterator should be in the format `function(data, id, index)` where data is the record and index is the count
+       * of the record starting from 0
        *
-       * Additionally, even if a limit is set, if the number of results is less than limit, the promise may
-       * still never fulfill (as stores will not fulfill until the required number of results is reached).
-       *
-       * In the case of a failure, the fail() method on the promise will always be notified immediately, and the load
-       * operation will end immediately.
+       * In the case of a failure, the fail() method on the promise will always be notified immediately,
+       * and the load operation will end immediately.
        *
        * PERFORMANCE
        * -----------
@@ -3401,26 +3363,57 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        * Alternately, very sophisticated queries could be done external to the knockout-sync module and then
        * injected into the synced data after.
        *
-       * @param {Function} progressFxn
+       * @param {Function} iterator
        * @param {ko.sync.Model}  model
-       * @param {object} [parms]
+       * @param {object} [filterCriteria]
        * @return {Promise}
        */
-      query: function(progressFxn, model, parms) { throw new Error('Interface not implemented'); },
+      query: function(model, iterator, filterCriteria) { throw new Error('Interface not implemented'); },
 
       /**
-       * Given a particular data model, get notifications of any changes to the data. The change notifications will
-       * come in the form:
+       * Given a particular data model, get a count of all records in the database matching
+       * the parms provided. The `filterCriteria` object is the same as query() method, in the format `function(data, id, index)`.
        *
-       *   - callback('added', {string}record_id, {object}hash_of_name_value_pairs)
-       *   - callback('deleted', {string}record_id)
-       *   - callback('updated', {string}record_id, {object}hash_of_name_value_pairs)
+       * This could be a very high-cost operation depending on the data size and the data source (it could require
+       * iterating every record in the table) for some data layers.
        *
        * @param {ko.sync.Model} model
-       * @param {Function} callback
-       * @return {Store} this
+       * @param {object}        [filterCriteria]
        */
-      sync: function(model, callback) { throw new Error('Interface not implemented'); }
+      count: function(model, filterCriteria) { throw new Error('Interface not implemented'); },
+
+      /**
+       * True if this data layer provides push updates that can be monitored by the client.
+       * @return {boolean}
+       */
+      hasTwoWaySync: function() { throw new Error('Interface not implemented'); },
+
+      /**
+       * Given a particular data model, notify `callback` any time any record is added, updated, deleted, or moved.
+       *
+       * The return value is an Object which contains a dispose() method to stop observing the data layer's
+       * changes.
+       *
+       * @param  {ko.sync.Model} model
+       * @param  {Function}     callback
+       * @param  {object}       [filterCriteria]
+       * @return {Object}
+       */
+      watch: function(model, callback, filterCriteria) { throw new Error('Interface not implemented'); },
+
+      /**
+       * Given a particular record, invoke `callback` any time the data changes. This does not get invoked for
+       * add/delete/moved events. We must monitor the entire model for that.
+       *
+       * The return value is an Object which contains a dispose() method to stop observing the data layer's
+       * changes.
+       *
+       * @param {ko.sync.Model}  model
+       * @param {ko.sync.Record} record
+       * @param  {Function}      callback
+       * @return {Object}
+       */
+      watchRecord: function(model, record, callback) { throw new Error('Interface not implemented'); }
 
    });
 

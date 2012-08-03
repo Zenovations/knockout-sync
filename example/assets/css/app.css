@@ -51,3 +51,7 @@ form .help-block {
 .nav-tabs li.separator {
    width: 200px;
 }
+
+.btn [class^="icon-"], .nav-tabs [class^="icon-"], .btn [class*=" icon-"], .nav-tabs [class*=" icon-"] {
+   line-height: inherit;
+}

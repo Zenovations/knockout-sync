@@ -40,7 +40,6 @@
    Controller.addStore('muck', 'Firebase', new Firebase('http://gamma.firebase.com/wordspot/muck'), 'http://gamma.firebase.com/wordspot/muck');
    Controller.addStore('sync', 'Firebase', new Firebase('http://gamma.firebase.com/wordspot/SYNC'), 'http://gamma.firebase.com/wordspot/SYNC');
 
-
    /** StoresPanel
     ********************************************************/
    var StoresPanel = {
@@ -99,20 +98,13 @@
       models: Controller.loadedModels,
       EditPanel: new (function() {
          var self = this, $modal;
-         self.modal = function(form) {
-            var $form = $(form);
-            $modal = createModal($.extend({
-               title: 'Create a Model',
-               body: '<div data-bind="template: \'form-create-model\'"></div>',
-               storeNames: Controller.storeNames()
-            }, self));
-         };
          self.fillModelForm = function(form) {
             console.log('fillModelForm', form, this);
          };
          self.createModel = function(form) {
             console.log('createModel', form, this);
          };
+         self.storeNames = Controller.storeNames;
       })
    };
    Controller.setPanel('ModelsPanel', ModelsPanel);
@@ -142,14 +134,24 @@
    ko.bindingHandlers.partial = {
       init: function(element, valAccessor, allAccessor, view, bindContext) {
          var val = valAccessor(), props = $.extend({
-                  ctx: view, name: null, after: '' },
-               typeof(val) === 'object'? val : {name: val});
+               ctx: view, name: null, after: '' },
+            typeof(val) === 'object'? val : {name: val});
          if( props.panel ) {
             props.ctx = Controller.bindPanel(props.panel, bindContext);
          }
          _after(props.after).done(loadPartial($(element), props.name, props.ctx));
          // Also tell KO *not* to bind the descendants itself, otherwise they will be bound twice
          return { controlsDescendantBindings: (props.ctx? true : false) };
+      }
+   };
+
+   ko.bindingHandlers.slideToggle = {
+      init: function(element, valAccessor, allAccessor, view, bindContext) {
+         var props = $.extend({}, valAccessor()), $target = $(props.target), $button = $(element);
+         $button.click(function() {
+            $target.slideToggle().toggleClass('active');
+            $button.toggleClass('btn-primary').text($button.hasClass('btn-primary')? 'Add a Model' : 'Cancel');
+         });
       }
    };
 
