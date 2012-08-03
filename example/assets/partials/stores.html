@@ -2,50 +2,72 @@
 <div class="container">
     <div class="row">
         <div class="span12" data-bind="with: EditPanel">
-            <button data-bind="click: storeModal" class="btn btn-small btn-primary">Create Store</button>
+            <button data-bind="click: storeModal" class="btn btn-small btn-primary">Add a Store</button>
         </div>
     </div>
     <div class="row">
         <div class="span12">
-            <div data-bind="visible: $root.hasStores, template: {name: 'store-list-template', foreach: $root.stores}"></div>
-            <div data-bind="visible: !$root.hasStores()">No stores yet.</div>
+            <div data-bind="visible: $root.hasStores, template: 'store-list-template'"></div>
+            <div data-bind="visible: !$root.hasStores()">No stores added yet.</div>
         </div>
     </div>
 </div>
 
 <script type="text/html" id="store-list-template">
-    <p><span data-bind="text: name"></span> (<span data-bind="text: type"></span>)</p>
+   <table class="table table-striped">
+      <thead>
+         <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Details</th>
+            <th>&nbsp;</th>
+         </tr>
+      </thead>
+      <tbody data-bind="foreach: $root.stores">
+         <tr>
+            <td data-bind="text: name"></td>
+            <td data-bind="text: type"></td>
+            <td data-bind="text: desc"></td>
+            <td></td>
+         </tr>
+      </tbody>
+   </table>
 </script>
 
 <script type="text/html" id="form-create-store">
-    <form data-bind="submit: createStore, validate: true">
-        <select class="input-medium" name="storeType"
-                data-bind="options: storeTypes, value: storeType"></select>
-        <div data-bind="template: {name: storeTemplate()}"></div>
-    </form>
+   <form class="form-horizontal" data-bind="submit: createStore, validate: true">
+      <div class="control-group">
+         <label class="control-label" for="instanceUrl">Store Type</label>
+         <div class="controls">
+            <select class="input-medium" name="storeType"
+                    data-bind="options: storeTypes, value: storeType"></select>
+         </div>
+      </div>
+      <!-- ko template: {name: storeTemplate()} --><!-- /ko -->
+      <button type="submit" class="btn btn-primary pull-right">Add Store</button>
+   </form>
 </script>
 
 <script type="text/html" id="storetypes-select">Select a type</script>
 
 <script type="text/html" id="storetypes-Firebase">
-    <fieldset>
-        <div class="control-group">
-            <label class="control-label" for="instanceUrl">Base URL</label>
-            <div class="controls">
-                <input type="text" class="baseUrl input-xlarge required url" id="instanceUrl"
-                       placeholder="http://demo.firebase.com/youraccount"
-                       data-bind="value: baseUrl, valueUpdate: 'afterkeydown'">
-                <p class="help-block">This is the URL to your Firebase instance</p>
-            </div>
-        </div>
-        <div class="control-group">
-            <label class="control-label" for="instanceName">Instance Name</label>
-            <div class="controls">
-                <input type="text" class="baseUrl input-medium required" id="instanceName"
+      <fieldset>
+           <div class="control-group">
+               <label class="control-label" for="instanceUrl">Base URL</label>
+               <div class="controls">
+                   <input type="text" class="baseUrl input-xlarge required url" name="instanceUrl" id="instanceUrl"
+                          placeholder="http://demo.firebase.com/youraccount"
+                          data-bind="value: baseUrl, valueUpdate: 'afterkeydown'">
+                   <p class="help-block">This is the URL to your Firebase instance</p>
+               </div>
+           </div>
+          <div class="control-group">
+             <label class="control-label" for="instanceName">Instance Name</label>
+             <div class="controls">
+                <input type="text" class="input-medium uniqueStoreName" name="instanceName" id="instanceName"
                        data-bind="value: baseName">
-                <p class="help-block">A name you can use to reference the connection</p>
-            </div>
-        </div>
-        <button type="submit" class="btn btn-primary">Create</button>
-    </fieldset>
+                <p class="help-block">Just a name to identify the connection</p>
+             </div>
+          </div>
+      </fieldset>
 </script>

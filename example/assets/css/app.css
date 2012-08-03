@@ -1,1 +1,53 @@
 
+body {
+   padding-top: 10px;
+}
+
+#panelBox {
+   border: 1px solid #DDDDDD;
+}
+
+#panelBox .nav-tabs {
+   padding-left: 15px;
+   background-color: #fafafa;
+}
+
+#panels {
+   margin: 0 10px 10px 15px;
+}
+
+input::-webkit-input-placeholder,
+.success input::-webkit-input-placeholder,
+.error input::-webkit-input-placeholder {
+   color:    #aad;
+}
+input:-moz-placeholder,
+.success input:-moz-placeholder,
+.error input:-moz-placeholder {
+   color:    #aad;
+}
+
+form .help-block {
+   color: #999;
+   font-style: italic;
+   font-size: .8em;
+}
+
+.control-group.success > label,
+.control-group.success .help-block,
+.control-group.success .help-inline {
+   color: inherit;
+}
+
+.control-group.error .help-block {
+   color: inherit;
+}
+
+.showMe {
+   background-color: #eee;
+   border: 1px solid red;
+}
+
+.nav-tabs li.separator {
+   width: 200px;
+}

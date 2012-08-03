@@ -49,7 +49,7 @@
       observe:   true,
       minLength: 0,
       maxLength: 0,
-      sortField: null,
+      sortField: null, //todo unused?
       valid:     null, //todo tie this to this.validator?
       updateCounter: 'update_counter',
       autoSync:  false,

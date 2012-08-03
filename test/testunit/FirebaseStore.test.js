@@ -99,6 +99,36 @@ jQuery(function($) {
 
    module("FirebaseStore");
 
+   asyncTest('#pop', function() {
+      var store = resetStore();
+      $.Deferred().resolve()
+            .pipe(function() {
+                return TestData.bigData.reset(syncRoot);
+            })
+            .pipe(function(ref) {
+               return $.Deferred(function(def) {
+                  // retrieve the last record from `ref`
+                  ref.endAt().limit(0).on('child_added', function(snapshot) {
+                     console.log(snapshot.name());
+                     for(var i=201; i < 211; i++) {
+                        ref.child(i).setWithPriority(TestData.bigData.data(i), i);
+                     }
+                  });
+                  ref.endAt().on('child_removed', function(snapshot) {
+                     console.log('removed', snapshot.name());
+                  });
+                  setTimeout(function() {
+                     def.resolve();
+                  }, 5000);
+               });
+            })
+            .done(function() {
+               ok(true);
+            })
+            .fail(function(e) { console.error(e); })
+            .always(start);
+   });
+
    //todo-test test sort priorities (create/update/etc)
    asyncTest("#create (keyed record)", function() {
       var store = resetStore(), data = TestData.fullData(), model = TestData.model();
