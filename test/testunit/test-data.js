@@ -5,8 +5,8 @@
    var exports = ko.sync.TestData = {}, Model = ko.sync.Model;
 
    var genericModelProps = {
-      dataTable: 'TableKeyed',
-      primaryKey: 'id',
+      table: 'TableKeyed',
+      key: 'id',
       fields: {
          id:             { required: true,  persist: true, type: 'string' },
          stringOptional: { required: false, persist: true, type: 'string' },
@@ -25,7 +25,7 @@
    };
 
    var genericModelPropsWithSort = ko.utils.extend(
-      {sortField: 'intRequired'}, genericModelProps);
+      {sort: 'intRequired'}, genericModelProps);
 
    var genericDataWithoutId = {
       stringRequired: 'required',
@@ -146,20 +146,20 @@
    var bigDataTemplate = {
       id:             'record123',
       aString:        'a big string',
-      sortField:      10,
+      sort:      10,
       aBool:          false
    };
 
    exports.bigData = {
       COUNT: 200,
       props: {
-         dataTable: 'BigData',
-         primaryKey: 'id',
-         sortField:  'sortField',
+         table: 'BigData',
+         key: 'id',
+         sort:  'sort',
          fields: {
             id:        { required: true,  persist: true, type: 'string'  },
             aString:   { required: false, persist: true, type: 'string'  },
-            sortField: { required: false, persist: true, type: 'int'     },
+            sort: { required: false, persist: true, type: 'int'     },
             aBool:     { required: false, persist: true, type: 'boolean' }
          }
       },
@@ -184,7 +184,7 @@
        */
       data: function(id, moreData) {
          return $.extend(
-            {id: id, aString: 'string-'+id, sortField: id, aBool: (id%2 === 0)},
+            {id: id, aString: 'string-'+id, sort: id, aBool: (id%2 === 0)},
             moreData
          )
       },
@@ -201,7 +201,7 @@
             var ref = firebaseRoot.child('BigData'), max = numrecs || exports.bigData.COUNT;
             for(i=1; i <= max; i++) {
                ref.child(i).setWithPriority(
-                  {id: i, aString: 'string-'+i, sortField: i, aBool: (i%2 === 0)},
+                  {id: i, aString: 'string-'+i, sort: i, aBool: (i%2 === 0)},
                   i,
                   function() { if( ++count == max ) {
                      console.timeEnd('bigData.reset()');

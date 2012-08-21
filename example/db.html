@@ -1,0 +1,72 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+        "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+    <title>Administrate a Database</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+
+    <link rel="stylesheet" href="lib/bootstrap/css/bootstrap.css" />
+    <link rel="stylesheet" href="lib/bootstrap/css/responsive.css" />
+    <!--[if IE 7]><link rel="stylesheet" href="lib/bootstrap/css/font-awesome-ie7.css"><![endif]-->
+    <link rel="stylesheet" href="assets/css/db.css" type="text/css"/>
+
+    <!-- LIBS
+    ---------------------------------------------------------------->
+    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.js"></script>
+    <script type="text/javascript" src="lib/jquery/jquery.validate.js"></script>
+    <script type="text/javascript" src="lib/jquery/jquery.validate.bootstrap.adapter.js"></script>
+    <script type="text/javascript" src="http://static.firebase.com/v0/firebase.js"></script>
+    <script type="text/javascript" src="lib/bootstrap/js/bootstrap.js"></script>
+    <script type="text/javascript" src="lib/moment/moment.js"></script>
+    <script type="text/javascript" src="lib/knockout/knockout.min.js"></script>
+    <script type="text/javascript" src="lib/knockout/ko.mapping.min.js"></script>
+    <!--<script type="text/javascript" src="lib/path/path.min.js"></script>-->
+    <script type="text/javascript" src="../dist/knockout-sync.all.js"></script>
+    <script type="text/javascript" src="lib/js/underscore.js"></script>
+    <script type="text/javascript" src="lib/js/underscore.string.js"></script>
+
+    <!-- APP
+    ---------------------------------------------------------------->
+    <script type="text/javascript" src="assets/js/db.js"></script>
+
+</head>
+<body>
+
+<div id="panelBox">
+    <ul class="nav nav-tabs">
+        <li>
+            <a href="#stores" data-toggle="tab">Stores (<span data-bind="text: storeNames().length"></span>)</a>
+        </li>
+        <li class="active"><a href="#models" data-toggle="tab">Models (<span data-bind="text: modelsCount"></span>)</a></li>
+        <li><a href="#data" data-toggle="tab">Data</a></li>
+        <li class="separator">&nbsp;</li>
+        <!--<li class="dropdown" data-bind="visible: hasStores">-->
+        <!--<a class="dropdown-toggle" data-toggle="dropdown" href="#">-->
+        <!--<span data-bind="text: currentStore"></span>-->
+        <!--<b class="caret"></b>-->
+        <!--</a>-->
+        <!--<ul class="dropdown-menu" data-bind="foreach: stores">-->
+        <!--<li><a href="#" data-bind="text: name, click: $parent.selectStore"></a></li>-->
+        <!--</ul>-->
+        <!--</li>-->
+    </ul>
+    <div id="panels" class="tab-content">
+        <div class="panel tab-pane fade" id="stores" data-bind="partial: {name: 'stores', panel: 'StoresPanel'}"></div>
+        <div class="panel tab-pane fade active in" id="models" data-bind="partial: {name: 'models', panel: 'ModelsPanel'}"></div>
+        <div class="panel tab-pane fade" id="data" data-bind="partial: {name: 'data', panel: 'DataPanel'}"></div>
+    </div>
+</div>
+
+<script type="text/html" id="modal-template">
+    <div class="modal fade">
+        <div class="modal-header" data-bind="visible: showHeader()">
+            <a class="close pull-right" data-dismiss="modal"><i class="icon-remove"></i></a>
+            <h4 data-bind="visible: title, html: title"></h4>
+        </div>
+        <div class="modal-body" data-bind="boundHtml: body"></div>
+        <div class="modal-footer" data-bind="visible: showFooter(), html: footer"></div>
+    </div>
+</script>
+
+</body>
+</html>

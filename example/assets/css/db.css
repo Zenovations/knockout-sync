@@ -1,19 +1,7 @@
-
+/** BOOTSTRAP HACKS
+******************************************************************/
 body {
    padding-top: 10px;
-}
-
-#panelBox {
-   border: 1px solid #DDDDDD;
-}
-
-#panelBox .nav-tabs {
-   padding-left: 15px;
-   background-color: #fafafa;
-}
-
-#panels {
-   margin: 0 10px 10px 15px;
 }
 
 input::-webkit-input-placeholder,
@@ -43,6 +31,25 @@ form .help-block {
    color: inherit;
 }
 
+.btn [class^="icon-"], .nav-tabs [class^="icon-"], .btn [class*=" icon-"], .nav-tabs [class*=" icon-"] {
+   line-height: inherit;
+}
+
+/** PAGE LAYOUT
+  ******************************************************************/
+#panelBox {
+   border: 1px solid #DDDDDD;
+}
+
+#panelBox .nav-tabs {
+   padding-left: 15px;
+   background-color: #fafafa;
+}
+
+#panels {
+   margin: 0 10px 10px 15px;
+}
+
 .showMe {
    background-color: #eee;
    border: 1px solid red;
@@ -52,6 +59,3 @@ form .help-block {
    width: 200px;
 }
 
-.btn [class^="icon-"], .nav-tabs [class^="icon-"], .btn [class*=" icon-"], .nav-tabs [class*=" icon-"] {
-   line-height: inherit;
-}

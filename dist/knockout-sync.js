@@ -1,4 +1,4 @@
-/*! Knockout Sync - v0.1.0 - 2012-08-03
+/*! Knockout Sync - v0.1.0 - 2012-08-21
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL */
 
@@ -2770,10 +2770,6 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    ko.sync || (ko.sync = {});
    ko.sync.stores || (ko.sync.stores = []);
 
-   ko.sync.use = function(target, model) {}; //todo
-   ko.sync.newView = function(model) {}; //todo
-   ko.sync.newList = function(model) {}; //todo
-
    ko.sync.when   = When;
    ko.sync.handle = Handle;
 
@@ -2794,18 +2790,25 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        */
       init: function(props) {
          var defaults    = ko.utils.extend(Model.FIELD_DEFAULTS, props.defaults);
-         this.store      = props.dataStore;
-         this.table      = props.dataTable;
-         this.key        = props.primaryKey;
-         this.sort       = props.sortField;
+         this.store      = props.store;
+         this.table      = props.table;
+         this.key        = props.key;
+         this.sort       = props.sort;
          this.validator  = props.validator;
-         this.auto       = props.autoSync;
+         this.auto       = props.auto;
          this.inst       = modelInst++;
          this.fields     = _processFields(defaults, props.fields);
          this.factory    = props.recordFactory || new RecordFactory(this);
       },
 
-      applyTo: function(viewOrObject, initialData) { }, //todo
+      sync: function(listOrRecord, initialData) {
+         //todo
+         //todo
+         //todo
+         //todo
+         //todo
+         return listOrRecord;
+      },
 
       /**
        * @param {object} [data]
@@ -2813,6 +2816,18 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        */
       newRecord: function(data) {
          return this.factory.create(data);
+      },
+
+      /**
+       * @param {object} [data]
+       * @return {*}
+       */
+      newList: function(data) {
+         //todo
+         //todo
+         //todo
+         //todo
+
       },
 
       toString: function() {
@@ -2831,10 +2846,10 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       observe:   true,
       minLength: 0,
       maxLength: 0,
-      sortField: null, //todo unused?
+      sort: null, //todo unused?
       valid:     null, //todo tie this to this.validator?
       updateCounter: 'update_counter',
-      autoSync:  false,
+      auto:  false,
       format:    function(v) { return v; } //todo
    };
 
@@ -2874,7 +2889,6 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    RecordFactory.prototype.create = function(data) {
       return new ko.sync.Record(this.model, data);
    };
-
 
    ko.sync || (ko.sync = {});
 
@@ -3062,7 +3076,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    });
    RecordId.DEFAULT_SEPARATOR = '|';
    RecordId.for = function(model, record) {
-      return new RecordId(model.primaryKey, record.getData());
+      return new RecordId(model.key, record.getData());
    };
 
    function _isTempId(hash) {
@@ -3322,8 +3336,8 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
        *
        * - limit:   {int=100}         number of records to return, use 0 for all
        * - offset:  {int=0}           exclusive starting point in records, e.g.: {limit: 100, offset: 100} would return records 101-200 (the first record is 1 not 0)
-       * - start:   {int=0}           using the sortField's integer values, this will start us at record matching this sort value
-       * - end:     {int=-1}          using the sortField's integer values, this will end us at record matching this sort value
+       * - start:   {int=0}           using the sort's integer values, this will start us at record matching this sort value
+       * - end:     {int=-1}          using the sort's integer values, this will end us at record matching this sort value
        * - where:   {function|object} filter rows using this function or value map
        * - sort:    {array|string}    Sort returned results by this field or fields. Each field specified in sort
        *                              array could also be an object in format {field: 'field_name', desc: true} to obtain

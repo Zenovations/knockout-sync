@@ -4,11 +4,32 @@ jQuery(function($) {
    var undef;
 
    module("Model");
-   test("#applyTo", function() {
+
+   test("#newRecord", function() {
       //todo
    });
 
-   test("#newRecord", function() {
+   test("#newList", function() {
+      //todo
+   });
+
+   test("#toString", function() {
+      //todo
+   });
+
+   test("#sync (object)", function() {
+      //todo
+   });
+
+   test("#sync (array)", function() {
+      //todo
+   });
+
+   test("#sync (observableArray)", function() {
+      //todo
+   });
+
+   test("#sync (observable)", function() {
       //todo
    });
 

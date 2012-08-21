@@ -69,8 +69,8 @@
        *
        * - limit:   {int=100}         number of records to return, use 0 for all
        * - offset:  {int=0}           exclusive starting point in records, e.g.: {limit: 100, offset: 100} would return records 101-200 (the first record is 1 not 0)
-       * - start:   {int=0}           using the sortField's integer values, this will start us at record matching this sort value
-       * - end:     {int=-1}          using the sortField's integer values, this will end us at record matching this sort value
+       * - start:   {int=0}           using the sort's integer values, this will start us at record matching this sort value
+       * - end:     {int=-1}          using the sort's integer values, this will end us at record matching this sort value
        * - where:   {function|object} filter rows using this function or value map
        * - sort:    {array|string}    Sort returned results by this field or fields. Each field specified in sort
        *                              array could also be an object in format {field: 'field_name', desc: true} to obtain

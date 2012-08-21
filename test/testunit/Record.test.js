@@ -51,12 +51,12 @@ jQuery(function($) {
       strictEqual(_buildARecord(true).hasKey(), true, 'has a key');
 
       // composite key missing
-      rec = _buildARecord(null, false, {primaryKey: ['id', 'intRequired']});
+      rec = _buildARecord(null, false, {key: ['id', 'intRequired']});
       strictEqual(rec.hasKey(), false, 'no key on composite with null');
 
       // composite key set
       rec = _buildARecord({intRequired: 10}, true,
-         {primaryKey: ['id', 'intRequired']});
+         {key: ['id', 'intRequired']});
       strictEqual(rec.hasKey(), true, 'key set on composite');
    });
 
@@ -71,12 +71,12 @@ jQuery(function($) {
       strictEqual(_buildARecord().hashKey(), 'record123', 'has a key');
 
       // composite key with a null
-      rec = _buildARecord(null, false, {primaryKey: ['id', 'intRequired']});
+      rec = _buildARecord(null, false, {key: ['id', 'intRequired']});
       ok(rec.hashKey().match(/^tmp[.][0-9]+/) && rec.hasKey() === false, 'no key on composite with null');
 
       // composite key set
       rec = _buildARecord({intRequired: 10}, true,
-         {primaryKey: ['id', 'intRequired']});
+         {key: ['id', 'intRequired']});
       strictEqual(rec.hashKey(), 'record123|10', 'key set on composite');
    });
 

@@ -99,36 +99,6 @@ jQuery(function($) {
 
    module("FirebaseStore");
 
-   asyncTest('#pop', function() {
-      var store = resetStore();
-      $.Deferred().resolve()
-            .pipe(function() {
-                return TestData.bigData.reset(syncRoot);
-            })
-            .pipe(function(ref) {
-               return $.Deferred(function(def) {
-                  // retrieve the last record from `ref`
-                  ref.endAt().limit(0).on('child_added', function(snapshot) {
-                     console.log(snapshot.name());
-                     for(var i=201; i < 211; i++) {
-                        ref.child(i).setWithPriority(TestData.bigData.data(i), i);
-                     }
-                  });
-                  ref.endAt().on('child_removed', function(snapshot) {
-                     console.log('removed', snapshot.name());
-                  });
-                  setTimeout(function() {
-                     def.resolve();
-                  }, 5000);
-               });
-            })
-            .done(function() {
-               ok(true);
-            })
-            .fail(function(e) { console.error(e); })
-            .always(start);
-   });
-
    //todo-test test sort priorities (create/update/etc)
    asyncTest("#create (keyed record)", function() {
       var store = resetStore(), data = TestData.fullData(), model = TestData.model();
@@ -382,7 +352,7 @@ jQuery(function($) {
    asyncTest("#count where object", function() {
       expect(1);
       var store = resetStore(), bigModel = TestData.bigData.model(),
-          parms = { where: { aBool: true, sortField: function(v) { return v < 51; } } },
+          parms = { where: { aBool: true, sort: function(v) { return v < 51; } } },
           def =_deferWithTimeout();
 
       //todo-test need to test function, object, number, undefined, and "default"
@@ -469,9 +439,9 @@ jQuery(function($) {
       expect(2);
       //todo-sort
       var store = resetStore(),
-         bigModel = TestData.bigData.model({sortField: null}),
+         bigModel = TestData.bigData.model({sort: null}),
          parms = {
-            where: { aBool: true, sortField: function(v) { return v < 51; } }
+            where: { aBool: true, sort: function(v) { return v < 51; } }
          },
          iteratorCalls = 0, def = _deferWithTimeout();
 
@@ -495,7 +465,7 @@ jQuery(function($) {
    asyncTest("#query where+limit", function() {
       expect(4);
       //todo-sort
-      var store = resetStore(), bigModel = TestData.bigData.model({sortField: null}), parms = {
+      var store = resetStore(), bigModel = TestData.bigData.model({sort: null}), parms = {
          where: { aBool: false },
          limit: 75
       }, iteratorCalls = 0, def = _deferWithTimeout();
@@ -530,7 +500,7 @@ jQuery(function($) {
    asyncTest("#query (no results)", function() {
       expect(2);
       //todo-sort
-      var store = resetStore(), bigModel = TestData.bigData.model({sortField: null}),
+      var store = resetStore(), bigModel = TestData.bigData.model({sort: null}),
          parms = { where: { aString: 'not this' } }, iteratorCalls = 0, def = _deferWithTimeout();
 
       TestData.bigData.reset(syncRoot)
@@ -552,7 +522,7 @@ jQuery(function($) {
    asyncTest("#query function", function() {
       expect(2);
       var store = resetStore(),
-         bigModel = TestData.bigData.model({sortField: null}), //todo-sort
+         bigModel = TestData.bigData.model({sort: null}), //todo-sort
          parms = {
             where: function(v, k) {
                return k.match(/^1\d$/);
@@ -578,7 +548,7 @@ jQuery(function($) {
    asyncTest("#query function (no results)", function() {
       expect(2);
       //todo-sort
-      var store = resetStore(), bigModel = TestData.bigData.model({sortField: null}),
+      var store = resetStore(), bigModel = TestData.bigData.model({sort: null}),
          parms = { where: function() { return false; } }, iteratorCalls = 0,
          def = _deferWithTimeout();
 
@@ -719,7 +689,7 @@ jQuery(function($) {
          }
          else if( data.aString == 'i was changed' && !changeCalled ) {
             changeCalled = true;
-            deepEqual(data, {aString: 'i was changed', aBool: true, sortField: 100, id: '100a'});
+            deepEqual(data, {aString: 'i was changed', aBool: true, sort: 100, id: '100a'});
          }
          else {
             console.warn('what is this?', id, data);
@@ -766,7 +736,7 @@ jQuery(function($) {
    asyncTest("composite keys", function() {
       expect(5);
       var store = resetStore(),
-          model = TestData.model({primaryKey: ['id', 'stringRequired', 'intRequired']}),
+          model = TestData.model({key: ['id', 'stringRequired', 'intRequired']}),
           data = TestData.genericData({id: 'one', stringRequired: 'two', intRequired: 3}),
           record = model.newRecord(data),
           def = _deferWithTimeout(),

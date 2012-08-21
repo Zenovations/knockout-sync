@@ -1,0 +1,129 @@
+
+
+/** BOOTSTRAP HACKS
+******************************************************************/
+body {
+   padding-top: 10px;
+}
+
+input::-webkit-input-placeholder,
+.success input::-webkit-input-placeholder,
+.error input::-webkit-input-placeholder {
+   color:    #aad;
+}
+input:-moz-placeholder,
+.success input:-moz-placeholder,
+.error input:-moz-placeholder {
+   color:    #aad;
+}
+
+form .help-block {
+   color: #999;
+   font-style: italic;
+   font-size: .8em;
+}
+
+.control-group.success > label,
+.control-group.success .help-block,
+.control-group.success .help-inline {
+   color: inherit;
+}
+
+.control-group.error .help-block {
+   color: inherit;
+}
+
+.btn [class^="icon-"], .nav-tabs [class^="icon-"], .btn [class*=" icon-"], .nav-tabs [class*=" icon-"] {
+   line-height: inherit;
+}
+
+/** SIDE BAR
+  ******************************************************************/
+
+#navbar {
+   text-align: right;
+}
+
+#navbar li.active a {
+   color: green;
+}
+
+#navbar li i.icon-ok {
+   display: none;
+   float: left;
+}
+
+#navbar li.active i.icon-ok {
+   display: inline-block;
+}
+
+/** TODO LIST
+  ******************************************************************/
+
+
+#thelist ul {
+   list-style-type: none;
+   margin: 5px 0;
+}
+
+#thelist li {
+   background-color: white;
+   padding: 10px;
+   font-size: 24px;
+   line-height: 32px;
+   border: 1px solid #ccc;
+   border-radius: 10px;
+   position: relative; /* for the delete icon */
+}
+
+#thelist li h2 {
+   margin: 0;
+   padding: 0;
+   line-height: inherit;
+}
+
+#thelist li i {
+   float: right;
+   opacity: .6;
+}
+
+#thelist li:hover {
+   background-color: #ffc;
+   cursor: pointer;
+}
+
+#thelist li i[class*="icon-check"] {
+   font-size: 3em;
+   padding: 20px 0;
+}
+
+#thelist li:hover i[class*="icon-check"] {
+   opacity: 1;
+}
+
+#thelist li i.icon-check {
+   color: green;
+}
+
+#thelist li i.icon-remove-sign {
+   color: #900;
+   position: absolute;
+   display: block;
+   top: -15px;
+   right: -15px;
+   visibility: hidden;
+   padding: 5px;
+}
+
+#thelist li:hover i.icon-remove-sign {
+   visibility: visible;
+}
+
+#thelist li i.icon-remove-sign:hover {
+   opacity: 1;
+}
+
+details {
+   color: #999;
+   font-size: 16px;
+}

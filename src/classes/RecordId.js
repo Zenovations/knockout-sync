@@ -38,7 +38,7 @@
    });
    RecordId.DEFAULT_SEPARATOR = '|';
    RecordId.for = function(model, record) {
-      return new RecordId(model.primaryKey, record.getData());
+      return new RecordId(model.key, record.getData());
    };
 
    function _isTempId(hash) {

@@ -12,18 +12,25 @@
        */
       init: function(props) {
          var defaults    = ko.utils.extend(Model.FIELD_DEFAULTS, props.defaults);
-         this.store      = props.dataStore;
-         this.table      = props.dataTable;
-         this.key        = props.primaryKey;
-         this.sort       = props.sortField;
+         this.store      = props.store;
+         this.table      = props.table;
+         this.key        = props.key;
+         this.sort       = props.sort;
          this.validator  = props.validator;
-         this.auto       = props.autoSync;
+         this.auto       = props.auto;
          this.inst       = modelInst++;
          this.fields     = _processFields(defaults, props.fields);
          this.factory    = props.recordFactory || new RecordFactory(this);
       },
 
-      applyTo: function(viewOrObject, initialData) { }, //todo
+      sync: function(listOrRecord, initialData) {
+         //todo
+         //todo
+         //todo
+         //todo
+         //todo
+         return listOrRecord;
+      },
 
       /**
        * @param {object} [data]
@@ -31,6 +38,18 @@
        */
       newRecord: function(data) {
          return this.factory.create(data);
+      },
+
+      /**
+       * @param {object} [data]
+       * @return {*}
+       */
+      newList: function(data) {
+         //todo
+         //todo
+         //todo
+         //todo
+
       },
 
       toString: function() {
@@ -49,10 +68,10 @@
       observe:   true,
       minLength: 0,
       maxLength: 0,
-      sortField: null, //todo unused?
+      sort: null, //todo unused?
       valid:     null, //todo tie this to this.validator?
       updateCounter: 'update_counter',
-      autoSync:  false,
+      auto:  false,
       format:    function(v) { return v; } //todo
    };
 
@@ -92,7 +111,6 @@
    RecordFactory.prototype.create = function(data) {
       return new ko.sync.Record(this.model, data);
    };
-
 
    ko.sync || (ko.sync = {});
 
