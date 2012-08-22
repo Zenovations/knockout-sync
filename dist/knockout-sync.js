@@ -1,10 +1,8 @@
-/*! Knockout Sync - v0.1.0 - 2012-08-21
+/*! Knockout Sync - v0.1.0 - 2012-08-22
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL */
 
-(function(root) {
-var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
-
+(function() {
 
 
 /* Simple JavaScript Inheritance
@@ -2801,18 +2799,33 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
          this.factory    = props.recordFactory || new RecordFactory(this);
       },
 
-      sync: function(listOrRecord, initialData) {
+      /**
+       *
+       * @param {Object} view
+       * @param {Object} [initialData]
+       * @return {Object} the view for chaining
+       */
+      sync: function(view, initialData) {
          //todo
          //todo
          //todo
          //todo
          //todo
-         return listOrRecord;
+         return view;
+      },
+
+      /**
+       *
+       * @param {Object} [data]
+       * @return {Object} a new view
+       */
+      newView: function(data) {
+
       },
 
       /**
        * @param {object} [data]
-       * @return {*}
+       * @return {Record}
        */
       newRecord: function(data) {
          return this.factory.create(data);
@@ -2898,7 +2911,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
     */
    ko.sync.Model = Model;
 
-})(this.ko);
+})(ko);
 /*******************************************
  * Record class for knockout-sync
  *******************************************/
@@ -2906,7 +2919,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    "use strict";
    var undef;
 
-   var Record = Class.extend({
+   ko.sync.Record = Class.extend({
       /**
        * @param {ko.sync.Model}  model
        * @param {object} [data]
@@ -2967,10 +2980,10 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
          return !this.validator || this.validator.validate(this);
       },
       /**
-       * @param {Record|object} newVals
+       * @param {ko.sync.Record|object} newVals
        */
       updateAll: function(newVals) {
-         var k, data = (newVals instanceof Record)? newVals.getData() : newVals, changes = false;
+         var k, data = (newVals instanceof ko.sync.Record)? newVals.getData() : newVals, changes = false;
          for(k in data) {
             if( data.hasOwnProperty(k) ) {
                changes |= this.set(k, data[k], true);
@@ -3032,9 +3045,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       }
    }
 
-   ko.sync.Record = Record;
-
-})(this.ko);
+})(ko);
 
 /*******************************************
  * RecordId class for knockout-sync
@@ -3110,7 +3121,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
       return v !== null && v !== undefined;
    }
 
-})(this.ko);
+})(ko);
 
 
 /*******************************************
@@ -3119,8 +3130,8 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
 (function() {
    "use strict";
 
-   var ko = this.ko;
-   var _ = this._;
+   //var ko = this.ko;
+   //var _ = this._;
 
    /**
     * @var ko.sync.RecordList
@@ -3262,7 +3273,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
    ko.sync || (ko.sync = {});
    ko.sync.RecordList = RecordList;
 
-}).call(this);
+}).call(ko);
 
 
 /*******************************************
@@ -3271,7 +3282,7 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
 (function(ko) {
    "use strict";
 
-   ko.sync || (ko.sync = {});
+   //ko.sync || (ko.sync = {});
 
    /**
     * Store interface describing how Store implementations should work and providing instanceof and extensibility
@@ -3431,7 +3442,6 @@ var ko = this.ko = root.ko, jQuery = this.jQuery = root.jQuery;
 
    });
 
-})(this.ko);
+})(ko);
 
-}).call({}, this);
-
+})();

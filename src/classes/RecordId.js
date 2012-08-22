@@ -4,7 +4,7 @@
 (function(ko) {
    "use strict";
 
-   ko.sync || (ko.sync = {});
+//   ko.sync || (ko.sync = {});
 
    var RecordId = ko.sync.RecordId = Class.extend({
       /**
@@ -72,5 +72,5 @@
       return v !== null && v !== undefined;
    }
 
-})(this.ko);
+})(ko);
 

@@ -67,7 +67,8 @@
 
    /**
     * @param {boolean} [unkeyed]
-    * @return {object}
+    * @param {Object}  [moreData]
+    * @return {Object}
     */
    exports.fullData = function(unkeyed, moreData) {
       //todo-sort

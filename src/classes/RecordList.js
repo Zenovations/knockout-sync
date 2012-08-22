@@ -1,11 +1,11 @@
 /*******************************************
  * RecordList class for knockout-sync
  *******************************************/
-(function() {
+(function(ko) {
    "use strict";
 
-   var ko = this.ko;
-   var _ = this._;
+   //var ko = this.ko;
+   //var _ = this._;
 
    /**
     * @var ko.sync.RecordList
@@ -144,8 +144,8 @@
       }
    }
 
-   ko.sync || (ko.sync = {});
+//   ko.sync || (ko.sync = {});
    ko.sync.RecordList = RecordList;
 
-}).call(this);
+})(ko);
 

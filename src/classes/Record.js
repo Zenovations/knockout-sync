@@ -5,7 +5,7 @@
    "use strict";
    var undef;
 
-   var Record = Class.extend({
+   ko.sync.Record = Class.extend({
       /**
        * @param {ko.sync.Model}  model
        * @param {object} [data]
@@ -66,10 +66,10 @@
          return !this.validator || this.validator.validate(this);
       },
       /**
-       * @param {Record|object} newVals
+       * @param {ko.sync.Record|object} newVals
        */
       updateAll: function(newVals) {
-         var k, data = (newVals instanceof Record)? newVals.getData() : newVals, changes = false;
+         var k, data = (newVals instanceof ko.sync.Record)? newVals.getData() : newVals, changes = false;
          for(k in data) {
             if( data.hasOwnProperty(k) ) {
                changes |= this.set(k, data[k], true);
@@ -131,6 +131,4 @@
       }
    }
 
-   ko.sync.Record = Record;
-
-})(this.ko);
+})(ko);

@@ -5,13 +5,13 @@
    "use strict";
 
    var modelInst = 1;
-   var Model = Class.extend({
+   ko.sync.Model = Class.extend({
       /**
        * @param {object} props
        * @constructor
        */
       init: function(props) {
-         var defaults    = ko.utils.extend(Model.FIELD_DEFAULTS, props.defaults);
+         var defaults    = ko.utils.extend(ko.sync.Model.FIELD_DEFAULTS, props.defaults);
          this.store      = props.store;
          this.table      = props.table;
          this.key        = props.key;
@@ -23,18 +23,33 @@
          this.factory    = props.recordFactory || new RecordFactory(this);
       },
 
-      sync: function(listOrRecord, initialData) {
+      /**
+       *
+       * @param {Object} view
+       * @param {Object} [initialData]
+       * @return {Object} the view for chaining
+       */
+      sync: function(view, initialData) {
          //todo
          //todo
          //todo
          //todo
          //todo
-         return listOrRecord;
+         return view;
+      },
+
+      /**
+       *
+       * @param {Object} [data]
+       * @return {Object} a new view
+       */
+      newView: function(data) {
+
       },
 
       /**
        * @param {object} [data]
-       * @return {*}
+       * @return {Record}
        */
       newRecord: function(data) {
          return this.factory.create(data);
@@ -54,14 +69,26 @@
 
       toString: function() {
          return this.table+'['+this.inst+']';
+      },
+
+      mapping: function() {
+         var out = { key: this.key, copy: [] }, fields = this.fields, f, k;
+         for (var key in fields) {
+            if (fields.hasOwnProperty(key)) {
+               if( !fields[key].observe ) {
+                  out.copy.push(key);
+               }
+               //todo apply validate or format here??
+            }
+         }
+      },
+
+      reverseMapping: function() {
+         
       }
 
-      //todo-api manual save
-
-      //todo-api manual sync
-
    });
-   Model.FIELD_DEFAULTS = {
+   ko.sync.Model.FIELD_DEFAULTS = {
       type:      'string',
       required:  false,
       persist:   true,
@@ -112,12 +139,4 @@
       return new ko.sync.Record(this.model, data);
    };
 
-   ko.sync || (ko.sync = {});
-
-   /**
-    * @param {object} props
-    * @constructor
-    */
-   ko.sync.Model = Model;
-
-})(this.ko);
+})(ko);

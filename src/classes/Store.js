@@ -4,7 +4,7 @@
 (function(ko) {
    "use strict";
 
-   ko.sync || (ko.sync = {});
+   //ko.sync || (ko.sync = {});
 
    /**
     * Store interface describing how Store implementations should work and providing instanceof and extensibility
@@ -164,4 +164,4 @@
 
    });
 
-})(this.ko);
+})(ko);

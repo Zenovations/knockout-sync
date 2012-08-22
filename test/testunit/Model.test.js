@@ -6,6 +6,22 @@ jQuery(function($) {
    module("Model");
 
    test("#newRecord", function() {
+      expect(4);
+      var model = TestData.model(),
+         baseData = TestData.genericData(),
+         rec = model.newRecord(baseData),
+         data = TestData.forCompare(TestData.fullData(baseData));
+      ok(rec instanceof ko.sync.Record, 'is a Record object');
+      deepEqual(rec.getData(), data, 'create record has all fields set');
+
+      // try an empty record
+      rec = model.newRecord();
+      data = TestData.defaults(model);
+      ok(rec instanceof ko.sync.Record, 'is a Record object');
+      deepEqual(rec.getData(), data, 'created record has proper defaults');
+   });
+
+   test("#newView", function() {
       //todo
    });
 
@@ -33,6 +49,10 @@ jQuery(function($) {
       //todo
    });
 
+   test("#mapping", function() {
+      //todo
+   });
+
    //todo data sorting
    var TestData = ko.sync.TestData;
 
@@ -43,8 +63,6 @@ jQuery(function($) {
          rec = factory.create(baseData),
          data = TestData.forCompare(TestData.fullData(baseData));
          ok(rec instanceof ko.sync.Record, 'is a Record object');
-         console.log({rec: rec.getData()});
-         console.log({data: data});
          deepEqual(rec.getData(), data, 'create record has all fields set');
    });
 

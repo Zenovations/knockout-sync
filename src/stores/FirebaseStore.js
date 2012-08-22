@@ -721,20 +721,21 @@
       ref: function(root, tableName, criteria) {
          criteria || (criteria = {});
          var table = root.child(tableName),
-              limit = Math.abs(~~criteria.limit);
+              limit = Math.abs(~~criteria.limit),
+              hasStart = 'start' in criteria, hasEnd = 'end' in criteria;
          // if a starting point is given, that's where we begin iterating
-         if( criteria.start ) {
+         if( hasStart ) {
             table = table.startAt(criteria.start, criteria.startId);
          }
          // if an ending point is given, that's where we stop iterating
-         if( criteria.end ) {
+         if( hasEnd ) {
             table = table.endAt(criteria.end, criteria.endId);
          }
          // we can't apply limit from here if we're going to filter the results (we want 100 filtered records,
          // not 100 minus those that don't match) so we skip the limit from here. Le sigh. This is yet another
          // very significant bit of coupling
          if( limit && !criteria.where ) {
-            if( !criteria.start && !criteria.end ) {
+            if( !hasStart && !hasEnd ) {
                // if the list is open ended, we can use an offset, otherwise start/end are the offset
                // we have a pretty big limitation with offset; we're depending on the caller to deal with that
                // and we simply increase our limit to accommodate; sadly not much else we can do until someone
