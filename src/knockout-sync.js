@@ -15,41 +15,24 @@
     * @return {*}
     */
    ko.extenders.sync = function(target, model, startDirty) {
-
       if( !target.push ) {
          throw new Error('Sync extender is only intended for observableArray classes');
       }
 
-      // convert to a mapped array as necessary
-      target = ko.sync.CrudArray.map(target, model);
-      target.crud = new ko.sync.CrudArray(target, model, startDirty);
+      // convert to a mapped array
+      target = ko.mapping.fromJS(ko.utils.unwrapObservable(target), model.mapping());
+
+      // add crud operations
+      ko.sync.Crud.applyTo(target, model, startDirty);
 
       return target;
    };
 
-   //todo does this have much better performance?
-   //todo if so, we can use the isDirty({read: ..., write...}) approach
-   //ko.extenders.dirty = function(target, startDirty) {
-   //   var cleanValue = ko.observable(ko.mapping.toJSON(target));
-   //   var dirtyOverride = ko.observable(ko.utils.unwrapObservable(startDirty));
-   //
-   //   target.isDirty = ko.computed(function(){
-   //      return dirtyOverride() || ko.mapping.toJSON(target) !== cleanValue();
-   //   });
-   //
-   //   target.markClean = function(){
-   //      cleanValue(ko.mapping.toJSON(target));
-   //      dirtyOverride(false);
-   //   };
-   //   target.markDirty = function(){
-   //      dirtyOverride(true);
-   //   };
-   //
-   //   return target;
-   //};
+   //todo-feature: ko.sync.remote to perform operations remotely without having to download records first? example: ko.sync.remote.delete( model, 'recordXYZ' );
 
    ko.sync || (ko.sync = {});
    ko.sync.stores || (ko.sync.stores = []);
+   ko.sync.validators || (ko.sync.validators = []);
 
    ko.sync.instanceId = moment().unix()+':'+(((1+Math.random())*1000)|0);
 

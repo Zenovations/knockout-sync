@@ -26,10 +26,9 @@
       /**
        *
        * @param {Object} view
-       * @param {Object} [initialData]
        * @return {Object} the view for chaining
        */
-      sync: function(view, initialData) {
+      sync: function(view) {
          //todo
          //todo
          //todo
@@ -39,9 +38,7 @@
       },
 
       /**
-       *
-       * @param {Object} [data]
-       * @return {Object} a new view
+       * @return {Object|String} data fields to load into the record or a record ID to load from the database
        */
       newView: function(data) {
 
@@ -56,15 +53,14 @@
       },
 
       /**
-       * @param {object} [data]
+       * @param {object} readFilter
        * @return {*}
        */
-      newList: function(data) {
+      newList: function( readFilter ) {
          //todo
          //todo
          //todo
          //todo
-
       },
 
       toString: function() {
@@ -72,7 +68,10 @@
       },
 
       mapping: function() {
-         var out = { key: this.key, copy: [] }, fields = this.fields, f, k;
+         var keyFx = _.bind(function(rec) {
+            return rec.hashKey? rec.hashKey() : rec[this.key];
+         }, this);
+         var out = { key: keyFx, copy: [] }, fields = this.fields;
          for (var key in fields) {
             if (fields.hasOwnProperty(key)) {
                if( !fields[key].observe ) {
@@ -81,10 +80,14 @@
                //todo apply validate or format here??
             }
          }
+         return out;
       },
 
       reverseMapping: function() {
-         
+         //todo
+         //todo
+         //todo
+         //todo
       }
 
    });

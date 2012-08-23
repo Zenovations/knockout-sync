@@ -1,8 +1,7 @@
 /*******************************************
  * FirebaseStore for knockout-sync
  *******************************************/
-(function() {
-   var undef, ko = this.ko, Firebase = this.Firebase||window.Firebase, $ = this.jQuery;
+(function(ko, jQuery, Firebase) {
 
    /** IDE CLUES
     **********************/
@@ -247,6 +246,11 @@
       self.disposed = false;
       self.paused   = false;
       var ref       = Util.ref(base, self.table, self.criteria);
+
+      //todo props.where not being applied in any case
+      //todo props.limit not being applied if where exists
+      //todo props.filter not being applied in any case
+
       // these need to be declared with each instantiation so that the functions
       // can be used as references for on/off; otherwise, calling off on one model
       // could also turn off all the other models referencing the same table!
@@ -556,23 +560,24 @@
        * `fx`. The iteration of values stops if `fx` returns true.
        *
        * @param {Firebase}         table
-       * @param {Function} [fx]    passed into forEach() on each iteration, see http://www.firebase.com/docs/datasnapshot/foreach.html
+       * @param {Function} [iterator]    passed into forEach() on each iteration, see http://www.firebase.com/docs/datasnapshot/foreach.html
        * @return {jQuery.Deferred} a promise resolved to number of records iterated
        */
-      each: function(table, fx) {
+      each: function(table, iterator) {
          return this.snap(table).pipe(function(snapshot) {
-            var def = $.Deferred(), count = 0;
-            try {
-               snapshot.forEach(function(snapshot) {
-                  count++;
-                  return fx && fx(snapshot.val(), snapshot.name());
-               });
-               def.resolve(count);
-            }
-            catch(e) {
-               def.reject(e);
-            }
-            return def.promise();
+            return $.Deferred(function(def) {
+               var count = 0;
+               try {
+                  snapshot.forEach(function(snapshot) {
+                     count++;
+                     return iterator && iterator(snapshot.val(), snapshot.name());
+                  });
+                  def.resolve(count);
+               }
+               catch(e) {
+                  def.reject(e);
+               }
+            }).promise();
          });
       },
 
@@ -619,12 +624,14 @@
        * @return {jQuery.Deferred} a promise
        */
       snap: function(ref) {
-         var def = $.Deferred(), to = _timeout(def);
-         ref.once('value', function(snapshot) {
-            clearTimeout(to);
-            def.resolve(snapshot);
-         });
-         return def.promise();
+         return $.Deferred(function(def) {
+            var to = _timeout(def);
+            ref.once('value', function(snapshot) {
+               clearTimeout(to);
+               def.resolve(snapshot);
+            });
+            return def.promise();
+         }).promise();
       },
 
       /**
@@ -832,4 +839,4 @@
    ko.sync || (ko.sync = {stores: []});
    ko.sync.stores.FirebaseStore = FirebaseStore;
 
-}).call(this);
+})(ko, jQuery, Firebase);

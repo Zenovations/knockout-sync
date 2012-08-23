@@ -4,9 +4,43 @@ jQuery(function($) {
 
    var undef;
 
-   // this is the observables this.crud instance
    module('Crud');
-   test('it should be tested', function() {
+   test('#isDirty', function() {
+      //todo-test
+   });
+   test('#create', function() {
+      //todo-test
+   });
+   test('#read', function() {
+      //todo-test
+   });
+   test('#update', function() {
+      //todo-test
+   });
+   test('#delete', function() {
+      //todo-test
+   });
+   test('#promise', function() {
+      //todo-test
+   });
+
+   module('CrudArray');
+   test('#isDirty', function() {
+      //todo-test
+   });
+   test('#create', function() {
+      //todo-test
+   });
+   test('#read', function() {
+      //todo-test
+   });
+   test('#update', function() {
+      //todo-test
+   });
+   test('#delete', function() {
+      //todo-test
+   });
+   test('#promise', function() {
       //todo-test
    });
 

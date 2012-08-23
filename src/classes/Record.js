@@ -35,6 +35,9 @@
       hashKey:         function() {
          return this.getKey().hashKey();
       },
+      setKey: function( newKey ) {
+         this.id = newKey;
+      },
       getData:         function() {
          return ko.utils.extend({}, this.data);
       },
@@ -44,7 +47,7 @@
       set:             function(field, val, suppressNotifications) {
          if( this.data.hasOwnProperty(field) && this.data[field] !== val ) {
             this.changed = true;
-            //todo validate!
+            //todo-validate !
             this.data[field] = val;
             if( ! suppressNotifications ) {
                _updateListeners(this.listeners, this);
