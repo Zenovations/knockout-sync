@@ -41,7 +41,10 @@
        * @return {Object|String} data fields to load into the record or a record ID to load from the database
        */
       newView: function(data) {
-
+         //todo
+         //todo
+         //todo
+         //todo
       },
 
       /**

@@ -137,6 +137,10 @@ jQuery(function($) {
       }, 'should throw an error');
    });
 
+   test('#subscribe', function() {});
+   test('#dispose', function() {});
+   test('#sync', function() {});
+
    test('#store', function() {
       //todo-test
    });

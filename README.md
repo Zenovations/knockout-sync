@@ -299,8 +299,8 @@ fields which are not persistent.
 ##### fields.observe
 
 {Boolean=true} When false, the field is not wrapped in a Knockout.js observable. It is important to note than
-fields which are not observed cannot trigger an auto-update (we aren't observing them). They can still be stored
-when a save occurs.
+fields which are not observed cannot trigger an auto-update or affect the isDirty flag (we aren't observing them
+so we can't know). They can still be stored when a save occurs, however, assuming `persist` is true.
 
 ##### fields.type
 

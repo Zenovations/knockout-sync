@@ -14,12 +14,13 @@
     * @constuctor
     */
    var RecordList = function(model, records) {
-      this.changed = [];
-      this.added   = [];
-      this.deleted = [];
-      this.dirty   = false;
-      this.model   = model;
-      this.recs    = {};
+      this.changed   = [];
+      this.added     = [];
+      this.deleted   = [];
+      this.dirty     = false;
+      this.model     = model;
+      this.recs      = {};
+      this.listeners = [];
       if( records ) { this.load(records); }
    };
 
@@ -56,6 +57,7 @@
          this.dirty = true;
          this.load(record);
       }
+      //todo _updateListeners
    };
 
    RecordList.prototype.load = function(record) {
@@ -80,7 +82,7 @@
          this.dirty = true;
          this.deleted.push(record);
          delete this.recs[key];
-         ko.utils.arrayRemoveItem(this.recs, record);
+         _updateListeners(this.listeners, 'deleted', record);
       }
    };
 
@@ -88,7 +90,12 @@
     * @param {ko.sync.Record} record
     * @param {string} [state]
     */
-   RecordList.prototype.updated = function(record, state) {
+   RecordList.prototype.updated = function(state, record, field) {
+      if( typeof(state) !== 'string' && arguments.length < 3 ) {
+         field = record;
+         record = state;
+         state = 'updated';
+      }
       switch(state) {
          case 'deleted':
             this.remove(record);
@@ -96,16 +103,34 @@
          case 'added':
             this.add(record);
             break;
+         case 'updated':
+            if( record.isDirty() ) {
+               if( record.hashKey() in this.recs ) {
+                  this.changed.push(record);
+                  this.dirty = true;
+               }
+               else if( typeof(console) === 'object' && console.warn ) {
+                  console.warn("Record "+record.hashKey()+' not found (concurrent changes perhaps? otherwise it\'s probably a bad ID)');
+               }
+            }
+            break;
          default:
-            if( state && state !== 'updated' ) {
-               throw new Error('Invalid status '+state);
-            }
-            if( record.isDirty() && record.hashKey() in this.recs ) {
-               this.changed.push(record);
-               this.dirty = true;
-            }
+            throw new Error('Invalid status '+state);
       }
+      //todo _updateListeners
+      //todo when the sortPriority field is updated, this triggers a move operation
       return true;
+   };
+
+   RecordList.prototype.subscribe = function(callback) {
+      var listeners = this.listeners;
+      listeners.push(callback);
+      return {
+         dispose: function() {
+            var idx = _.indexOf(listeners, callback);
+            if( idx >= 0 ) { listeners.splice(idx, 1); }
+         }
+      };
    };
 
    RecordList.Iterator = function(list) {
@@ -141,6 +166,13 @@
       }
       else {
          return list[ key.hashKey() ];
+      }
+   }
+
+   function _updateListeners(callbacks, value) {
+      var i = -1, len = callbacks.length;
+      while(++i < len) {
+         callbacks[i](value);
       }
    }
 

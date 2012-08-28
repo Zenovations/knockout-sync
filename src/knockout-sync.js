@@ -6,26 +6,16 @@
 (function(ko) {
    "use strict";
 
-   /**
-    * This should only be used for observable arrays
-    *
-    * @param target
-    * @param model
-    * @param startDirty
-    * @return {*}
-    */
-   ko.extenders.sync = function(target, model, startDirty) {
-      if( !target.push ) {
-         throw new Error('Sync extender is only intended for observableArray classes');
-      }
+   ko.extenders.crud = function(target, model, startDirty) {
 
-      // convert to a mapped array
-      target = ko.mapping.fromJS(ko.utils.unwrapObservable(target), model.mapping());
+      //todo
+      //todo
+      //todo
+      //todo
+      //todo
 
       // add crud operations
       ko.sync.Crud.applyTo(target, model, startDirty);
-
-      return target;
    };
 
    //todo-feature: ko.sync.remote to perform operations remotely without having to download records first? example: ko.sync.remote.delete( model, 'recordXYZ' );

@@ -3,6 +3,8 @@
  *******************************************/
 (function(ko, jQuery, Firebase) {
 
+   var undef;
+
    /** IDE CLUES
     **********************/
    /** @var {jQuery.Deferred}  */ var Promise;

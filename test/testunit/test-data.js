@@ -8,19 +8,19 @@
       table: 'TableKeyed',
       key: 'id',
       fields: {
-         id:             { required: true,  persist: true, type: 'string' },
-         stringOptional: { required: false, persist: true, type: 'string' },
-         stringRequired: { required: true,  persist: true, type: 'string' },
-         dateOptional:   { required: false, persist: true, type: 'date' },
-         dateRequired:   { required: true,  persist: true, type: 'date' },
-         intOptional:    { required: false, persist: true, type: 'int' },
-         intRequired:    { required: true,  persist: true, type: 'int' },
-         boolOptional:   { required: false, persist: true, type: 'boolean' },
-         boolRequired:   { required: true,  persist: true, type: 'boolean' },
-         floatOptional:  { required: false, persist: true, type: 'float' },
-         floatRequired:  { required: true,  persist: true, type: 'float' },
-         emailOptional:  { required: false, persist: true, type: 'email' },
-         emailRequired:  { required: true,  persist: true, type: 'email' }
+         id:             { required: true,  observe: false, persist: true, type: 'string' },
+         stringOptional: { required: false, observe: true,  persist: true, type: 'string' },
+         stringRequired: { required: true,  observe: true,  persist: true, type: 'string' },
+         dateOptional:   { required: false, observe: false, persist: true, type: 'date' },
+         dateRequired:   { required: true,  observe: true,  persist: true, type: 'date' },
+         intOptional:    { required: false, observe: true,  persist: true, type: 'int' },
+         intRequired:    { required: true,  observe: false, persist: true, type: 'int' },
+         boolOptional:   { required: false, observe: true,  persist: true, type: 'boolean' },
+         boolRequired:   { required: true,  observe: true,  persist: true, type: 'boolean' },
+         floatOptional:  { required: false, observe: true,  persist: true, type: 'float' },
+         floatRequired:  { required: true,  observe: false, persist: true, type: 'float' },
+         emailOptional:  { required: false, observe: true,  persist: true, type: 'email' },
+         emailRequired:  { required: true,  observe: true,  persist: true, type: 'email' }
       }
    };
 

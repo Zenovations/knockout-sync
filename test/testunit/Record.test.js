@@ -130,7 +130,42 @@ jQuery(function($) {
    });
 
    test('#subscribe', function() {
-      //todo-test
+      expect(6);
+
+      // change a value
+      var onlyCallOnce, rec = _buildARecord(false);
+      var sub = rec.subscribe(function(record, field) {
+         if( onlyCallOnce ) {
+            ok(false, 'should not be notified after subscription is disposed');
+         }
+         strictEqual(record.hashKey(), rec.hashKey(), 'listener passed correct record');
+         strictEqual(field, 'stringOptional', 'correct field provided');
+         onlyCallOnce = true;
+      });
+      rec.set('stringOptional', 'new value for stringOptional');
+
+      // once disposed, doesn't get any more updates
+      sub.dispose();
+      rec.set('stringOptional', 'a nudder value that should not trigger a notification');
+
+      // call set without changing the value
+      rec = _buildARecord(true);
+      sub  = rec.subscribe(function() {
+         ok(false, 'should not be notified if the field does not change');
+      });
+      rec.set('floatOptional', rec.get('floatOptional'));
+
+      // change the underlying observable (should still trigger a notification)
+      sub.dispose();
+      rec.subscribe(function(record, field) {
+         strictEqual(record.hashKey(), rec.hashKey(), 'listener passed correct record');
+         strictEqual(field, 'intOptional', 'correct field provided');
+         strictEqual(record.get(field), 987, 'value set correctly');
+      });
+      var obsField = rec.data.intOptional;
+      ok( ko.isObservable(obsField), 'is an observable field');
+      obsField(987);
+
    });
 
    test("#isValid", function() {
