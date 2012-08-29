@@ -1,7 +1,7 @@
 
 jQuery(function($) {
    "use strict";
-   var undef;
+   var undef, S = ko.sync.RecordId.DEFAULT_SEPARATOR;
 
    module("RecordId");
    test("#isSet (not set)", function() {
@@ -40,7 +40,7 @@ jQuery(function($) {
 
       // composite
       id = new ko.sync.RecordId(['id', 'stringRequired'], ko.sync.TestData.genericData());
-      strictEqual(id.hashKey(), 'record123|required');
+      strictEqual(id.hashKey(), 'record123'+S+'required');
    });
 
    test("#toString", function() {
@@ -50,7 +50,7 @@ jQuery(function($) {
 
       // composite
       id = new ko.sync.RecordId(['id', 'stringRequired'], ko.sync.TestData.genericData());
-      strictEqual(id.toString(), 'record123|required');
+      strictEqual(id.toString(), 'record123'+S+'required');
    });
 
    test('#equals', function() {

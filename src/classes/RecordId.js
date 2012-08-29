@@ -36,7 +36,7 @@
                || (typeof(o) === 'string' && o === this.hashKey());
       }
    });
-   RecordId.DEFAULT_SEPARATOR = '|';
+   RecordId.DEFAULT_SEPARATOR = '|||';
    RecordId.for = function(model, record) {
       return new RecordId(model.key, record.getData());
    };
