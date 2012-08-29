@@ -17,16 +17,33 @@
     */
    var RecordList = function(model, records) {
       this.model     = model;
-      this.obs       = ko.observableArray();
-      this.keys      = {};
-      this.listeners = [];
-      this.subs      = []; // replaced when sync() is called
-      this.checkpoint();
-      if( records ) { this.load(records); }
+      this.keys      = {}; // a list of all keys in this list for quick reference
+      this.cache     = {}; // a partial list of keys to indices to speed up retrieval
+      this.listeners = []; // a list of subscribers to events in this list
+      this.subs      = []; // a list of records to which this list has subscribed
+      this.checkpoint();   // refresh our list of added/changed/deleted records
+      if( records && ko.isObservable(records) ) {
+         // use the `records` object as our observableArray
+         this.obs = records;
+         _checkAndCacheAll(this, model);
+      }
+      else {
+         // create an observableArray and load our records into it
+         this.obs = ko.observableArray();
+         if( records ) {
+            this.load(records);
+         }
+      }
       _sync(this);
    };
 
    RecordList.prototype.checkpoint = function() {
+      var keys = this.keys;
+      var cache = this.cache;
+      // remove any keys which have been deleted
+      _.each(this.deleted, function(v, k) {
+         delete keys[k];
+      });
       this.changed = {};
       this.added   = {};
       this.deleted = {};
@@ -68,7 +85,7 @@
    };
 
    RecordList.prototype.find = function(recordId) {
-      return _findRecord(this.obs, recordId);
+      return _findRecord(this, recordId);
    };
 
    RecordList.prototype.load = function(record, afterRecordId) {
@@ -80,15 +97,15 @@
          }
       }
       else {
-         var key = record.hashKey(), loc, aKey = afterRecordId? afterRecordId.hashKey() : null;
-         this.subs[key] = record.subscribe(_.bind(this.updated, this));
-         if( aKey && aKey in this.keys ) {
-            loc = this.keys[key] = this.keys[aKey]+1;
-            _shiftKeys(this.keys, key, false);
+         var afterRecordPos = _recordIndex(this, afterRecordId);
+         if( afterRecordPos > 0 ) {
+            var loc = afterRecordPos+1;
             this.obs.splice(loc, 0, record);
+            _invalidateCache(this);
+            _cacheAndMonitor(this, record, loc);
          }
          else {
-            this.keys[key] = this.obs.push(record)-1;
+            _cacheAndMonitor(this, record, this.obs.push(record)-1);
          }
       }
    };
@@ -101,24 +118,28 @@
          }
       }
       else {
-         var record = _findRecord(this.keys, this.obs, recordOrId);
+         var record = _findRecord(this, recordOrId);
          if( record ) {
             var key = record.hashKey();
 
             if( !(key in this.deleted) ) {
                // mark dirty
                this.dirty = true;
-
-               // if rec is removed, take it out of the added/updated list
-               delete this.added[key];
-               delete this.updated[key];
-
                record.isDirty(true);
+
+               // mark it deleted
                this.deleted[key] = record;
+
+               // if rec is removed, that supersedes added/updated status
+               delete this.added[key];
+               delete this.changed[key];
+
                // remove the record
-               var idx = this.keys[key];
+               var idx = _recordIndex(this, key);
                this.obs.splice(idx, 1);
-               _shiftKeys(this.keys, key, true);
+
+               // clear our indexes
+               _invalidateCache(this);
                delete this.keys[key];
 
                // cancel subscription
@@ -158,9 +179,9 @@
          case 'updated':
             if( record.isDirty() ) {
                var hashKey = record.hashKey();
-               if( hashKey in this.keys ) {
+               if( _recordIndex(this, hashKey) >= 0 ) { //todo-perf we could skip this check and just assume; do the checking at save time
                   if( !(hashKey in this.added) ) {
-                     // if the record is already marked as newly added, don't mark it as an update too
+                     // if the record is already marked as newly added, don't mark it as updated and lose that status
                      this.changed[hashKey] = record;
                   }
                   this.dirty = true;
@@ -208,6 +229,37 @@
    RecordList.Iterator.prototype.hasPrev = function() { return this.len && this.curr > 0; };
    RecordList.Iterator.prototype.hasNext = function() { return this.len && this.curr < this.len-1; };
 
+   /**
+    * Only intended to be used during load operations where the observableArray has already been populated.
+    * @param list
+    * @private
+    */
+   function _checkAndCacheAll(list, model) {
+      var vals = ko.utils.unwrapObservable(list.obs), i = vals.length, r;
+      while(i--) {
+         r = vals[i];
+         if( !(r instanceof ko.sync.Record) ) {
+            vals[i] = r = model.newRecord(r);
+         }
+         _cacheAndMonitor(this, r, i);
+      }
+   }
+
+   /**
+    * Add a record to the cache and subscribe to the record to get notifications of any changes. Only intended to
+    * be used by load operations.
+    * @param {ko.sync.RecordList} list
+    * @param {ko.sync.Record} record
+    * @param {int} position
+    * @private
+    */
+   function _cacheAndMonitor(list, record, position) {
+      var key = record.hashKey();
+      list.subs[key] = record.subscribe(_.bind(list.updated, this));
+      list.cache[key] = position;
+      list.keys[key] = key;
+   }
+
    function _keyFor(recOrId) {
       if( typeof(recOrId) !== 'object' || !recOrId ) {
          return null;
@@ -230,10 +282,46 @@
       }
    }
 
-   function _findRecord(keys, obs, recOrIdOrHash) {
-      var hashKey = _hashKey(recOrIdOrHash);
-      if( hashKey && hashKey in keys ) {
-         return obs()[ keys[hashKey] ];
+   function _invalidateCache(list) {
+      // because the cache doesn't have a guaranteed order and items aren't entered into it in the same sorted way
+      // they are put into the observable, any time the observable changes, our cache of keys to indices becomes invalid
+      // (unless the item was just added to the end, in which case we're fine!)
+      list.cache = {};
+   }
+
+   /**
+    * Locate a record's position in the observable array. If it isn't found, return -1
+    * @param {ko.sync.RecordList} list
+    * @param {ko.sync.Record|ko.sync.RecordId|String} recOrIdOrHash
+    * @return {int}
+    * @private
+    */
+   function _recordIndex(list, recOrIdOrHash) {
+      var hashKey = _hashKey(recOrIdOrHash), cache = list.cache;
+      if( hashKey && hashKey in cache ) {
+         // do we have it in hand? (in our cache?)
+         return cache[hashKey];
+      }
+      else if( hashKey && hashKey in list.keys ) {
+         // go fish! (look for it in the array)
+         var key, vals = ko.unwrapObservable(list.obs), i = vals.length;
+         while(i--) {
+            key = vals[i].hashKey();
+            if( !(key in cache) ) {
+               // rebuild cache as we go
+               cache[key] = i;
+            }
+            if( key == hashKey ) { return i; }
+         }
+      }
+      // it's not in our list, so -1 it
+      return -1;
+   }
+
+   function _findRecord(list, recOrIdOrHash) {
+      var idx = _recordIndex(list, recOrIdOrHash);
+      if( idx >= 0 ) {
+         return ko.utils.unwrapObservable(list.obs)[idx];
       }
       return null;
    }
@@ -262,14 +350,6 @@
          //todo
       });
       reclist.subs.push(obSub);
-   }
-
-   function _shiftKeys(keys, from, down) {
-      //todo
-      //todo
-      //todo
-      //todo
-      //todo
    }
 
 //   ko.sync || (ko.sync = {});

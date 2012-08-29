@@ -74,7 +74,15 @@ jQuery(function($) {
       list.remove(recToDelete); // delete using the Record object
       strictEqual(list.isDirty(), true, 'list is dirty after remove');
       strictEqual(recToDelete.isDirty(), true, 'rec should be dirty after remove');
-      ok(!(key in list.keys), 'list does not contain record after remove');
+      ok(!(key in list.keys), 'keys do not contain record after remove');
+      ok(!(key in list.keys), 'keys do not contain record after remove');
+      ok(!(key in list.cache), 'cache does not contain record after remove');
+      strictEqual(list.find(key), null, 'can\'t retrieve the record using find');
+      // make sure the record isn't in the observable anymore
+      var vals = list.obs(), i = vals.length;
+      while(i--) {
+         if( vals[i].hashKey() == key ) { ok(false, 'found deleted record in the observable array'); }
+      }
    });
 
    test('#remove (using RecordId)', function() {
