@@ -53,6 +53,10 @@ jQuery(function($) {
       //todo
    });
 
+   test("#reverseMapping", function() {
+      //todo
+   });
+
    //todo data sorting
    var TestData = ko.sync.TestData;
 

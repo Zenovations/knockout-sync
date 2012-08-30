@@ -28,7 +28,7 @@ module.exports = function(grunt) {
          all: {
             src: [
                '<banner:meta.banner>',
-               'lib/**/*.js',
+               'lib/*.js',
                'src/*.js',
                'src/classes/*.js',
                'src/validators/*.js',
@@ -56,7 +56,7 @@ module.exports = function(grunt) {
       },
       watch: {
          files: '<config:lint.files>',
-         tasks: 'lint qunit'
+         tasks: 'concat min'
       },
       mocha: {
          index: 'test/index.html'
@@ -83,7 +83,7 @@ module.exports = function(grunt) {
    });
 
    // Default task.
-   grunt.registerTask('default', 'concat min');
+   grunt.registerTask('default', 'watch');
    grunt.registerTask('make',    'concat min');
    grunt.registerTask('test', 'mocha');
 //   grunt.registerTask('default', 'concat min');

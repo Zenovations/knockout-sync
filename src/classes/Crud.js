@@ -58,24 +58,17 @@
    });
 
    /**
-    * @param {Object} target a mapped observable array
-    * @param {ko.sync.Model} model
-    * @param {boolean} [startDirty]
+    * @param {ko.sync.RecordList} list a RecordList we will use as our base
     * @constructor
     */
-   ko.sync.CrudArray = function(target, model, startDirty) {
-      this.isDirty = ko.observable(startDirty||false);
-      //todo not a good solution for arrays
-      //todo does not account for persist/observe attributes of the model
-      this.checkpoint = ko.mapping.toJSON(target);
-      this.model = model;
-      //todo deal with auto-updates
+   ko.sync.CrudArray = function(list) {
+      this.list = list;
    };
 
    var CrudArray = ko.sync.CrudArray;
    $.extend(CrudArray.prototype, {
       isDirty: function() {
-         //todo
+         return this.list.isDirty();
       },
 
       create: function( data ) {

@@ -25,16 +25,16 @@
 
       /**
        *
-       * @param {Object} view
+       * @param {Object} viewOrList
        * @return {Object} the view for chaining
        */
-      sync: function(view) {
+      sync: function(viewOrList) {
          //todo
          //todo
          //todo
          //todo
          //todo
-         return view;
+         return viewOrList;
       },
 
       /**

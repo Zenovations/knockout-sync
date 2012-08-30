@@ -58,11 +58,11 @@ jQuery(function($) {
          list = new ko.sync.RecordList(model, data.slice(0, 4)),
          newRec = TestData.makeRecord(model, data.slice(4,5)[0]), key = newRec.hashKey();
       strictEqual(list.isDirty(), false, 'list is not dirty before push');
-      ok(!(key in list.keys), 'list does not contain record before push');
+      strictEqual(list.find(key), null, 'list does not contain record before push');
       list.load(newRec);
       strictEqual(list.isDirty(), false, 'list is not dirty after push');
       strictEqual(newRec.isDirty(), false, 'rec should not be dirty after push');
-      ok(key in list.keys, 'list contains record after push');
+      ok(list.find(key) !== null, 'list contains record after push');
    });
 
    test('#remove (using Record)', function() {
@@ -70,14 +70,11 @@ jQuery(function($) {
          list = new ko.sync.RecordList(TestData.model(), data),
             key = 'record-5', recToDelete = list.find(key);
       strictEqual(list.isDirty(), false, 'list is not dirty before remove');
-      ok(key in list.keys, 'list should contain our record before remove');
+      ok(list.find(key) !== null, 'list should contain our record before remove');
       list.remove(recToDelete); // delete using the Record object
       strictEqual(list.isDirty(), true, 'list is dirty after remove');
       strictEqual(recToDelete.isDirty(), true, 'rec should be dirty after remove');
-      ok(!(key in list.keys), 'keys do not contain record after remove');
-      ok(!(key in list.keys), 'keys do not contain record after remove');
-      ok(!(key in list.cache), 'cache does not contain record after remove');
-      strictEqual(list.find(key), null, 'can\'t retrieve the record using find');
+      strictEqual(list.find(key), null, 'record has been removed');
       // make sure the record isn't in the observable anymore
       var vals = list.obs(), i = vals.length;
       while(i--) {
@@ -90,12 +87,45 @@ jQuery(function($) {
          list = new ko.sync.RecordList(TestData.model(), data),
           key = 'record-5', recToDelete = list.find(key);
       strictEqual(list.isDirty(), false, 'list is not dirty before remove');
-      ok(key in list.keys, 'list should contain our record before remove');
       list.remove(recToDelete.getKey()); // delete using the record id
       strictEqual(list.isDirty(), true, 'list is dirty after remove');
       strictEqual(recToDelete.isDirty(), true, 'rec should be dirty after remove');
-      ok(!(key in list.keys), 'list does not contain record after remove');
+      strictEqual(list.find(key), null, 'list does not contain record after remove');
+      // make sure the record isn't in the observable anymore
+      var vals = list.obs(), i = vals.length;
+      while(i--) {
+         if( vals[i].hashKey() == key ) { ok(false, 'found deleted record in the observable array'); }
+      }
    });
+
+   test('#move', function() {
+      expect(6);
+      var list = new ko.sync.RecordList(TestData.model(), TestData.makeRecords(5)),
+          rec = list[1], after = list[3], callbackInvoked = false;
+
+      function callback(action, record, afterRec) {
+         callbackInvoked = true;
+         strictEqual(action, 'moved', 'notification was a move event');
+         strictEqual(record.hashKey(), rec.hashKey(), 'notification with correct record id');
+         strictEqual(afterRec.hashKey(), after.hashKey(), 'notification with correct "after" record');
+      }
+
+      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 1, 'record starts in correct position');
+      list.move(rec, after);
+      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 4, 'record in correct position after move');
+
+      ok(callbackInvoked, 'callback was invoked');
+   });
+
+   function _indexOfKey(arr, key) {
+      var idx = 0;
+      var x = _.find(arr, function(v) {
+         idx++;
+         return v.hashKey() === key;
+      });
+      if( !x ) { return -1; }
+      else { return idx; }
+   }
 
    test('change tracking', function() {
       var RECS_TOTAL = 6;
@@ -141,11 +171,11 @@ jQuery(function($) {
 
    test('#updated (dirty)', function() {
       var data = TestData.makeRecords(5),
-         list = new ko.sync.RecordList(TestData.model(), data),
-          key = 'record-4', rec = list.find(key);
+         list  = new ko.sync.RecordList(TestData.model(), data),
+         rec   = list.find('record-4');
       rec.isDirty(true);
       strictEqual(list.isDirty(), false, 'list is not dirty before updated()');
-      list.updated('updated', rec);
+      list.updated(rec);
       strictEqual(list.isDirty(), true, 'list is dirty after updated()');
    });
 
@@ -154,51 +184,22 @@ jQuery(function($) {
          list = new ko.sync.RecordList(TestData.model(), data),
             key = 'record-4', rec = list.find(key);
       strictEqual(list.isDirty(), false, 'list is not dirty before updated()');
-      list.updated('updated', rec);
+      list.updated(rec);
       strictEqual(list.isDirty(), false, 'list is dirty after updated()');
-   });
-
-   test('#updated (added status)', function() {
-      var data = TestData.makeRecords(5),
-         list = new ko.sync.RecordList(TestData.model(), data),
-          rec  = TestData.makeRecord(TestData.model(), 6);
-      strictEqual(list.isDirty(), false, 'list is not dirty before updated()');
-      list.updated('added', rec);
-      strictEqual(list.isDirty(), true, 'list is dirty after updated()');
-      ok(rec.hashKey() in list.keys, 'record was added');
-   });
-
-   test('#updated (deleted status)', function() {
-      var data = TestData.makeRecords(5),
-         list = new ko.sync.RecordList(TestData.model(), data),
-          rec = list.find('record-4');
-      strictEqual(list.isDirty(), false, 'list is not dirty before updated()');
-      list.updated('deleted', rec);
-      strictEqual(list.isDirty(), true, 'list is dirty after updated()');
-      ok(!(rec.hashKey() in list.recs), 'record was deleted');
-   });
-
-   test('#updated (invalid status)', function() {
-      var data = TestData.makeRecords(5),
-         list = new ko.sync.RecordList(TestData.model(), data),
-            rec = list.find('record-4');
-      raises(function() {
-         list.updated('not a valid status', rec);
-      }, 'should throw an error');
    });
 
    test('#subscribe', function() {
       var RECS_TOTAL = 5;
       var RECS_PRELOADED = 2;
       var i, v,
-          data     = TestData.makeRecords(RECS_TOTAL),
+          data     = TestData.makeRecords(RECS_TOTAL+1), //create one extra for the manual push/delete ops; it won't be in list
           // create the list with 2 records pre-populated
           list     =  new ko.sync.RecordList(TestData.model(), data.slice(0, RECS_PRELOADED)),
           events   = [],
           expected = [];
 
       // data values to use for update operation
-      var newvals = {
+      var newVals = {
          stringOptional: 'liver yuck!',
          stringRequired: 'yummy apples',
          dateOptional:   moment.utc().add('seconds', 10).toDate(),
@@ -211,7 +212,7 @@ jQuery(function($) {
          floatRequired:  -.001,
          emailOptional:  'newemail@new.com',
          emailRequired:  'newerest@newest.com'
-      };
+      }, newValKeys = _.keys(newVals);
 
       function callback(action, record, field) {
          events.push([action, record.hashKey(), field]);
@@ -229,31 +230,40 @@ jQuery(function($) {
 
       // try updating each record using a different field each time for fun
       i = 0;
-      _.each(newvals, function(v, k) {
-         var j = i % data.length, rec = data[j];
+      _.each(newVals, function(v, k) {
+         var j = i % RECS_TOTAL, rec = data[j];
          expected.push(['updated', rec.hashKey(), k]);
          rec.set(k, v);
          i++;
       });
 
       // delete some records
-      i = RECS_PRELOADED+1;
-      while(i-- >= RECS_PRELOADED-1) {
+      i = RECS_PRELOADED+2;
+      while(i-- > RECS_PRELOADED) {
          var rec = data[i];
          expected.push(['deleted', rec.hashKey(), undef]);
          list.remove(rec);
       }
+
+      // manually push a record to the observable, which should still trigger notifications
+      expected.push(['added', data[RECS_TOTAL].hashKey(), undef]);
+      list.obs.push(data[RECS_TOTAL]);
+
+      // delete a record from the observable, which should still trigger notifications
+      expected.push(['deleted', data[RECS_TOTAL].hashKey(), undef]);
+      list.obs.pop();
 
       // check the results
       deepEqual(events, expected, 'all events recorded as expected');
 
       // try updating each record again, but use the previous values, which shouldn't trigger updates
       events = [];
-      i = 0;
-      _.each(newvals, function(v, k) {
-         var j = i % data.length, rec = data[j];
-         rec.set(k, v);
-      });
+      i = 20;
+      while(i--) {
+         var k = newValKeys[i % newValKeys.length];
+         rec = data[i % data.length];
+         rec.set( k, rec.get(k) );
+      }
       strictEqual(events.length, 0, 'updates with existing value or on deleted records do not trigger notifications');
 
       // delete a record that doesn't exist and make sure it doesn't trigger an update
@@ -262,12 +272,26 @@ jQuery(function($) {
       strictEqual(events.length, 0, 'deleting record twice doesn\'t send second notification');
    });
 
-   test('#sync', function() {
+   test('construct with existing observable', function() {
+      expect(9);
+      var model = TestData.model(), recs = TestData.makeRecords(6), data = recs.slice(0, 3);
+      data[3] = recs[3].data;
+      data[4] = recs[4].data;
+      var obs = ko.observableArray(data), obsVals = obs();
+      var list = new ko.sync.RecordList(model, obs);
+      ok( list.obs === obs, 'is the same observableArray' );
+      strictEqual(list.obs().length, obs().length, 'has right number of records');
+      var i = obs().length;
+      while(i--) {
+         ok( obsVals[i] instanceof ko.sync.Record, 'All entries are a record' );
+      }
 
-      //todo-test
-      //todo-test
-      //todo-test
-      //todo-test
+      var appendedRecord = recs[5];
+      list.subscribe(function(event, record) {
+         strictEqual(event, 'added', 'adding record to original observable triggers add in list');
+         strictEqual(record, appendedRecord, 'added record matches one in original observable');
+      });
+      obs.push(appendedRecord);
 
    });
 
@@ -334,7 +358,8 @@ jQuery(function($) {
    });
 
    function _newIt(len) {
-      return new ko.sync.RecordList.Iterator({recs: TestData.makeRecords(len)});
+      var list = new ko.sync.RecordList(TestData.model(), TestData.makeRecords(len));
+      return new ko.sync.RecordList.Iterator(list);
    }
 
 });

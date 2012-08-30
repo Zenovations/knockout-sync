@@ -1,7 +1,7 @@
 
 jQuery(function($) {
    "use strict";
-   var undef;
+   var undef, S = ko.sync.RecordId.DEFAULT_SEPARATOR;
 
    var newData = {
       id:             'record456',
@@ -77,7 +77,7 @@ jQuery(function($) {
       // composite key set
       rec = _buildARecord({intRequired: 10}, true,
          {key: ['id', 'intRequired']});
-      strictEqual(rec.hashKey(), 'record123|10', 'key set on composite');
+      strictEqual(rec.hashKey(), 'record123'+S+'10', 'key set on composite');
    });
 
    test("#getData", function() {

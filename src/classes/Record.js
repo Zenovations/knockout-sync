@@ -130,7 +130,7 @@
    function _value(k, fields, data) {
       var field = fields[k];
       if( data.hasOwnProperty(k) && exists(data[k]) ) {
-         var v = data[k];
+         var v = ko.utils.unwrapObservable(data[k]);
          switch(field.type) {
             case 'date':
                v = moment(v).utc().toDate();
