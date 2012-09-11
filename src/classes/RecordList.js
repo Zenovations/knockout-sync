@@ -104,33 +104,29 @@
    /**
     * Repositions the record within the observable array.
     *
-    * In the case that afterRecordId is set to {boolean}true or null, the record is prepended to the beginning of
-    * the list.
+    * If afterRecordId is a string, then it represents the hashKey of the record that will be immediately before our
+    * insert position. If that record doesn't exist, then we append to the end.
     *
-    * In the event that afterRecord is an integer, it is used as the exact position of the insert. Don't be confused
-    * by the name in this case! You are specifying where it gets inserted. For instance, zero means first, not after
-    * record 0. 1 means in position 1, not after the record in position 1.
+    * If afterRecordId is null or undefined, then we append to the end.
     *
-    * If the number is negative, then it is considered to be from the end of the list. -1 equals the end of the list,
-    * -2 being second to last, and so on.
+    * If afterRecordId is a positive integer, then it is the exact position at which to insert our record. Thus,
+    * 0 means insert it at position 0 (shift all records to the right 1), 1 means insert it immediately after record
+    * 0, and so on.
+    *
+    * If afterRecordId is a negative integer, it is relative to the end position. Thus, -1 means just before
+    * the last record, -2 means insert it before the last 2 records, etc.
     *
     * @param {ko.sync.Record} record
-    * @param {ko.sync.RecordId|ko.sync.Record|String|int} afterRecordId see description
+    * @param {ko.sync.RecordId|ko.sync.Record|String|int} [afterRecordIdOrIndex] see description
     * @return {ko.sync.RecordList} this
     */
-   ko.sync.RecordList.prototype.move = function(record, afterRecordId) {
+   ko.sync.RecordList.prototype.move = function(record, afterRecordIdOrIndex) {
       var key = record.hashKey();
+      var newLoc = _findInsertPosition(this, record, afterRecordIdOrIndex); // the exact index this element should be placed at
+      var currentLoc = _recordIndex(this, record);
+
       if( key in this.byKey && !(key in this.deleted) ) {
-         var loc;
-         if( afterRecordId === true ) { loc = 0; }
-         else if( typeof(afterRecordId) === 'number' ) {
-            loc = afterRecordId < 0? this.obs().length - afterRecordId : afterRecordId;
-         }
-         else { loc = _recordIndex(this, afterRecordId)+1; }
-
-         var currentLoc = _recordIndex(this, record);
-
-         if( currentLoc !== loc ) {
+         if( currentLoc !== newLoc ) { // if these are equal, we've already recorded the move or it's superfluous
             _invalidateCache(this);
 
             // store in changelist
@@ -144,20 +140,32 @@
             this.deleted[key] = record;
             wasAdded || (this.added[key] = record);
 
+            // determine what record we have moved it after
+            var afterRecord = null;
+            if( newLoc > 0 ) {
+               if( newLoc == currentLoc + 1 ) {
+                  // we are moving it by 1 slot so the next record is the one we want
+                  afterRecord = this.obs()[newLoc];
+               }
+               else {
+                  // find the record before the new slot
+                  afterRecord = this.obs()[newLoc-1];
+               }
+            }
+
             // now we move it
-            this.obs.splice(currentLoc, 1);
-            this.obs.splice(loc, 0, record);
+            _.move(this.obs, currentLoc, newLoc);
 
             // now we restore the changelists from our devious trickishness
             delete this.deleted[key];
             wasAdded || (delete this.added[key]);
 
             // now we shoot off the correct notification
-            _updateListeners('moved', record, loc > 0? this.obs.slice(loc-1, loc)[0] : null);
+            _updateListeners(this.listeners, 'moved', record, afterRecord);
          }
       }
       else if( typeof(console) === 'object' && console.warn ) {
-         console.warn('attempted to move a record which doesn\'t exist; could be a concurrent edit or could be a bug');
+         console.warn('attempted to move a record which doesn\'t exist; probably just a concurrent edit');
       }
       return this;
    };
@@ -260,15 +268,14 @@
    };
 
    ko.sync.RecordList.prototype.subscribe = function(callback) {
-      var listeners = this.listeners;
-      listeners.push(callback);
+      this.listeners.push(callback);
       return this;
    };
 
    ko.sync.RecordList.prototype.dispose = function() {
       var i = this.subs.length;
       while(i--) {
-         this.subs[i]();
+         this.subs[i].dispose();
       }
       this.obsSub && this.obsSub.dispose();
       return this;
@@ -279,6 +286,15 @@
       // snapshot to guarantee iterator is not mucked up if synced records update during iteration
       this.recs = _.toArray(list.obs());
       this.len  = this.recs.length;
+   };
+
+   /**
+    * A debug method used to obtain the ordered hash key ids for each record
+    * @param {ko.sync.RecordList} recordList
+    * @return {Array} of string hashKeys
+    */
+   ko.sync.RecordList.ids = function(recordList) {
+      return _.map(recordList.obs(), function(v) { return v.hashKey(); });
    };
 
    ko.sync.RecordList.Iterator.prototype.size    = function() { return this.len; };
@@ -316,17 +332,7 @@
    }
 
    function putIn(recList, record, afterRecordId, sendNotification) {
-      var loc;
-      switch(typeof(afterRecordId)) {
-         case 'undefined':
-            loc = recList.obs().length;
-            break;
-         case 'boolean':
-            loc = 0;
-            break;
-         default:
-            loc = _recordIndex(recList, afterRecordId)+1;
-      }
+      var loc = _findInsertPosition(recList, record, afterRecordId);
       _invalidateCache(recList);
       _cacheAndMonitor(recList, record, loc);
       if( sendNotification ) {
@@ -437,6 +443,53 @@
       return -1;
    }
 
+   /**
+    * Determine the position where a record should be inserted.
+    *
+    * If afterRecordId is a string, then it represents the hashKey of the record that will be immediately before our
+    * insert position. If that record doesn't exist, then we append to the end.
+    *
+    * If afterRecordId is null or undefined, then we append to the end.
+    *
+    * If afterRecordId is a positive integer, then it is the exact position at which to insert our record. Thus,
+    * 0 means insert it at position 0 (shift all records to the right 1), 1 means insert it immediately after record
+    * 0, and so on.
+    *
+    * If afterRecordId is a negative integer, it is relative to the end position. Thus, -1 means just before
+    * the last record, -2 means insert it before the last 2 records, etc.
+    *
+    * @param {RecordList} recList
+    * @param {Record}     record    the record to move
+    * @param {String|int|null} [afterRecordIdOrIndex] see description
+    * @return {Number}
+    * @private
+    */
+   function _findInsertPosition(recList, record, afterRecordIdOrIndex) {
+      var numRecs = recList.obs().length, loc = numRecs, currLoc;
+      // a null or undefined is interpreted as append to end of records
+      if( afterRecordIdOrIndex !== undef && afterRecordIdOrIndex !== null ) {
+         if( typeof(afterRecordIdOrIndex) === 'number' ) {
+            // a number represents the exact position of the insert
+            // a negative number is relative to the end
+            loc = afterRecordIdOrIndex < 0? Math.max(numRecs - 1 + afterRecordIdOrIndex, 0) : Math.min(afterRecordIdOrIndex, numRecs);
+         }
+         else {
+            loc = _recordIndex(recList, afterRecordIdOrIndex);
+            currLoc = _recordIndex(recList, record);
+            if( loc === -1 ) {
+               // if the record wasn't found, we append
+               loc = numRecs;
+            }
+            else if( currLoc > loc ) {
+               // when loc < currLoc, it will be removed, dropping all the indices one place
+               // when it's greater, we need to add one to get the appropriate slot (i.e. after the record)
+               loc++;
+            }
+         }
+      }
+      return loc;
+   }
+
    function _findRecord(list, recOrIdOrHash, withholdDeleted) {
       var hashKey = getHashKey(recOrIdOrHash);
       if( hashKey in list.byKey && (!withholdDeleted || !(hashKey in list.deleted)) ) { return list.byKey[hashKey]; }
@@ -452,7 +505,7 @@
     */
    function _updateListeners(callbacks, action, record, field) {
       var i = -1, len = callbacks.length;
-      //console.info(action, record.hashKey(), field);
+//      console.info(action, record.hashKey(), field, callbacks);
       while(++i < len) {
          callbacks[i](action, record, field);
       }
@@ -460,7 +513,7 @@
 
    function _sync(recList) {
       recList.obsSub = recList.obs.subscribe(function(obsValue) {
-         if( recList.ignoreNextEvent ) {
+         if( recList.ignoreNextEvent ) { //todo unused
             // notification suppressed
             recList.ignoreNextEvent = false;
          }
@@ -468,8 +521,8 @@
             // diff the last version with this one and see what changed; we only have to look for deletions and additions
             // since all of our local changes will change byKey before modifying the observable array, feedback loops
             // are prevented here because anything already marked as added/deleted can be considered a prior change
-            var existingKeys = recList.byKey, alreadyDeleted = recList.deleted, alreadyAdded = recList.added;
-            var i = -1, len = obsValue.length, obsKeys = [];
+            var existingKeys = recList.byKey, alreadyDeleted = recList.deleted;
+            var obsKeys = [];
 
             // look for added keys
             _.each(obsValue, function(v, i) {
@@ -492,7 +545,7 @@
    }
 
    function _findPrevId(existingKeys, deletedKeys, list, idx) {
-      if( idx === 0 ) { return true; }
+      if( idx === 0 ) { return 0; }
       else if( idx < list.length - 1 ) {
          var i = idx, key;
          while(i--) {

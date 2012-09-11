@@ -3,12 +3,12 @@ jQuery(function($) {
    "use strict";
    var undef;
 
-   var TestData = ko.sync.TestData;
+   var TestData = ko.sync.TestData, RecordList = ko.sync.RecordList;
 
    module('RecordList');
 
    test('#checkpoint', function() {
-      var model = TestData.model(), list = new ko.sync.RecordList(model);
+      var model = TestData.model(), list = new RecordList(model);
       list.add( TestData.makeRecords(2) );
       strictEqual(list.isDirty(), true, 'list is dirty after adding records');
       list.checkpoint();
@@ -19,19 +19,19 @@ jQuery(function($) {
       var it,
           model = TestData.model(),
           recs = TestData.makeRecords(5),
-          list = new ko.sync.RecordList(model);
+          list = new RecordList(model);
       // try one before we have any records
       it = list.iterator();
-      ok(it instanceof ko.sync.RecordList.Iterator, 'instanceof iterator');
+      ok(it instanceof RecordList.Iterator, 'instanceof iterator');
       strictEqual(it.len, 0, 'iterator has no records');
       list.add(recs);
       it = list.iterator();
-      ok(it instanceof ko.sync.RecordList.Iterator, 'instanceof iterator');
+      ok(it instanceof RecordList.Iterator, 'instanceof iterator');
       strictEqual(it.len, 5, 'has correct number of records');
    });
 
    test('#isDirty', function() {
-      var recs = TestData.makeRecords(5), list = new ko.sync.RecordList(TestData.model(), recs);
+      var recs = TestData.makeRecords(5), list = new RecordList(TestData.model(), recs);
       strictEqual(list.isDirty(), false);
       // changing a record should cascade out to the list
       recs[0].set('intOptional', 99);
@@ -41,7 +41,7 @@ jQuery(function($) {
    test('#add', function() {
       var model = TestData.model(),
           data = TestData.makeRecords(5),
-          list = new ko.sync.RecordList(model, data.slice(0, 4)),
+          list = new RecordList(model, data.slice(0, 4)),
           newRec = TestData.makeRecord(model, data.slice(4,5)[0]), key = newRec.hashKey();
       list.checkpoint();
       strictEqual(list.isDirty(), false, 'list is not dirty before add');
@@ -55,7 +55,7 @@ jQuery(function($) {
    test('#load', function() {
       var model = TestData.model(),
          data = TestData.makeRecords(5),
-         list = new ko.sync.RecordList(model, data.slice(0, 4)),
+         list = new RecordList(model, data.slice(0, 4)),
          newRec = TestData.makeRecord(model, data.slice(4,5)[0]), key = newRec.hashKey();
       strictEqual(list.isDirty(), false, 'list is not dirty before push');
       strictEqual(list.find(key), null, 'list does not contain record before push');
@@ -67,7 +67,7 @@ jQuery(function($) {
 
    test('#remove (using Record)', function() {
       var data = TestData.makeRecords(5),
-         list = new ko.sync.RecordList(TestData.model(), data),
+         list = new RecordList(TestData.model(), data),
             key = 'record-5', recToDelete = list.find(key);
       strictEqual(list.isDirty(), false, 'list is not dirty before remove');
       ok(list.find(key) !== null, 'list should contain our record before remove');
@@ -84,7 +84,7 @@ jQuery(function($) {
 
    test('#remove (using RecordId)', function() {
       var data = TestData.makeRecords(5),
-         list = new ko.sync.RecordList(TestData.model(), data),
+         list = new RecordList(TestData.model(), data),
           key = 'record-5', recToDelete = list.find(key);
       strictEqual(list.isDirty(), false, 'list is not dirty before remove');
       list.remove(recToDelete.getKey()); // delete using the record id
@@ -98,10 +98,10 @@ jQuery(function($) {
       }
    });
 
-   test('#move', function() {
-      expect(6);
-      var list = new ko.sync.RecordList(TestData.model(), TestData.makeRecords(5)),
-          rec = list[1], after = list[3], callbackInvoked = false;
+   test('#move (using record id)', function() {
+      expect(9);
+      var list = new RecordList(TestData.model(), TestData.makeRecords(5)),
+          rec = list.obs()[1], after = list.obs()[2], callbackInvoked = false;
 
       function callback(action, record, afterRec) {
          callbackInvoked = true;
@@ -110,21 +110,164 @@ jQuery(function($) {
          strictEqual(afterRec.hashKey(), after.hashKey(), 'notification with correct "after" record');
       }
 
-      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 1, 'record starts in correct position');
+      list.subscribe(callback);
+
+      // move record
       list.move(rec, after);
+      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 2, 'record in correct position after move');
+
+      // switch it back
+      after = list.obs()[0];
+      list.move(rec, after);
+      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 1, 'record in correct position after move');
+
+      ok(callbackInvoked, 'callback was invoked');
+   });
+
+   test('#move (with undefined)', function() {
+      expect(6);
+      var list = new RecordList(TestData.model(), TestData.makeRecords(5)),
+         rec = list.obs()[0], after = list.obs()[4], callbackInvoked = false;
+
+      function callback(action, record, afterRec) {
+         callbackInvoked = true;
+         strictEqual(action, 'moved', 'notification was a move event');
+         strictEqual(record.hashKey(), rec.hashKey(), 'notification with correct record id');
+         strictEqual(afterRec.hashKey(), after.hashKey(), 'notification with correct "after" record');
+      }
+
+      list.subscribe(callback);
+
+      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 0, 'record starts in correct position');
+      list.move(rec);
       strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 4, 'record in correct position after move');
 
       ok(callbackInvoked, 'callback was invoked');
    });
 
+   test('#move (with null)', function() {
+      expect(6);
+      var list = new RecordList(TestData.model(), TestData.makeRecords(5)),
+         rec = list.obs()[2], after = list.obs()[4], callbackInvoked = false;
+
+      function callback(action, record, afterRec) {
+         callbackInvoked = true;
+         strictEqual(action, 'moved', 'notification was a move event');
+         strictEqual(record.hashKey(), rec.hashKey(), 'notification with correct record id');
+         strictEqual(afterRec.hashKey(), after.hashKey(), 'notification with correct "after" record');
+      }
+
+      list.subscribe(callback);
+
+      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 2, 'record starts in correct position');
+      list.move(rec, null);
+      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 4, 'record in correct position after move');
+
+      ok(callbackInvoked, 'callback was invoked');
+   });
+
+   test('#move (with integer)', function() {
+      expect(17);
+      var list = new RecordList(TestData.model(), TestData.makeRecords(10)),
+          callbackInvoked = false, rec, after,
+          obs = list.obs();
+
+      function callback(action, record, afterRec) {
+         callbackInvoked = true;
+         strictEqual(action, 'moved', 'notification was a move event');
+         strictEqual(record.hashKey(), rec.hashKey(), 'notification with correct record id');
+         if( afterRec === null ) {
+            strictEqual(afterRec, after, 'notification with correct "after" record');
+         }
+         else {
+            strictEqual(afterRec.hashKey(), after.hashKey(), 'notification with correct "after" record');
+         }
+      }
+
+      list.subscribe(callback);
+
+      // move forwards
+      rec = obs[0];
+      after = obs[5];
+      list.move(rec, 6);
+      strictEqual(_indexOfKey(obs, rec.hashKey()), 6, 'moved forwards');
+
+      // move backwards
+      rec = obs[7];
+      after = obs[2];
+      list.move(rec, 3);
+      strictEqual(_indexOfKey(obs, rec.hashKey()), 3, 'moved backward');
+
+      // move first to last
+      rec = obs[0];
+      after = obs[9];
+      list.move(rec, 10);
+      strictEqual(_indexOfKey(obs, rec.hashKey()), 9, 'moved first to last');
+
+      // move last to first
+      rec = obs[9];
+      after = null;
+      list.move(rec, 0);
+      strictEqual(_indexOfKey(obs, rec.hashKey()), 0, 'moved last to first');
+
+      ok(callbackInvoked, 'callback was invoked');
+   });
+
+   test('#move (with negative integer)', function() {
+      expect(9);
+      var list = new RecordList(TestData.model(), TestData.makeRecords(10)), callbackInvoked = false, rec, after;
+
+      function callback(action, record, afterRec) {
+         callbackInvoked = true;
+         strictEqual(action, 'moved', 'notification was a move event');
+         strictEqual(record.hashKey(), rec.hashKey(), 'notification with correct record id');
+         if( !afterRec ) {
+            strictEqual(afterRec, after, 'notification with correct "after" record');
+         }
+         else {
+            strictEqual(afterRec.hashKey(), after.hashKey(), 'notification with correct "after" record');
+         }
+      }
+
+      list.subscribe(callback);
+
+      rec = list.obs()[3];
+      after = list.obs()[7];
+      list.move(rec, -1);
+      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 8, 'record before last position');
+
+      rec = list.obs()[3];
+      after = list.obs()[5];
+      list.move(rec, -3);
+      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 6, 'record before third from last');
+
+      ok(callbackInvoked, 'callback was invoked');
+   });
+
+   test('#move (invalid move options)', function() {
+      var data = TestData.makeRecords(10), list = new RecordList(TestData.model(), data.slice(0, 5)),
+          origList = list.obs().slice(), a = data[1], b = data[8];
+
+      function callback() {
+         ok(false, 'should not invoke callback');
+      }
+
+      list.subscribe(callback);
+      list.move(b, 0);
+      deepEqual(origList, list.obs(), 'list should not change');
+
+      list.subscribe(callback);
+      list.move(b, a);
+      deepEqual(origList, list.obs(), 'list should not change');
+   });
+
    function _indexOfKey(arr, key) {
-      var idx = 0;
+      var idx = -1;
       var x = _.find(arr, function(v) {
          idx++;
          return v.hashKey() === key;
       });
-      if( !x ) { return -1; }
-      else { return idx; }
+      return idx;
    }
 
    test('change tracking', function() {
@@ -133,7 +276,7 @@ jQuery(function($) {
       var i, v, k,
          data     = TestData.makeRecords(RECS_TOTAL),
          // create the list with 4 records pre-populated
-         list     =  new ko.sync.RecordList(TestData.model(), data.slice(0, RECS_PRELOADED));
+         list     =  new RecordList(TestData.model(), data.slice(0, RECS_PRELOADED));
 
       // now add records
       list.add(data.slice(RECS_PRELOADED));
@@ -171,7 +314,7 @@ jQuery(function($) {
 
    test('#updated (dirty)', function() {
       var data = TestData.makeRecords(5),
-         list  = new ko.sync.RecordList(TestData.model(), data),
+         list  = new RecordList(TestData.model(), data),
          rec   = list.find('record-4');
       rec.isDirty(true);
       strictEqual(list.isDirty(), false, 'list is not dirty before updated()');
@@ -181,7 +324,7 @@ jQuery(function($) {
 
    test('#updated (not dirty)', function() {
       var data = TestData.makeRecords(5),
-         list = new ko.sync.RecordList(TestData.model(), data),
+         list = new RecordList(TestData.model(), data),
             key = 'record-4', rec = list.find(key);
       strictEqual(list.isDirty(), false, 'list is not dirty before updated()');
       list.updated(rec);
@@ -194,7 +337,7 @@ jQuery(function($) {
       var i, v,
           data     = TestData.makeRecords(RECS_TOTAL+1), //create one extra for the manual push/delete ops; it won't be in list
           // create the list with 2 records pre-populated
-          list     =  new ko.sync.RecordList(TestData.model(), data.slice(0, RECS_PRELOADED)),
+          list     =  new RecordList(TestData.model(), data.slice(0, RECS_PRELOADED)),
           events   = [],
           expected = [];
 
@@ -278,7 +421,7 @@ jQuery(function($) {
       data[3] = recs[3].data;
       data[4] = recs[4].data;
       var obs = ko.observableArray(data), obsVals = obs();
-      var list = new ko.sync.RecordList(model, obs);
+      var list = new RecordList(model, obs);
       ok( list.obs === obs, 'is the same observableArray' );
       strictEqual(list.obs().length, obs().length, 'has right number of records');
       var i = obs().length;
@@ -358,8 +501,8 @@ jQuery(function($) {
    });
 
    function _newIt(len) {
-      var list = new ko.sync.RecordList(TestData.model(), TestData.makeRecords(len));
-      return new ko.sync.RecordList.Iterator(list);
+      var list = new RecordList(TestData.model(), TestData.makeRecords(len));
+      return new RecordList.Iterator(list);
    }
 
 });

@@ -29,11 +29,8 @@
        * @return {Object} the view for chaining
        */
       sync: function(viewOrList) {
-         //todo
-         //todo
-         //todo
-         //todo
-         //todo
+         var isArray = ko.isObservable(viewOrList) && 'destroyAll' in viewOrList;
+         viewOrList.crud = isArray? new ko.sync.CrudArray(new ko.sync.RecordList(this, viewOrList)) : new ko.sync.Crud(viewOrList, this);
          return viewOrList;
       },
 

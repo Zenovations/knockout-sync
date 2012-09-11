@@ -288,7 +288,7 @@
             unwatchFirebase(events, ref);
             var idx = _.indexOf(list, self);
             if( idx >= 0 ) {
-               list.slice(idx, 1);
+               list.splice(idx, 1);
             }
          }
       };

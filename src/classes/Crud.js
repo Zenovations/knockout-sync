@@ -9,7 +9,7 @@
     * @constructor
     */
    ko.sync.Crud = function(target, model, startDirty) {
-      this.isDirty = ko.observable(startDirty||false);
+      this.dirtyFlag = ko.observable(startDirty||false);
       this.checkpoint = ko.mapping.toJSON(target);
       this.model = model;
       //todo deal with auto-updates

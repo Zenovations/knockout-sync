@@ -18,6 +18,11 @@ a data store for the appropriate storage type and using that instead.
 Simple example:
 
 ```javascript
+    // define a View object to use with Knockout
+    function View( recordId ) {
+       this.id = recordId;
+    }
+
     //define a data model (e.g. a Firebase path or data table)
     var model = new ko.sync.Model({
         store:  new ko.sync.FirebaseStore(MY_URL),
@@ -32,15 +37,16 @@ Simple example:
         }
     });
 
-    //apply it to an existing knockout view (one record)
+    // create a view and load a record into it
     var view = new View();
     model.sync(view);
+    view.crud.load('record123');
 
     // or let the model automagically create a view, loaded with a record from the database
     var view = model.newView( 'record123' );
 
-    // the fields this.login, this.email, this.pass, and this.joinDate will now exist as observables in `view`
-    // and from here out, the database and the local record are synchronized
+    // in either case, the fields this.login, this.email, this.pass, and this.joinDate will now exist as
+    // observables in `view` and from here on, the database and the local record are synchronized
 
     // let's change something!
     view.email('new@address.tld'); // automatically synced to database!

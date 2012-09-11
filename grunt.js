@@ -18,7 +18,8 @@ module.exports = function(grunt) {
          dist: {
             src: [
                '<banner:meta.banner>',
-               'lib/**/*.js',
+               'lib/*.js',
+               'lib/deplibs/*.js',
                'src/*.js',
                'src/classes/*.js',
                '<banner:meta.footer>'
@@ -29,6 +30,7 @@ module.exports = function(grunt) {
             src: [
                '<banner:meta.banner>',
                'lib/*.js',
+               'lib/deplibs/*.js',
                'src/*.js',
                'src/classes/*.js',
                'src/validators/*.js',
@@ -52,7 +54,7 @@ module.exports = function(grunt) {
          files: ['test/**/*.html']
       },
       lint: {
-         files: ['grunt.js', 'src/**/*.js', 'test/**/*.js']
+         files: ['grunt.js', 'src/**/*.js', 'test/**/*.js', 'lib/**/*.js']
       },
       watch: {
          files: '<config:lint.files>',
