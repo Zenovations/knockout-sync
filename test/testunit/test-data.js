@@ -144,13 +144,6 @@
       return new ko.sync.RecordId(['id'], {'id': value});
    };
 
-   var bigDataTemplate = {
-      id:             'record123',
-      aString:        'a big string',
-      sort:      10,
-      aBool:          false
-   };
-
    exports.bigData = {
       COUNT: 200,
       props: {
@@ -158,10 +151,10 @@
          key: 'id',
          sort:  'sort',
          fields: {
-            id:        { required: true,  persist: true, type: 'string'  },
-            aString:   { required: false, persist: true, type: 'string'  },
-            sort: { required: false, persist: true, type: 'int'     },
-            aBool:     { required: false, persist: true, type: 'boolean' }
+            id:      { required: true,  persist: true, type: 'string'  },
+            aString: { required: false, persist: true, type: 'string'  },
+            sort:    { required: false, persist: true, type: 'int'     },
+            aBool:   { required: false, persist: true, type: 'boolean' }
          }
       },
 
@@ -195,14 +188,14 @@
        * @param {int} [numrecs]
        * @return {jQuery.Deferred}
        */
-      reset: function(firebaseRoot, numrecs) {
+      reset: function(firebaseRoot, numrecs, moreData) {
          console.time('bigData.reset()');
          var i, def = $.Deferred(), count = 0, ref = firebaseRoot.child('BigData');
          ref.set(null, function() {
             var ref = firebaseRoot.child('BigData'), max = numrecs || exports.bigData.COUNT;
             for(i=1; i <= max; i++) {
                ref.child(i).setWithPriority(
-                  {id: i, aString: 'string-'+i, sort: i, aBool: (i%2 === 0)},
+                  exports.bigData.data(i, moreData),
                   i,
                   function() { if( ++count == max ) {
                      console.timeEnd('bigData.reset()');

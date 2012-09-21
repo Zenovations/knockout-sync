@@ -711,10 +711,10 @@ jQuery(function($) {
          }, 250), recRef = ref.child('100');
 
          // we observe the model for changes
-         obs1 = store.watchRecord(model, rec, watcher);
+         obs1 = store.watchRecord(model, watcher, rec.getKey());
 
          // we add the same observer again, which should just return the first reference and not cause duplicate notifications
-         obs2 = store.watchRecord(model, rec, watcher);
+         obs2 = store.watchRecord(model, watcher, rec.getKey());
          recRef.set(TestData.bigData.data(100, {aString: 'i was changed', id: '100a'}));
          recRef.setPriority(101);
          recRef.remove();

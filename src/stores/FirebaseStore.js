@@ -167,6 +167,7 @@
     * @return {Promise} fulfilled when all records have been fetched with {int} total number
     */
    FirebaseStore.prototype.query = function(model, iterator, criteria) {
+      //todo-perf filter iterates the entire table; could we optimize?
       return Util.filter(model, this.base, criteria, iterator);
    };
 
@@ -222,13 +223,13 @@
    };
 
    /**
-    * @param {ko.sync.Model}  model
-    * @param {ko.sync.Record} record
-    * @param  {Function}      callback
+    * @param {ko.sync.Model}    model
+    * @param {ko.sync.RecordId} recordId
+    * @param  {Function}        callback
     * @return {Object}
     */
-   FirebaseStore.prototype.watchRecord = function(model, record, callback) {
-      var props = { table: model.table, key: record.hashKey(), callback: callback };
+   FirebaseStore.prototype.watchRecord = function(model, recordId, callback) {
+      var props = { table: model.table, key: recordId.hashKey(), callback: callback };
       var obs = _.find(this.observedRecs, function(o) { return o.matches(props); });
       if( !obs ) {
          obs = new RecordObserver(this.observedRecs, this.base, props);
@@ -605,6 +606,7 @@
             curr     = -1,
             matches  = 0;
          _buildFilter(opts);
+         //todo-perf Util.each requires iterating the entire table; optimize?
          return Util.each(table, function(data, id) {
             if( data !== null && (!opts.filter || opts.filter(data, id)) ) {
                curr++;
@@ -720,7 +722,7 @@
        * a limit that accounts for offset (by adding offset onto the limit amount) so that enough records are retrieved
        * to account for the offset. The caller must still manually strip off the offset amount (unh).
        *
-       * //todo improve this somehow when Firebase adds some more query related API features
+       * //todo improve this when Firebase adds some more query related API features
        *
        * @param {Firebase} root
        * @param {string} tableName

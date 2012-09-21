@@ -57,10 +57,10 @@ jQuery(function($) {
       var id1 = new ko.sync.RecordId(['id'], {id: 'record123'});
       var id2 = new ko.sync.RecordId(['id'], ko.sync.TestData.genericData());
       var id3 = new ko.sync.RecordId(['id', 'stringRequired'], ko.sync.TestData.genericData());
-      ok(id1.equals(id2), 'ids are equal');
-      ok(!id1.equals(null), "works with null");
-      ok(!id1.equals(undef), "works with undefined");
-      ok(!id3.equals(id1), "not equal to a different id");
+      ok(id1.equals(id2),         'ids are equal');
+      ok(!id1.equals(null),       "works with null");
+      ok(!id1.equals(undef),      "works with undefined");
+      ok(!id3.equals(id1),        "not equal to a different id");
       ok(!id1.equals('not id 1'), 'not equal to random string');
       ok(id1.equals('record123'), 'is equal to string "record123"');
    });

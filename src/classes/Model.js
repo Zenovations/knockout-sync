@@ -12,6 +12,7 @@
        */
       init: function(props) {
          var defaults    = ko.utils.extend(ko.sync.Model.FIELD_DEFAULTS, props.defaults);
+         /** @var {ko.sync.Store} */
          this.store      = props.store;
          this.table      = props.table;
          this.key        = props.key;
@@ -21,17 +22,11 @@
          this.inst       = modelInst++;
          this.fields     = _processFields(defaults, props.fields);
          this.factory    = props.recordFactory || new RecordFactory(this);
+         this.controller = new SyncController(this);
       },
 
-      /**
-       *
-       * @param {Object} viewOrList
-       * @return {Object} the view for chaining
-       */
-      sync: function(viewOrList) {
-         var isArray = ko.isObservable(viewOrList) && 'destroyAll' in viewOrList;
-         viewOrList.crud = isArray? new ko.sync.CrudArray(new ko.sync.RecordList(this, viewOrList)) : new ko.sync.Crud(viewOrList, this);
-         return viewOrList;
+      getController: function() {
+         return this.controller;
       },
 
       /**

@@ -1,4 +1,4 @@
-/*! Knockout Sync - v0.1.0 - 2012-09-11
+/*! Knockout Sync - v0.1.0 - 2012-09-20
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL */
 
@@ -1312,120 +1312,203 @@
    "use strict";
 
    /**
-    * @param {Object} target a mapped observable array
+    * @param {Object}        target   an object, observable, or view containing the record data
     * @param {ko.sync.Model} model
-    * @param {boolean} [startDirty]
+    * @param {ko.sync.Record|Object} [recordOrData]
     * @constructor
     */
-   ko.sync.Crud = function(target, model, startDirty) {
-      this.dirtyFlag = ko.observable(startDirty||false);
-      this.checkpoint = ko.mapping.toJSON(target);
-      this.model = model;
-      //todo deal with auto-updates
-      //todo monitor for changes
+   ko.sync.Crud = function(target, model, recordOrData) {
+      this.parent = target;
+      this.promise = $.Deferred().resolve().promise();
+      if( recordOrData instanceof ko.sync.Record ) {
+         this.record = recordOrData;
+      }
+      else {
+         this.record = model.newRecord(recordOrData);
+      }
+      this.controller = new ko.sync.SyncController(model, this.record);
    };
 
    var Crud = ko.sync.Crud;
-   $.extend(Crud.prototype, {
-      isDirty: function() {
-         //todo
-      },
 
-      create: function() {
-         //todo
 
-         return this;
-      },
+   /**
+    * @param {Object} target
+    * @param {ko.sync.Model} model
+    * @param {ko.sync.Record|ko.sync.RecordList|Object} [dataRecOrList]
+    * @static
+    */
+   Crud.applyTo = function( target, model, dataRecOrList) {
+      if( ko.isObservable(target) && target.push ) {
+         target.crud = new ko.sync.CrudArray(target, model, dataRecOrList);
+      }
+      else {
+         target.crud = new ko.sync.Crud(target, model, dataRecOrList);
+      }
+   };
 
-      read: function( recordId ) {
-         //todo
+   /**
+    * @param {boolean} [b] set the isDirty value (use this with care!)
+    * @return {boolean}
+    */
+   Crud.prototype.isDirty = function(b) {
+      return this.record.isDirty(b);
+   };
 
-         return this;
-      },
+   /**
+    * Save a new record to the data layer
+    * @return {ko.sync.Crud} this
+    */
+   Crud.prototype.create = function() {
+      //todo
 
-      update: function() {
-         //todo
+      return this;
+   };
 
-         return this;
-      },
+   /**
+    * Load a record from the data layer into the local copy
+    * @param {ko.sync.RecordId|string} recordId
+    * @return {ko.sync.Crud} this
+    */
+   Crud.prototype.read = function( recordId ) {
+      //todo
 
-      delete: function() {
-         //todo
+      return this;
+   };
 
-         return this;
-      },
+   /**
+    * Push updates to the data layer
+    * @return {ko.sync.Crud} this
+    */
+   Crud.prototype.update = function() {
+      this.record.isDirty() && this.controller.pushUpdates(this.record);
+      return this;
+   };
 
-      save: function() {
-         return this.update();
-      },
+   /**
+    * Delete record locally and from the data layer service
+    * @return {ko.sync.Crud} this
+    */
+   Crud.prototype.delete = function() {
+      //todo
 
-      load: function() {
-         return this.read.apply(this, _.toArray(arguments));
-      },
+      return this;
+   };
 
-      promise: $.Deferred().resolve(null).promise()
-   });
+   /**
+    * Alias to the `update` method.
+    * @return {ko.sync.Crud}
+    */
+   Crud.prototype.save = function() {
+      return this.update();
+   };
+
+   /**
+    * Alias to the `read` method.
+    * @return {ko.sync.Crud}
+    */
+   Crud.prototype.load = function() {
+      return this.read.apply(this, _.toArray(arguments));
+   };
+
+})(ko);
+
+
+(function($) {
 
    /**
     * @param {ko.sync.RecordList} list a RecordList we will use as our base
     * @constructor
     */
-   ko.sync.CrudArray = function(list) {
-      this.list = list;
+   ko.sync.CrudArray = function(target, model, list, criteria) {
+      this.list = list; //todo create new lists? may not have one to start?
+      this.parent = target;
+      this.promise = $.Deferred().resolve().promise();
+      //todo what do we do with lists that are already populated? SyncController will expect the sync op to populate data
+      this.controller = new ko.sync.SyncController(model, list, criteria);
    };
 
    var CrudArray = ko.sync.CrudArray;
-   $.extend(CrudArray.prototype, {
-      isDirty: function() {
-         return this.list.isDirty();
-      },
 
-      create: function( data ) {
-         //todo
-
-         return this;
-      },
-
-      read: function( criteria ) {
-         //todo
-
-         return this;
-      },
-
-      update: function() {
-         //todo
-
-         return this;
-      },
-
-      delete: function( hashKey ) {
-         //todo
-
-         return this;
-      },
-
-      save: function() {
-         return this.update();
-      },
-
-      load: function() {
-         return this.read.apply(this, _.toArray(arguments));
-      },
-
-      promise: $.Deferred().resolve(null).promise()
-   });
-
-   CrudArray.applyTo = function( target, model, startDirty ) {
-      if( ko.isObservable(target) && target.push ) {
-         target.crud = new ko.sync.CrudArray(target, model, startDirty);
-      }
-      else {
-         target.crud = new ko.sync.Crud(target, model, startDirty);
-      }
-      target.crud.parent = target;
+   /**
+    * @param {boolean} [b] set the isDirty value (use with care!)
+    * @return {boolean}
+    */
+   CrudArray.prototype.isDirty = function(b) {
+      return this.list.isDirty(b);
    };
 
-})(ko);
+   /**
+    * Add a new record to the local list and sync it to the data layer (during the next call
+    * to `update()` if auto-update is false)
+    *
+    * @param {ko.sync.Record|Object} recordOrData
+    * @param {ko.sync.Record|ko.sync.RecordId|String} [afterRecordId]
+    * @return {ko.sync.CrudArray} this
+    */
+   CrudArray.prototype.create = function( recordOrData, afterRecordId ) {
+      var rec = (recordOrData instanceof ko.sync.Record)? recordOrData : this.model.newRecord(recordOrData);
+      this.list.add(rec, afterRecordId);
+      return this;
+   };
+
+   /**
+    * Load a list of records from data layer into the local copy (replaces local list)
+    *
+    * @param {object|function} criteria
+    * @return {ko.sync.CrudArray} this
+    */
+   CrudArray.prototype.read = function( criteria ) {
+      //todo
+
+      return this;
+   };
+
+   /**
+    * Save any unsynced changes to the local list.
+    *
+    * @return {ko.sync.CrudArray} this
+    */
+   CrudArray.prototype.update = function() {
+      var list = this.list, c = this.controller;
+      if( list.isDirty() ) {
+         list.added.length && c.pushUpdates(list.added, 'added');
+         list.updated.length && c.pushUpdates(list.updated, 'updated');
+         list.deleted.length && c.pushUpdates(list.deleted, 'deleted');
+         list.moved.length && c.pushUpdates(list.moved, 'moved');
+      }
+      return this;
+   };
+
+   /**
+    * Delete a record from the local list and also from the data layer (if auto-update is false, the remote delete
+    * is triggered during the next `update()` operation.
+    *
+    * @param {ko.sync.RecordId|ko.sync.Record|string} hashKey
+    * @return {ko.sync.CrudArray} this
+    */
+   CrudArray.prototype.delete = function( hashKey ) {
+      this.list.remove(hashKey);
+      return this;
+   };
+
+   /**
+    * Alias to the `update` method.
+    * @return {ko.sync.CrudArray}
+    */
+   CrudArray.prototype.save = function() {
+      return this.update();
+   };
+
+   /**
+    * Alias to the `read` method.
+    * @return {ko.sync.CrudArray}
+    */
+   CrudArray.prototype.load = function() {
+      return this.read.apply(this, _.toArray(arguments));
+   };
+
+})(jQuery);
 
 
 /*******************************************
@@ -1442,6 +1525,7 @@
        */
       init: function(props) {
          var defaults    = ko.utils.extend(ko.sync.Model.FIELD_DEFAULTS, props.defaults);
+         /** @var {ko.sync.Store} */
          this.store      = props.store;
          this.table      = props.table;
          this.key        = props.key;
@@ -1451,17 +1535,11 @@
          this.inst       = modelInst++;
          this.fields     = _processFields(defaults, props.fields);
          this.factory    = props.recordFactory || new RecordFactory(this);
+         this.controller = new SyncController(this);
       },
 
-      /**
-       *
-       * @param {Object} viewOrList
-       * @return {Object} the view for chaining
-       */
-      sync: function(viewOrList) {
-         var isArray = ko.isObservable(viewOrList) && 'destroyAll' in viewOrList;
-         viewOrList.crud = isArray? new ko.sync.CrudArray(new ko.sync.RecordList(this, viewOrList)) : new ko.sync.Crud(viewOrList, this);
-         return viewOrList;
+      getController: function() {
+         return this.controller;
       },
 
       /**
@@ -1905,12 +1983,12 @@
     */
    ko.sync.RecordList = function(model, records) {
       this.model     = model;
-      this.byKey     = {}; // a list of all keys in this list for quick reference, deleted records are included here until checkpoint() is called
-      this.cache     = {}; // a partial list of keys to indices to speed up retrieval
-      this.listeners = []; // a list of subscribers to events in this list
-      this.subs      = []; // a list of records to which this list has subscribed
+      this.byKey     = {};   // a list of all keys in this list for quick reference, deleted records are included here until checkpoint() is called
+      this.cache     = {};   // a partial list of keys to indices to speed up retrieval
+      this.listeners = [];   // a list of subscribers to events in this list
+      this.subs      = [];   // a list of records to which this list has subscribed
       this.obsSub    = null; // a subscription to the observableArray (added by _sync, used by ko.sync.RecordList::dispose)
-      this.checkpoint();   // refresh our changelists (added/changed/moved/deleted records)
+      this.checkpoint();     // refresh our changelists (added/changed/moved/deleted records)
       if( records && ko.isObservable(records) ) {
          // use the `records` object as our observableArray
          this.obs = records;
@@ -1931,17 +2009,21 @@
 
    /**
     * Clear any current change lists (added/updated/moved/deleted records) and begin tracking fresh from this point.
+    * @param {boolean} [purge] when set to true, the observed list is emptied of all values (no updates are sent and no events generated)
     * @return {ko.sync.RecordList} this
     */
-   ko.sync.RecordList.prototype.checkpoint = function() {
-      var keys = this.byKey;
-      // remove any keys which have been deleted
-      _.has(this, 'deleted') && _.each(this.deleted, function(v, k) { delete keys[k]; });
+   ko.sync.RecordList.prototype.checkpoint = function(purge) {
       this.changed = {};
       this.added   = {};
       this.deleted = {};
       this.moved   = {};
       this.dirty   = false;
+      if( purge ) {
+         this.dispose();
+         this.byKey = {};
+         this.obs.removeAll();
+         _sync(this);
+      }
       return this;
    };
 
@@ -1964,18 +2046,26 @@
    /**
     * Add a new record to our observable array and record it as newly added.
     *
-    * If no afterRecordId is provided, the value is appended to the list. If the `afterRecordId` is set to {boolean}true,
-    * then the value is prepended to the list instead.
+    * If afterRecordId is a string, then it represents the hashKey of the record that will be immediately before our
+    * insert position. If that record doesn't exist, then we append to the end.
+    *
+    * If afterRecordId is null or undefined, then we append to the end.
+    *
+    * If afterRecordId is a positive integer, then it is the exact position at which to insert our record. Thus,
+    * 0 means insert it at position 0 (shift all records to the right 1), 1 means insert it immediately after record
+    * 0, and so on.
+    *
+    * If afterRecordId is a negative integer, it is relative to the end position. Thus, -1 means just before
+    * the last record, -2 means insert it before the last 2 records, etc.
     *
     * @param {ko.sync.Record} record
-    * @param {ko.sync.RecordId|ko.sync.Record|String|boolean} [afterRecordId] see description
+    * @param {ko.sync.RecordId|ko.sync.Record|String|int} [afterRecordId] see description
     * @return {ko.sync.RecordList} this
     */
    ko.sync.RecordList.prototype.add = function(record, afterRecordId) {
       if( _.isArray(record) ) {
          var i = -1, len = record.length;
          while(++i < len) {
-            // add them in reverse so they end up in order
             this.add(record[i], afterRecordId);
             afterRecordId = record[i].getKey();
          }
@@ -2053,7 +2143,7 @@
             _updateListeners(this.listeners, 'moved', record, afterRecord);
          }
       }
-      else if( typeof(console) === 'object' && console.warn ) {
+      else {
          console.warn('attempted to move a record which doesn\'t exist; probably just a concurrent edit');
       }
       return this;
@@ -2075,11 +2165,20 @@
    /**
     * Pushes a record into the observableArray; does not store anything in the added/updated/moved/deleted lists.
     *
-    * If no afterRecordId is provided, the value is appended to the list. If the `afterRecordId` is set to {boolean}true,
-    * then the value is prepended to the list instead.
+    * If afterRecordId is a string, then it represents the hashKey of the record that will be immediately before our
+    * insert position. If that record doesn't exist, then we append to the end.
+    *
+    * If afterRecordId is null or undefined, then we append to the end.
+    *
+    * If afterRecordId is a positive integer, then it is the exact position at which to insert our record. Thus,
+    * 0 means insert it at position 0 (shift all records to the right 1), 1 means insert it immediately after record
+    * 0, and so on.
+    *
+    * If afterRecordId is a negative integer, it is relative to the end position. Thus, -1 means just before
+    * the last record, -2 means insert it before the last 2 records, etc.
     *
     * @param {ko.sync.Record} record
-    * @param {ko.sync.RecordId|ko.sync.Record|String} [afterRecordId] see description
+    * @param {ko.sync.RecordId|ko.sync.Record|int|String} [afterRecordId] see description
     * @param {boolean} [sendNotification] if true an added notification is sent
     * @return {ko.sync.RecordList} this
     */
@@ -2087,7 +2186,7 @@
       if(_.isArray(record)) {
          var i = -1, len = record.length;
          while(++i < len) {
-            this.load(record[i], afterRecordId);
+            this.load(record[i], afterRecordId, sendNotification);
             afterRecordId = afterRecordId? record[i].getKey() : undef;
          }
       }
@@ -2167,6 +2266,8 @@
          this.subs[i].dispose();
       }
       this.obsSub && this.obsSub.dispose();
+      this.subs = [];
+      this.obsSub = null;
       return this;
    };
 
@@ -2311,6 +2412,7 @@
     * @private
     */
    function _recordIndex(list, recOrIdOrHash) {
+      //todo optimize for mapped arrays
       var hashKey = getHashKey(recOrIdOrHash), cache = list.cache;
       if( hashKey && hashKey in cache ) {
          // do we have it in hand? (in our cache?)
@@ -2347,6 +2449,9 @@
     * If afterRecordId is a negative integer, it is relative to the end position. Thus, -1 means just before
     * the last record, -2 means insert it before the last 2 records, etc.
     *
+    * In the case the `record` exists in the list, this method will also adjust for cases where slicing the element
+    * out of the list would affect the index of the insert position.
+    *
     * @param {RecordList} recList
     * @param {Record}     record    the record to move
     * @param {String|int|null} [afterRecordIdOrIndex] see description
@@ -2354,6 +2459,7 @@
     * @private
     */
    function _findInsertPosition(recList, record, afterRecordIdOrIndex) {
+      //todo optimize for mapped arrays
       var numRecs = recList.obs().length, loc = numRecs, currLoc;
       // a null or undefined is interpreted as append to end of records
       if( afterRecordIdOrIndex !== undef && afterRecordIdOrIndex !== null ) {
@@ -2369,11 +2475,17 @@
                // if the record wasn't found, we append
                loc = numRecs;
             }
-            else if( currLoc > loc ) {
-               // when loc < currLoc, it will be removed, dropping all the indices one place
-               // when it's greater, we need to add one to get the appropriate slot (i.e. after the record)
+            else if( currLoc === -1 || currLoc > loc ) {
+               // when the element currently exists in the list and is positioned before the index we want to move it to,
+               // it will effectively drop all the indices one place because we remove it and re-insert
+               // which is the reason for the currLoc > loc check
+               // when it's greater or not in the list, we need to add one to get the appropriate slot
+               // (i.e. it goes after the record)
                loc++;
             }
+            // this invisibly handles the case where currLoc === loc, meaning we aren't really moving
+            // it at all, because it simply falls through, returning `loc` which will be equal to currLoc
+            // and causing it to be removed and inserted right back at the same place
          }
       }
       return loc;
@@ -2413,6 +2525,12 @@
             var existingKeys = recList.byKey, alreadyDeleted = recList.deleted;
             var obsKeys = [];
 
+            // look for deleted keys
+            _.chain(existingKeys).keys().difference(_.keys(alreadyDeleted)).difference(obsKeys).each(function(key) {
+               // it's in the old values and not marked as deleted, but not in the new values
+               takeOut(recList, existingKeys[key]);
+            });
+
             // look for added keys
             _.each(obsValue, function(v, i) {
                var key = v.hashKey();
@@ -2420,13 +2538,18 @@
                   // it's in the new values but not in the old values
                   putIn(recList, v, _findPrevId(existingKeys, alreadyDeleted, obsValue, i), true);
                }
+               else if(_.has(alreadyDeleted, key) ) {
+                  // the record was removed then added, so it's simply moved
+                  //todo
+                  //todo
+                  //todo
+                  //todo
+                  //todo
+                  //todo
+                  //todo
+                  //todo
+               }
                obsKeys.push(v.hashKey()); // saves an iteration to collect the keys
-            });
-
-            // look for deleted keys
-            _.chain(existingKeys).keys().difference(_.keys(alreadyDeleted)).difference(obsKeys).each(function(key) {
-               // it's in the old values and not marked as deleted, but not in the new values
-               takeOut(recList, existingKeys[key]);
             });
          }
          recList.lastUpdate = obsValue.slice();
@@ -2468,7 +2591,7 @@
     *
     * @interface
     */
-   var Store = ko.sync.Store = Class.extend({
+   ko.sync.Store = Class.extend({
       init: function(properties) { throw new Error('Interface not implemented'); },
 
       /**
@@ -2613,15 +2736,189 @@
        * changes.
        *
        * @param {ko.sync.Model}  model
-       * @param {ko.sync.Record} record
        * @param  {Function}      callback
+       * @param {ko.sync.RecordId|ko.sync.Record} recordId
        * @return {Object}
        */
-      watchRecord: function(model, record, callback) { throw new Error('Interface not implemented'); }
+      watchRecord: function(model, callback, recordId) { throw new Error('Interface not implemented'); }
 
    });
 
 })(ko);
+(function($) {
+
+   /**
+    * Establish and handle client-to-server and server-to-client updates. If the model/store only supports
+    * one-way updates, then we use those. This will also trigger automatic pushes to the server when auto-sync
+    * is true.
+    */
+   ko.sync.SyncController = Class.extend({
+
+      /**
+       * Establish and handle client-to-server and server-to-client updates. If the model/store only supports
+       * one-way updates, then we use those. This will also trigger automatic pushes to the server when auto-sync
+       * is true.
+       *
+       * @param {ko.sync.Model} model
+       * @param {ko.sync.RecordList|ko.sync.Record} listOrRecord
+       * @param {object} [criteria] used with lists to specify the filter parameters used by server and to load initial data
+       * @constructor
+       */
+      init: function(model, listOrRecord, criteria) {
+         var isList = listOrRecord instanceof ko.sync.RecordList, store = model.store;
+         this.store = store;
+         this.model = model;
+         this.subs = [];
+
+         //todo if the model.auto property is toggled this will not be updated; do we care?
+         if( model.auto ) {
+            // sync client to server (push) updates
+            if( isList ) {
+               this.subs.push.apply(this.subs, syncListPush(model, listOrRecord));
+            }
+            else         {
+               this.subs.push.apply(this.subs, syncRecordPush(model, listOrRecord));
+            }
+         }
+
+         //todo if the model.store property is changed this will not be updated; do we care?
+         if( store.hasTwoWaySync(model) ) {
+            // sync server to client (pull) updates
+            // monitor the client (using the libs)
+            if( isList ) {
+               this.subs.push.apply(this.subs, syncListPull(model, listOrRecord, criteria));
+            }
+            else {
+               this.subs.push.apply(this.subs, syncRecordPull(model, listOrRecord));
+            }
+         }
+      },
+
+      /**
+       * @return {ko.sync.SyncController} this
+       */
+      dispose: function() {
+         var i = this.subs.length;
+         while (i--) {
+            this.subs[i].dispose();
+         }
+         this.subs = [];
+         return this;
+      },
+
+      /**
+       * Force updates (for use when auto-sync is off). It is safe to call this on unchanged records or empty lists
+       *
+       * @param {Array|ko.sync.Record} listOrRecord
+       * @param {string} [action]  added, updated, or deleted
+       * @return {Promise} fulfilled when all updates are marked completed by the server
+       */
+      pushUpdates: function(listOrRecord, action) {
+         if(_.isArray(listOrRecord) ) {
+            var promises = [];
+            _.each(listOrRecord, function(v) {
+               promises.push(this.pushUpdates(v, action));
+            }, this);
+            return $.when(promises);
+         }
+         else if( listOrRecord.isDirty() ) {
+            return $.Deferred(function(def) {
+               var store = this.store, model = this.model;
+               if( !action ) { action = 'updated'; }
+               switch(action) {
+                  case 'added':
+                     store.create(model, listOrRecord).then(_resolve(def, listOrRecord));
+                     break;
+                  case 'updated':
+                     store.update(model, listOrRecord).then(_resolve(def, listOrRecord));
+                     break;
+                  case 'deleted':
+                     store.delete(model, listOrRecord).then.(_resolve(def, listOrRecord));
+                     break;
+                  case 'moved':
+                     //todo-sort does this work? how do we get "moved" notifications?
+                     store.update(model, listOrRecord).then(_resolve(def, listOrRecord));
+                     break;
+                  default:
+                     throw new Error('Invalid action', action);
+               }
+            });
+         }
+         return $.Deferred().resolve(false);
+      }
+   });
+
+   function syncListPush(model, list) {
+      var store = model.store;
+      list.subscribe(function(action, record, field) {
+         console.log('push::'+action, name, prevSibling, rec.hashKey()); //debug
+         switch(action) {
+            case 'added':
+               store.create(model, record);
+               break;
+            case 'deleted':
+               store.delete(model, record);
+               break;
+            case 'updated':
+               store.update(model, record);
+               break;
+            case 'moved':
+               //todo-sort is this sufficient? will the record even be dirty?
+               store.update(model, record);
+               break;
+            default:
+               console.error('invalid action', _.toArray(arguments));
+         }
+      });
+   }
+
+   function syncListPull(model, list, criteria) {
+      model.store.watch(model, function(action, name, value, prevSibling) {
+         var rec = list.find(name) || model.newRecord(value);
+         console.log('pull::'+action, name, prevSibling, rec.hashKey()); //debug
+         switch(action) {
+            case 'added':
+               list.add(rec, prevSibling || 0);
+               break;
+            case 'deleted':
+               list.remove(rec);
+               break;
+            case 'updated':
+               rec.updateAll(value);
+               break;
+            case 'moved':
+               list.move(rec, prevSibling || 0);
+               break;
+            default:
+               console.error('invalid action', _.toArray(arguments));
+         }
+      }, criteria);
+   }
+
+   function syncRecordPush(model, rec) {
+      var store = model.store;
+      rec.subscribe(function(record, fieldChanged) {
+         store.update(model, record);
+      });
+   }
+
+   function syncRecordPull(model, rec) {
+      model.store.watchRecord(model, rec.getKey(), function(id, val, sortPriority) {
+         //todo-sort need to do something with sortPriority here
+         rec.updateAll(val);
+      });
+   }
+
+   function _resolve(def, rec) {
+      return function() {
+         rec.isDirty(false);
+         def.resolve.apply(def, _.toArray(arguments));
+      };
+   }
+
+})(jQuery);
+
+
 /*******************************************
  * Validator for knockout-sync
  *******************************************/
@@ -2800,6 +3097,7 @@
     * @return {Promise} fulfilled when all records have been fetched with {int} total number
     */
    FirebaseStore.prototype.query = function(model, iterator, criteria) {
+      //todo-perf filter iterates the entire table; could we optimize?
       return Util.filter(model, this.base, criteria, iterator);
    };
 
@@ -2855,13 +3153,13 @@
    };
 
    /**
-    * @param {ko.sync.Model}  model
-    * @param {ko.sync.Record} record
-    * @param  {Function}      callback
+    * @param {ko.sync.Model}    model
+    * @param {ko.sync.RecordId} recordId
+    * @param  {Function}        callback
     * @return {Object}
     */
-   FirebaseStore.prototype.watchRecord = function(model, record, callback) {
-      var props = { table: model.table, key: record.hashKey(), callback: callback };
+   FirebaseStore.prototype.watchRecord = function(model, recordId, callback) {
+      var props = { table: model.table, key: recordId.hashKey(), callback: callback };
       var obs = _.find(this.observedRecs, function(o) { return o.matches(props); });
       if( !obs ) {
          obs = new RecordObserver(this.observedRecs, this.base, props);
@@ -3238,6 +3536,7 @@
             curr     = -1,
             matches  = 0;
          _buildFilter(opts);
+         //todo-perf Util.each requires iterating the entire table; optimize?
          return Util.each(table, function(data, id) {
             if( data !== null && (!opts.filter || opts.filter(data, id)) ) {
                curr++;
@@ -3353,7 +3652,7 @@
        * a limit that accounts for offset (by adding offset onto the limit amount) so that enough records are retrieved
        * to account for the offset. The caller must still manually strip off the offset amount (unh).
        *
-       * //todo improve this somehow when Firebase adds some more query related API features
+       * //todo improve this when Firebase adds some more query related API features
        *
        * @param {Firebase} root
        * @param {string} tableName

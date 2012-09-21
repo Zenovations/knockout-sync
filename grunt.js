@@ -2,6 +2,8 @@
 /*global module:false*/
 module.exports = function(grunt) {
 
+   grunt.loadNpmTasks('grunt-mocha');
+
    // Project configuration.
    grunt.initConfig({
       pkg: '<json:grunt.json>',
@@ -89,8 +91,6 @@ module.exports = function(grunt) {
    grunt.registerTask('make',    'concat min');
    grunt.registerTask('test', 'mocha');
 //   grunt.registerTask('default', 'concat min');
-
-   grunt.loadNpmTasks('grunt-mocha');
 
 };
 

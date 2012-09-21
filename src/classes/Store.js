@@ -11,7 +11,7 @@
     *
     * @interface
     */
-   var Store = ko.sync.Store = Class.extend({
+   ko.sync.Store = Class.extend({
       init: function(properties) { throw new Error('Interface not implemented'); },
 
       /**
@@ -156,11 +156,11 @@
        * changes.
        *
        * @param {ko.sync.Model}  model
-       * @param {ko.sync.Record} record
        * @param  {Function}      callback
+       * @param {ko.sync.RecordId|ko.sync.Record} recordId
        * @return {Object}
        */
-      watchRecord: function(model, record, callback) { throw new Error('Interface not implemented'); }
+      watchRecord: function(model, callback, recordId) { throw new Error('Interface not implemented'); }
 
    });
 

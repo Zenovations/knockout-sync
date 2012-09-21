@@ -47,6 +47,7 @@
          return field in this.observed? this.data[field]() : this.data[field];
       },
       set:             function(field, val) {
+         //todo-sort what happens if fields affecting the sort priority change?
          if( !(field in this.data) ) { return false; }
          var obs = (field in this.observed), currVal = this.data[field];
          if( obs ) {

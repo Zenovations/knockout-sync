@@ -1,10 +1,6 @@
+(function($) {
 
-jQuery(function($) {
-   "use strict";
-
-   var undef;
-
-   module('Crud');
+   module('CrudArray');
    test('#isDirty', function() {
       //todo-test
    });
@@ -30,6 +26,5 @@ jQuery(function($) {
       //todo-test
    });
 
-
-});
+})(jQuery);
 

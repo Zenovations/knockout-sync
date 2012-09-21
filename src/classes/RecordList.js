@@ -16,12 +16,12 @@
     */
    ko.sync.RecordList = function(model, records) {
       this.model     = model;
-      this.byKey     = {}; // a list of all keys in this list for quick reference, deleted records are included here until checkpoint() is called
-      this.cache     = {}; // a partial list of keys to indices to speed up retrieval
-      this.listeners = []; // a list of subscribers to events in this list
-      this.subs      = []; // a list of records to which this list has subscribed
+      this.byKey     = {};   // a list of all keys in this list for quick reference, deleted records are included here until checkpoint() is called
+      this.cache     = {};   // a partial list of keys to indices to speed up retrieval
+      this.listeners = [];   // a list of subscribers to events in this list
+      this.subs      = [];   // a list of records to which this list has subscribed
       this.obsSub    = null; // a subscription to the observableArray (added by _sync, used by ko.sync.RecordList::dispose)
-      this.checkpoint();   // refresh our changelists (added/changed/moved/deleted records)
+      this.checkpoint();     // refresh our changelists (added/changed/moved/deleted records)
       if( records && ko.isObservable(records) ) {
          // use the `records` object as our observableArray
          this.obs = records;
@@ -42,17 +42,21 @@
 
    /**
     * Clear any current change lists (added/updated/moved/deleted records) and begin tracking fresh from this point.
+    * @param {boolean} [purge] when set to true, the observed list is emptied of all values (no updates are sent and no events generated)
     * @return {ko.sync.RecordList} this
     */
-   ko.sync.RecordList.prototype.checkpoint = function() {
-      var keys = this.byKey;
-      // remove any keys which have been deleted
-      _.has(this, 'deleted') && _.each(this.deleted, function(v, k) { delete keys[k]; });
+   ko.sync.RecordList.prototype.checkpoint = function(purge) {
       this.changed = {};
       this.added   = {};
       this.deleted = {};
       this.moved   = {};
       this.dirty   = false;
+      if( purge ) {
+         this.dispose();
+         this.byKey = {};
+         this.obs.removeAll();
+         _sync(this);
+      }
       return this;
    };
 
@@ -75,18 +79,26 @@
    /**
     * Add a new record to our observable array and record it as newly added.
     *
-    * If no afterRecordId is provided, the value is appended to the list. If the `afterRecordId` is set to {boolean}true,
-    * then the value is prepended to the list instead.
+    * If afterRecordId is a string, then it represents the hashKey of the record that will be immediately before our
+    * insert position. If that record doesn't exist, then we append to the end.
+    *
+    * If afterRecordId is null or undefined, then we append to the end.
+    *
+    * If afterRecordId is a positive integer, then it is the exact position at which to insert our record. Thus,
+    * 0 means insert it at position 0 (shift all records to the right 1), 1 means insert it immediately after record
+    * 0, and so on.
+    *
+    * If afterRecordId is a negative integer, it is relative to the end position. Thus, -1 means just before
+    * the last record, -2 means insert it before the last 2 records, etc.
     *
     * @param {ko.sync.Record} record
-    * @param {ko.sync.RecordId|ko.sync.Record|String|boolean} [afterRecordId] see description
+    * @param {ko.sync.RecordId|ko.sync.Record|String|int} [afterRecordId] see description
     * @return {ko.sync.RecordList} this
     */
    ko.sync.RecordList.prototype.add = function(record, afterRecordId) {
       if( _.isArray(record) ) {
          var i = -1, len = record.length;
          while(++i < len) {
-            // add them in reverse so they end up in order
             this.add(record[i], afterRecordId);
             afterRecordId = record[i].getKey();
          }
@@ -164,7 +176,7 @@
             _updateListeners(this.listeners, 'moved', record, afterRecord);
          }
       }
-      else if( typeof(console) === 'object' && console.warn ) {
+      else {
          console.warn('attempted to move a record which doesn\'t exist; probably just a concurrent edit');
       }
       return this;
@@ -186,11 +198,20 @@
    /**
     * Pushes a record into the observableArray; does not store anything in the added/updated/moved/deleted lists.
     *
-    * If no afterRecordId is provided, the value is appended to the list. If the `afterRecordId` is set to {boolean}true,
-    * then the value is prepended to the list instead.
+    * If afterRecordId is a string, then it represents the hashKey of the record that will be immediately before our
+    * insert position. If that record doesn't exist, then we append to the end.
+    *
+    * If afterRecordId is null or undefined, then we append to the end.
+    *
+    * If afterRecordId is a positive integer, then it is the exact position at which to insert our record. Thus,
+    * 0 means insert it at position 0 (shift all records to the right 1), 1 means insert it immediately after record
+    * 0, and so on.
+    *
+    * If afterRecordId is a negative integer, it is relative to the end position. Thus, -1 means just before
+    * the last record, -2 means insert it before the last 2 records, etc.
     *
     * @param {ko.sync.Record} record
-    * @param {ko.sync.RecordId|ko.sync.Record|String} [afterRecordId] see description
+    * @param {ko.sync.RecordId|ko.sync.Record|int|String} [afterRecordId] see description
     * @param {boolean} [sendNotification] if true an added notification is sent
     * @return {ko.sync.RecordList} this
     */
@@ -198,7 +219,7 @@
       if(_.isArray(record)) {
          var i = -1, len = record.length;
          while(++i < len) {
-            this.load(record[i], afterRecordId);
+            this.load(record[i], afterRecordId, sendNotification);
             afterRecordId = afterRecordId? record[i].getKey() : undef;
          }
       }
@@ -278,6 +299,8 @@
          this.subs[i].dispose();
       }
       this.obsSub && this.obsSub.dispose();
+      this.subs = [];
+      this.obsSub = null;
       return this;
    };
 
@@ -422,6 +445,7 @@
     * @private
     */
    function _recordIndex(list, recOrIdOrHash) {
+      //todo optimize for mapped arrays
       var hashKey = getHashKey(recOrIdOrHash), cache = list.cache;
       if( hashKey && hashKey in cache ) {
          // do we have it in hand? (in our cache?)
@@ -458,6 +482,9 @@
     * If afterRecordId is a negative integer, it is relative to the end position. Thus, -1 means just before
     * the last record, -2 means insert it before the last 2 records, etc.
     *
+    * In the case the `record` exists in the list, this method will also adjust for cases where slicing the element
+    * out of the list would affect the index of the insert position.
+    *
     * @param {RecordList} recList
     * @param {Record}     record    the record to move
     * @param {String|int|null} [afterRecordIdOrIndex] see description
@@ -465,6 +492,7 @@
     * @private
     */
    function _findInsertPosition(recList, record, afterRecordIdOrIndex) {
+      //todo optimize for mapped arrays
       var numRecs = recList.obs().length, loc = numRecs, currLoc;
       // a null or undefined is interpreted as append to end of records
       if( afterRecordIdOrIndex !== undef && afterRecordIdOrIndex !== null ) {
@@ -480,11 +508,17 @@
                // if the record wasn't found, we append
                loc = numRecs;
             }
-            else if( currLoc > loc ) {
-               // when loc < currLoc, it will be removed, dropping all the indices one place
-               // when it's greater, we need to add one to get the appropriate slot (i.e. after the record)
+            else if( currLoc === -1 || currLoc > loc ) {
+               // when the element currently exists in the list and is positioned before the index we want to move it to,
+               // it will effectively drop all the indices one place because we remove it and re-insert
+               // which is the reason for the currLoc > loc check
+               // when it's greater or not in the list, we need to add one to get the appropriate slot
+               // (i.e. it goes after the record)
                loc++;
             }
+            // this invisibly handles the case where currLoc === loc, meaning we aren't really moving
+            // it at all, because it simply falls through, returning `loc` which will be equal to currLoc
+            // and causing it to be removed and inserted right back at the same place
          }
       }
       return loc;
@@ -524,6 +558,12 @@
             var existingKeys = recList.byKey, alreadyDeleted = recList.deleted;
             var obsKeys = [];
 
+            // look for deleted keys
+            _.chain(existingKeys).keys().difference(_.keys(alreadyDeleted)).difference(obsKeys).each(function(key) {
+               // it's in the old values and not marked as deleted, but not in the new values
+               takeOut(recList, existingKeys[key]);
+            });
+
             // look for added keys
             _.each(obsValue, function(v, i) {
                var key = v.hashKey();
@@ -531,13 +571,18 @@
                   // it's in the new values but not in the old values
                   putIn(recList, v, _findPrevId(existingKeys, alreadyDeleted, obsValue, i), true);
                }
+               else if(_.has(alreadyDeleted, key) ) {
+                  // the record was removed then added, so it's simply moved
+                  //todo
+                  //todo
+                  //todo
+                  //todo
+                  //todo
+                  //todo
+                  //todo
+                  //todo
+               }
                obsKeys.push(v.hashKey()); // saves an iteration to collect the keys
-            });
-
-            // look for deleted keys
-            _.chain(existingKeys).keys().difference(_.keys(alreadyDeleted)).difference(obsKeys).each(function(key) {
-               // it's in the old values and not marked as deleted, but not in the new values
-               takeOut(recList, existingKeys[key]);
             });
          }
          recList.lastUpdate = obsValue.slice();
