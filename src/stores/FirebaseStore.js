@@ -20,8 +20,9 @@
     * @constructor
     */
    var FirebaseStore = ko.sync.Store.extend({
-      init: function(url, base) {
-         this.base         = _base(new Firebase(url), base);
+      init: function(rootPath) {
+         console.log('root path', _.toArray(arguments).join('/'));
+         this.base         = new Firebase(_.toArray(arguments).join('/'));
          this.listeners    = [];
          this.observedRecs = [];
       }
@@ -43,7 +44,7 @@
     *
     * @param {Model}  model   the schema for a data model
     * @param {Record} rec  the data to be inserted
-    * @return {Promise} resolves to the record's {string} id
+    * @return {jQuery.Deferred} promise - resolves to the record's {string} id
     */
    FirebaseStore.prototype.create = function(model, rec) {
       var base = this.base;

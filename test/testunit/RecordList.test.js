@@ -42,7 +42,7 @@ jQuery(function($) {
       var model = TestData.model(),
           data = TestData.makeRecords(5),
           list = new RecordList(model, data.slice(0, 4)),
-          newRec = TestData.makeRecord(model, data.slice(4,5)[0]), key = newRec.hashKey();
+          newRec = data.slice(4,5)[0], key = newRec.hashKey();
       list.checkpoint();
       strictEqual(list.isDirty(), false, 'list is not dirty before add');
       ok(!(key in list.added), 'list.added does not contain record before add');

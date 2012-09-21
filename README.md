@@ -10,7 +10,7 @@ KnockoutSync is a persistence, validation, and synchronization library that conn
 When updates occur on the server, observed fields are automatically updated and knockouts bindings are triggered.
 When knockout updates variables, they (can) automatically update the server. Behavior is highly configurable.
 
-This library relies heavily on the [mapping plugin][mplug].
+This library does not use the [mapping plugin][mplug]; it's superfluous to the functionality provided here.
 
 Right now, Firebase is the only data layer supported, but the design should allow any data layer by simply creating
 a data store for the appropriate storage type and using that instead.
@@ -58,20 +58,22 @@ Download the [production version][min] or the [development version][max].
 [min]: https://raw.github.com/zenovations/knockout-sync/master/dist/knockout-sync.min.js
 [max]: https://raw.github.com/zenovations/knockout-sync/master/dist/knockout-sync.js
 
-In your web page, you need to have [jQuery][2], [Knockout.js][3], [Knockout-mapping][5], and Knockout-sync!
+In your web page, you need to have [jQuery][2], [Knockout.js][3], and Knockout-sync!
 
 ```html
    <script type="text/javascript" src="jquery.js"></script>
    <script type="text/javascript" src="knockout.js"></script>
-   <script type="text/javascript" src="knockout.mapping.js"></script>
-   <script type="text/javascript" src="knockout-sync.all.js"></script>
+   <script type="text/javascript" src="knockout-sync.js"></script>
 ```
 
-Alternately, if you want to include your own data store or validator:
+Alternately, if you want to squeeze every byte of bandwidth you can go the manual route:
 
 ```html
-    <!-- just the basic libs -->
-    <script type="text/javascript" src="knockout-sync.js"></script>
+    <!-- required libs -->
+    <script type="text/javascript" src="jquery.js"></script>
+    <script type="text/javascript" src="knockout.js"></script>
+    <!-- just the base code -->
+    <script type="text/javascript" src="knockout-sync.base.js"></script>
     <!-- my validator -->
     <script type="text/javascript" src="assets/js/MyValidator.js"></script>
     <!-- my data store -->
@@ -131,8 +133,7 @@ also provides validation if a validator is configured.
 
 ### Create an observableArray from the model
 
-The array is created using the ko.mapping plugin, and the methods available (mappedCreate, mappedRemove, et al) all
-function as expected here.
+The array is created using ko.observableArray().
 
 ```javascript
    // creates an array of Records (a RecordList) //todo-readme
@@ -189,7 +190,8 @@ Once `model.sync()` is called on a view/object, it gets a `rec` with CRUD method
 
     // operations can be chained for great joy
     // no worries, asynchronous operations like read and update automagically queue and run in sequence!
-    view.crud.read( 'recordXYZ' ).update({name: 'John Smith'}).then(function() { /* read and update both completed in order */ });
+    view.crud.read( 'recordXYZ' ).update({name: 'John Smith'})
+        .promise().then(function(crud) { /* read and update both completed in order */ });
 ```
 
 ### Perform crud operations on observable arrays
@@ -216,10 +218,9 @@ with `destroy()` and `_destroy` as deleted items are automagically tracked and h
     // apply changes and save them at the same time
     users.update();
 
-    // these can be chained too, and also queue and in order (i.e. the read() event will complete before update/delete/update are applied)
+    // these can be chained too, and also queue in order (i.e. the read() event will complete before update/delete/update are applied)
     users.crud.read( {limit: 100} ).update('record123', {name: 'John Smith'}).delete( 'recordXYZ' ).create( {name: 'Jim Campbell'} ).update()
-        .then(function() { /* all operations completed and saved */ });
-    });
+        .promise().then(function(crud) { /* all operations completed and saved */ });
 ```
 
 # Some Mistakes to Avoid
@@ -388,7 +389,7 @@ into the list.
 ### Model.newList( readFilter )
 
 @param {object} [readFilter] passed to the `read` method
-@returns {object} `ko.observableArray()` instance that has been mapped using ko.mapping
+@returns {object} `ko.observableArray()` instance
 
 The returned observable has a special `crud` variable, containing all the `Crud.Array` methods.
 Each element in the observable represents one Record object. If an item is inserted into the array it is converted
@@ -889,12 +890,11 @@ If autoUpdate is true, then the promise resolves after the save. Otherwise, it r
    list.crud.delete( deletedRecordId ).done( function(success) { /* synced with server */ } );
 
    // this is valid as long as the exact element of the array is used (knockout uses == to compare) and still
-   // works with auto-updates; it does not return a promise, obviously
+   // auto-updates and events are still invoked just as if crud.delete were called
    list.remove( record );
 
-   // this works better than list.remove() with keyed records (the mapping plugin functions are automagically
-   // added when Model.newList() is called)
-   list.mappedRemove( {id: deletedRecordId} );
+   // this works too (removes fifth element in the list) and auto-updates and events still get invoked
+   list.splice(5, 1);
 ```
 
 #### Crud.Array.load()

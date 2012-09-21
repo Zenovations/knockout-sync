@@ -10,7 +10,7 @@
     */
    ko.sync.Crud = function(target, model, recordOrData) {
       this.parent = target;
-      this.promise = $.Deferred().resolve().promise();
+      this.def = $.Deferred().resolve().promise();
       if( recordOrData instanceof ko.sync.Record ) {
          this.record = recordOrData;
       }
@@ -51,8 +51,13 @@
     * @return {ko.sync.Crud} this
     */
    Crud.prototype.create = function() {
-      //todo
+      this.def = this.def.pipe(_.bind(function() {
 
+         //todo
+         //todo
+         //todo
+
+      }, this));
       return this;
    };
 
@@ -62,8 +67,13 @@
     * @return {ko.sync.Crud} this
     */
    Crud.prototype.read = function( recordId ) {
-      //todo
+      this.def = this.def.pipe(_.bind(function() {
 
+         //todo
+         //todo
+         //todo
+
+      }, this));
       return this;
    };
 
@@ -72,7 +82,12 @@
     * @return {ko.sync.Crud} this
     */
    Crud.prototype.update = function() {
-      this.record.isDirty() && this.controller.pushUpdates(this.record);
+      this.def = this.def.pipe(_.bind(function() {
+         if( this.record.isDirty() ) {
+            return this.controller.pushUpdates(this.record);
+         }
+         return this;
+      }, this));
       return this;
    };
 
@@ -101,6 +116,13 @@
    Crud.prototype.load = function() {
       return this.read.apply(this, _.toArray(arguments));
    };
+
+   /**
+    * @return {jQuery.Deferred} promise
+    */
+   Crud.prototype.promise = function() {
+      return this.def.promise();
+   }
 
 })(ko);
 

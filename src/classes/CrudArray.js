@@ -7,7 +7,7 @@
    ko.sync.CrudArray = function(target, model, list, criteria) {
       this.list = list; //todo create new lists? may not have one to start?
       this.parent = target;
-      this.promise = $.Deferred().resolve().promise();
+      this.def = $.Deferred().resolve().promise();
       //todo what do we do with lists that are already populated? SyncController will expect the sync op to populate data
       this.controller = new ko.sync.SyncController(model, list, criteria);
    };
@@ -31,8 +31,11 @@
     * @return {ko.sync.CrudArray} this
     */
    CrudArray.prototype.create = function( recordOrData, afterRecordId ) {
-      var rec = (recordOrData instanceof ko.sync.Record)? recordOrData : this.model.newRecord(recordOrData);
-      this.list.add(rec, afterRecordId);
+      this.def = this.def.pipe(_.bind(function() {
+         var rec = (recordOrData instanceof ko.sync.Record)? recordOrData : this.model.newRecord(recordOrData);
+         this.list.add(rec, afterRecordId);
+         return this;
+      }, this));
       return this;
    };
 
@@ -43,8 +46,13 @@
     * @return {ko.sync.CrudArray} this
     */
    CrudArray.prototype.read = function( criteria ) {
-      //todo
+      this.def = this.def.pipe(_.bind(function() {
 
+         //todo
+         //todo
+         //todo
+
+      }, this));
       return this;
    };
 
@@ -54,13 +62,17 @@
     * @return {ko.sync.CrudArray} this
     */
    CrudArray.prototype.update = function() {
-      var list = this.list, c = this.controller;
-      if( list.isDirty() ) {
-         list.added.length && c.pushUpdates(list.added, 'added');
-         list.updated.length && c.pushUpdates(list.updated, 'updated');
-         list.deleted.length && c.pushUpdates(list.deleted, 'deleted');
-         list.moved.length && c.pushUpdates(list.moved, 'moved');
-      }
+      this.def = this.def.pipe(_.bind(function() {
+         var list = this.list, c = this.controller, promises = [];
+         if( list.isDirty() ) {
+            list.added.length && promises.push(c.pushUpdates(list.added, 'added'));
+            list.updated.length && promises.push(c.pushUpdates(list.updated, 'updated'));
+            list.deleted.length && promises.push(c.pushUpdates(list.deleted, 'deleted'));
+            list.moved.length && promises.push(c.pushUpdates(list.moved, 'moved'));
+            return $.when(promises);
+         }
+         return this;
+      }, this));
       return this;
    };
 
@@ -72,7 +84,10 @@
     * @return {ko.sync.CrudArray} this
     */
    CrudArray.prototype.delete = function( hashKey ) {
-      this.list.remove(hashKey);
+      this.def = this.def.pipe(_.bind(function() {
+         this.list.remove(hashKey);
+         return this;
+      }, this));
       return this;
    };
 
@@ -91,6 +106,14 @@
    CrudArray.prototype.load = function() {
       return this.read.apply(this, _.toArray(arguments));
    };
+
+
+   /**
+    * @return {jQuery.Deferred} promise
+    */
+   CrudArray.prototype.promise = function() {
+      return this.def.promise();
+   }
 
 })(jQuery);
 

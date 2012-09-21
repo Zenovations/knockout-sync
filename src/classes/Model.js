@@ -22,7 +22,6 @@
          this.inst       = modelInst++;
          this.fields     = _processFields(defaults, props.fields);
          this.factory    = props.recordFactory || new RecordFactory(this);
-         this.controller = new SyncController(this);
       },
 
       getController: function() {

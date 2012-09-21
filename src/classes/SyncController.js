@@ -86,7 +86,7 @@
                      store.update(model, listOrRecord).then(_resolve(def, listOrRecord));
                      break;
                   case 'deleted':
-                     store.delete(model, listOrRecord).then.(_resolve(def, listOrRecord));
+                     store.delete(model, listOrRecord).then(_resolve(def, listOrRecord));
                      break;
                   case 'moved':
                      //todo-sort does this work? how do we get "moved" notifications?
