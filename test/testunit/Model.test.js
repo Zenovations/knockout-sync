@@ -33,19 +33,15 @@ jQuery(function($) {
       //todo
    });
 
-   test("#sync (object)", function() {
+   test("#sync, observable", function() {
       //todo
    });
 
-   test("#sync (array)", function() {
+   test("#sync, observable", function() {
       //todo
    });
 
-   test("#sync (observableArray)", function() {
-      //todo
-   });
-
-   test("#sync (observable)", function() {
+   test("#sync, observableArray", function() {
       //todo
    });
 

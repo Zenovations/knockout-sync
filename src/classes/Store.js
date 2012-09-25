@@ -126,6 +126,7 @@
        *
        * @param {ko.sync.Model} model
        * @param {object}        [filterCriteria]
+       * @return {Promise} promise resolving to total number of records matched
        */
       count: function(model, filterCriteria) { throw new Error('Interface not implemented'); },
 
@@ -137,6 +138,13 @@
 
       /**
        * Given a particular data model, notify `callback` any time any record is added, updated, deleted, or moved.
+       * The signature of the callback is as follows:
+       *     added:    callback( 'added',   record_id, record_data, prevRecordId )
+       *     updated:  callback( 'updated', record_id, record_data  )
+       *     deleted:  callback( 'deleted', record_id, record_data  )
+       *     moved:    callback( 'moved',   record_id, prevRecordId )
+       *
+       * When prevRecordId is null (for applicable calls), this means it is inserted at the first record in the list
        *
        * The return value is an Object which contains a dispose() method to stop observing the data layer's
        * changes.
@@ -151,6 +159,8 @@
       /**
        * Given a particular record, invoke `callback` any time the data changes. This does not get invoked for
        * add/delete/moved events. We must monitor the entire model for that.
+       *
+       * The signature of the callback is as follows: callback( record_id, data_object, sort_priority )
        *
        * The return value is an Object which contains a dispose() method to stop observing the data layer's
        * changes.

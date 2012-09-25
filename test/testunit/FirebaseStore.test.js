@@ -2,6 +2,8 @@
 jQuery(function($) {
    "use strict";
 
+   //todo-test create a generic Store tester; it should work db agnostic anyways
+
    var undef;
    var FIREBASE_URL = 'http://gamma.firebase.com/wordspot';
    var FIREBASE_TEST_URL = 'GitHub/firebase-sync';
@@ -677,6 +679,7 @@ jQuery(function($) {
 
       function watcher(id, data, priority) {
          calls++;
+         activity = true;
          if( id !== '100' ) {
             ok(false, 'wrong ID received, should only be listening to record with ID 100');
          }
@@ -708,13 +711,13 @@ jQuery(function($) {
                def.resolve();
             }
             activity = false;
-         }, 250), recRef = ref.child('100');
+         }, 100), recRef = ref.child('100');
 
          // we observe the model for changes
-         obs1 = store.watchRecord(model, watcher, rec.getKey());
+         obs1 = store.watchRecord(model, rec.getKey(), watcher);
 
          // we add the same observer again, which should just return the first reference and not cause duplicate notifications
-         obs2 = store.watchRecord(model, watcher, rec.getKey());
+         obs2 = store.watchRecord(model, rec.getKey(), watcher);
          recRef.set(TestData.bigData.data(100, {aString: 'i was changed', id: '100a'}));
          recRef.setPriority(101);
          recRef.remove();

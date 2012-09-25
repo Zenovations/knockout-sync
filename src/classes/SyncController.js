@@ -4,6 +4,10 @@
     * Establish and handle client-to-server and server-to-client updates. If the model/store only supports
     * one-way updates, then we use those. This will also trigger automatic pushes to the server when auto-sync
     * is true.
+    *
+    * It is expected that by the time this class is called, that the data has been loaded and the object is ready
+    * to be placed into a two-way sync state. Any time a record is reloaded or a list is reloaded with new data or
+    * criterio, this object should probably be disposed and replaced.
     */
    ko.sync.SyncController = Class.extend({
 
@@ -95,7 +99,7 @@
                   default:
                      throw new Error('Invalid action', action);
                }
-            });
+            }.bind(this));
          }
          return $.Deferred().resolve(false);
       }

@@ -1,4 +1,4 @@
-/*! Knockout Sync - v0.1.0 - 2012-09-21
+/*! Knockout Sync - v0.1.0 - 2012-09-25
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL */
 
@@ -1330,22 +1330,6 @@
 
    var Crud = ko.sync.Crud;
 
-
-   /**
-    * @param {Object} target
-    * @param {ko.sync.Model} model
-    * @param {ko.sync.Record|ko.sync.RecordList|Object} [dataRecOrList]
-    * @static
-    */
-   Crud.applyTo = function( target, model, dataRecOrList) {
-      if( ko.isObservable(target) && target.push ) {
-         target.crud = new ko.sync.CrudArray(target, model, dataRecOrList);
-      }
-      else {
-         target.crud = new ko.sync.Crud(target, model, dataRecOrList);
-      }
-   };
-
    /**
     * @param {boolean} [b] set the isDirty value (use this with care!)
     * @return {boolean}
@@ -1430,7 +1414,7 @@
     */
    Crud.prototype.promise = function() {
       return this.def.promise();
-   }
+   };
 
 })(ko);
 
@@ -1581,18 +1565,19 @@
          this.factory    = props.recordFactory || new RecordFactory(this);
       },
 
-      getController: function() {
-         return this.controller;
-      },
-
       /**
-       * @return {Object|String} data fields to load into the record or a record ID to load from the database
+       * @param {ko.observableArray|ko.observable} observable
+       * @param {object} [data]
+       * @return {ko.sync.Model} this
        */
-      newView: function(data) {
-         //todo
-         //todo
-         //todo
-         //todo
+      sync: function(observable, data) {
+         if( ko.isObservable(observable) && observable.push ) {
+            observable.crud = new ko.sync.CrudArray(observable, this, _makeList(this, dataRecOrList));
+         }
+         else {
+            observable.crud = new ko.sync.Crud(observable, this, _makeRecord(this, dataRecOrList));
+         }
+         return this;
       },
 
       /**
@@ -1604,14 +1589,11 @@
       },
 
       /**
-       * @param {object} readFilter
+       * @param {object} data
        * @return {*}
        */
-      newList: function( readFilter ) {
-         //todo
-         //todo
-         //todo
-         //todo
+      newList: function( data ) {
+         return new ko.sync.RecordList(this, data);
       },
 
       toString: function() {
@@ -1693,6 +1675,25 @@
       return new ko.sync.Record(this.model, data);
    };
 
+
+   function _makeList(model, dataOrList) {
+      if( dataOrList instanceof ko.sync.RecordList ) {
+         return dataOrList;
+      }
+      else {
+         return model.newList(dataOrList);
+      }
+   }
+
+   function _makeRecord(model, dataOrRecord) {
+      if( dataOrRecord instanceof ko.sync.Record ) {
+         return dataOrRecord;
+      }
+      else {
+         return model.newRecord(dataOrRecord);
+      }
+   }
+
 })(ko);
 /*******************************************
  * Record class for knockout-sync
@@ -1743,7 +1744,7 @@
          return field in this.observed? this.data[field]() : this.data[field];
       },
       set:             function(field, val) {
-         //todo-sort what happens if fields affecting the sort priority change?
+         //todo-sort what should happen if fields affecting the sort priority are changed?
          if( !(field in this.data) ) { return false; }
          var obs = (field in this.observed), currVal = this.data[field];
          if( obs ) {
@@ -1759,6 +1760,7 @@
                this.data[field] = val;
                // only non-observables generate notifications here; the _watchObservables method handles the remainder
                // somewhat invisibly but quite effectively
+               //todo should this even exist? should we only trigger updates for observables?
                _updateListeners(this.listeners, this, field);
             }
             return true;
@@ -1808,7 +1810,7 @@
          return {
             dispose: function() {
                var idx = _.indexOf(listeners, callback);
-               if( idx >= 0 ) { listeners.splice(idx, 1); }
+               if( idx > -1 ) { listeners.splice(idx, 1); }
             }
          };
       }
@@ -2031,6 +2033,7 @@
       this.cache     = {};   // a partial list of keys to indices to speed up retrieval
       this.listeners = [];   // a list of subscribers to events in this list
       this.subs      = [];   // a list of records to which this list has subscribed
+      this.delayed   = {};
       this.obsSub    = null; // a subscription to the observableArray (added by _sync, used by ko.sync.RecordList::dispose)
       this.checkpoint();     // refresh our changelists (added/changed/moved/deleted records)
       if( records && ko.isObservable(records) ) {
@@ -2119,7 +2122,7 @@
          record.isDirty(true);
          this.added[key] = record;
          this.dirty = true;
-         this.load(record, afterRecordId, 'added');
+         this.load(record, afterRecordId, true);
       }
       return this;
    };
@@ -2258,13 +2261,15 @@
          if( record ) {
             var key = record.hashKey();
 
-            if( !(key in this.deleted) ) {
+            if( !(key in this.deleted) && !(key in this.delayed) ) {
                // remove the record locally and mark it in our changelists
                takeOut(this, record);
 
                // remove the record from the observableArray
                var idx = _recordIndex(this, key);
-               this.obs.splice(idx, 1); // this will trigger a notification (handled by _sync)
+               if( idx > -1 ) {
+                  this.obs.splice(idx, 1); // this will trigger a notification (handled by _sync)
+               }
             }
             else {
                console.warn('tried to delete the same record twice', key);
@@ -2348,10 +2353,10 @@
       // mark it deleted
       recList.deleted[key] = record;
 
-      // if rec is removed, that supersedes added/updated status
+      // if rec is removed, that supersedes added/updated/moved status
       delete recList.added[key];
       delete recList.changed[key];
-
+      delete recList.moved[key];
 
       // clear our indexes
       _invalidateCache(recList);
@@ -2370,9 +2375,15 @@
       _invalidateCache(recList);
       _cacheAndMonitor(recList, record, loc);
       if( sendNotification ) {
-         _updateListeners(recList.listeners, 'added', record);
+         _updateListeners(recList.listeners, 'added', record, afterRecordId);
       }
       return loc;
+   }
+
+   function moveRec(recList, record) {
+      _invalidateCache(recList);
+      var loc = recList.obs.indexOf(record);
+      _updateListeners(recList.listeners, 'moved', record, loc < 1? null : recList.obs.slice(loc-1, loc)[0]);
    }
 
    /**
@@ -2558,45 +2569,44 @@
 
    function _sync(recList) {
       recList.obsSub = recList.obs.subscribe(function(obsValue) {
-         if( recList.ignoreNextEvent ) { //todo unused
-            // notification suppressed
-            recList.ignoreNextEvent = false;
-         }
-         else {
-            // diff the last version with this one and see what changed; we only have to look for deletions and additions
-            // since all of our local changes will change byKey before modifying the observable array, feedback loops
-            // are prevented here because anything already marked as added/deleted can be considered a prior change
-            var existingKeys = recList.byKey, alreadyDeleted = recList.deleted;
-            var obsKeys = [];
+         // diff the last version with this one and see what changed; we only have to look for deletions and additions
+         // since all of our local changes will change byKey before modifying the observable array, feedback loops
+         // are prevented here because anything already marked as added/deleted can be considered a prior change
+         var existingKeys = recList.byKey, alreadyDeleted = recList.deleted;
+         var obsKeys = [];
 
-            // look for deleted keys
-            _.chain(existingKeys).keys().difference(_.keys(alreadyDeleted)).difference(obsKeys).each(function(key) {
-               // it's in the old values and not marked as deleted, but not in the new values
+         // look for added keys
+         _.each(obsValue, function(v, i) {
+            //todo this is a bit of a mess when combined with the various points where _updateListeners is called
+            //todo create an event controller/handler to process all the incoming requests and send the notifications?
+            if(_.isArray(v) ) {
+               debugger;
+            }
+            var key = v.hashKey();
+            var prevId = _findPrevId(existingKeys, alreadyDeleted, obsValue, i);
+            if( !_.has(existingKeys, key) ) {
+               // it's in the new values but not in the old values
+               recList.added[key] = v;
+               putIn(recList, v, prevId, true);
+            }
+            else if(_.has(recList.delayed, key)) {
+               // clear the pending delete action
+               clearTimeout(recList.delayed[key]);
+               delete recList.delayed[key];
+               // add the record to the cached and monitored content
+               moveRec(recList, v);
+            }
+            obsKeys.push(v.hashKey()); // saves an iteration to collect the keys for finding deletions
+         });
+
+         // look for deleted keys
+         _.chain(existingKeys).keys().difference(_.keys(alreadyDeleted)).difference(obsKeys).each(function(key) {
+            //todo knockout 2.2 will have move operations (how do they work?) which can replace this craziness
+            recList.delayed[key] = setTimeout(function() {
+               // it's in the old values and not marked as deleted, and not in the new values
                takeOut(recList, existingKeys[key]);
-            });
-
-            // look for added keys
-            _.each(obsValue, function(v, i) {
-               var key = v.hashKey();
-               if( !_.has(existingKeys, key) ) {
-                  // it's in the new values but not in the old values
-                  putIn(recList, v, _findPrevId(existingKeys, alreadyDeleted, obsValue, i), true);
-               }
-               else if(_.has(alreadyDeleted, key) ) {
-                  // the record was removed then added, so it's simply moved
-                  //todo
-                  //todo
-                  //todo
-                  //todo
-                  //todo
-                  //todo
-                  //todo
-                  //todo
-               }
-               obsKeys.push(v.hashKey()); // saves an iteration to collect the keys
-            });
-         }
-         recList.lastUpdate = obsValue.slice();
+            }, 0);
+         });
       });
    }
 
@@ -2750,6 +2760,7 @@
        *
        * @param {ko.sync.Model} model
        * @param {object}        [filterCriteria]
+       * @return {Promise} promise resolving to total number of records matched
        */
       count: function(model, filterCriteria) { throw new Error('Interface not implemented'); },
 
@@ -2761,6 +2772,13 @@
 
       /**
        * Given a particular data model, notify `callback` any time any record is added, updated, deleted, or moved.
+       * The signature of the callback is as follows:
+       *     added:    callback( 'added',   record_id, record_data, prevRecordId )
+       *     updated:  callback( 'updated', record_id, record_data  )
+       *     deleted:  callback( 'deleted', record_id, record_data  )
+       *     moved:    callback( 'moved',   record_id, prevRecordId )
+       *
+       * When prevRecordId is null (for applicable calls), this means it is inserted at the first record in the list
        *
        * The return value is an Object which contains a dispose() method to stop observing the data layer's
        * changes.
@@ -2775,6 +2793,8 @@
       /**
        * Given a particular record, invoke `callback` any time the data changes. This does not get invoked for
        * add/delete/moved events. We must monitor the entire model for that.
+       *
+       * The signature of the callback is as follows: callback( record_id, data_object, sort_priority )
        *
        * The return value is an Object which contains a dispose() method to stop observing the data layer's
        * changes.
@@ -2795,6 +2815,10 @@
     * Establish and handle client-to-server and server-to-client updates. If the model/store only supports
     * one-way updates, then we use those. This will also trigger automatic pushes to the server when auto-sync
     * is true.
+    *
+    * It is expected that by the time this class is called, that the data has been loaded and the object is ready
+    * to be placed into a two-way sync state. Any time a record is reloaded or a list is reloaded with new data or
+    * criterio, this object should probably be disposed and replaced.
     */
    ko.sync.SyncController = Class.extend({
 
@@ -2886,7 +2910,7 @@
                   default:
                      throw new Error('Invalid action', action);
                }
-            });
+            }.bind(this));
          }
          return $.Deferred().resolve(false);
       }

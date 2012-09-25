@@ -6,6 +6,12 @@ jQuery(function($) {
 
    module('Crud');
 
+   test('#applyTo', function() {
+      var o = {};
+
+      //todo-test
+   });
+
    test('#isDirty', function() {
       //todo-test
    });

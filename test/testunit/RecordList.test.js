@@ -43,6 +43,7 @@ jQuery(function($) {
           data = TestData.makeRecords(5),
           list = new RecordList(model, data.slice(0, 4)),
           newRec = data.slice(4,5)[0], key = newRec.hashKey();
+
       list.checkpoint();
       strictEqual(list.isDirty(), false, 'list is not dirty before add');
       ok(!(key in list.added), 'list.added does not contain record before add');
@@ -324,14 +325,14 @@ jQuery(function($) {
 
    test('#updated (not dirty)', function() {
       var data = TestData.makeRecords(5),
-         list = new RecordList(TestData.model(), data),
-            key = 'record-4', rec = list.find(key);
+         list  = new RecordList(TestData.model(), data),
+         key   = 'record-4', rec = list.find(key);
       strictEqual(list.isDirty(), false, 'list is not dirty before updated()');
       list.updated(rec);
       strictEqual(list.isDirty(), false, 'list is dirty after updated()');
    });
 
-   test('#subscribe', function() {
+   asyncTest('#subscribe', function() {
       var RECS_TOTAL = 5;
       var RECS_PRELOADED = 2;
       var i, v,
@@ -355,7 +356,7 @@ jQuery(function($) {
          floatRequired:  -.001,
          emailOptional:  'newemail@new.com',
          emailRequired:  'newerest@newest.com'
-      }, newValKeys = _.keys(newVals);
+      };
 
       function callback(action, record, field) {
          events.push([action, record.hashKey(), field]);
@@ -392,27 +393,127 @@ jQuery(function($) {
       expected.push(['added', data[RECS_TOTAL].hashKey(), undef]);
       list.obs.push(data[RECS_TOTAL]);
 
-      // delete a record from the observable, which should still trigger notifications
+      // manually delete a record from the observable, which should still trigger notifications
       expected.push(['deleted', data[RECS_TOTAL].hashKey(), undef]);
       list.obs.pop();
 
-      // check the results
-      deepEqual(events, expected, 'all events recorded as expected');
+      //todo manual update
+
+      // just leave enough time for deleted events to get processed
+      _.delay(function() {
+         // check the results
+         deepEqual(events, expected, 'all events recorded as expected');
+         start();
+      }, 100);
+   });
+
+   test('#subscribe, invalid update ops', function() {
+      var RECS_TOTAL = 5;
+      var i, data = TestData.makeRecords(RECS_TOTAL),
+      // create the list with 2 records pre-populated
+         list     =  new RecordList(TestData.model(), data),
+         events   = [],
+         expected = [];
+
+      // data values to use for update operation
+      var newVals = {
+         stringOptional: 'liver yuck!',
+         stringRequired: 'yummy apples',
+         dateOptional:   moment.utc().add('seconds', 10).toDate(),
+         dateRequired:   moment.utc().add('days', 5).toDate(),
+         intOptional:    -27,
+         intRequired:    525,
+         boolOptional:   true,
+         boolRequired:   false,
+         floatOptional:  .001,
+         floatRequired:  -.001,
+         emailOptional:  'newemail@new.com',
+         emailRequired:  'newerest@newest.com'
+      }, newValKeys = _.keys(newVals);
+
+      function callback(action, record, field) {
+         events.push([action, record.hashKey(), field]);
+      }
+
+      list.subscribe(callback);
+
+      // try updating each record using a different field each time for fun
+      i = 0;
+      _.each(newVals, function(v, k) {
+         var j = i % RECS_TOTAL, rec = data[j];
+         expected.push(['updated', rec.hashKey(), k]);
+         rec.set(k, v);
+         i++;
+      });
 
       // try updating each record again, but use the previous values, which shouldn't trigger updates
-      events = [];
-      i = 20;
+      i = 12;
+      var rec;
       while(i--) {
          var k = newValKeys[i % newValKeys.length];
          rec = data[i % data.length];
          rec.set( k, rec.get(k) );
       }
-      strictEqual(events.length, 0, 'updates with existing value or on deleted records do not trigger notifications');
+
+      // check the results
+      deepEqual(events, expected, 'all events recorded as expected');
+   });
+
+   asyncTest('#subscribe, invalid delete ops', function() {
+      var RECS_TOTAL = 5;
+      var i, v,
+         data     = TestData.makeRecords(RECS_TOTAL),
+        // create the list but leave out one record (so we can use it for a record not in the list)
+         list     =  new RecordList(TestData.model(), data.slice(0, -1)),
+         events   = [],
+         expected = [];
+
+      function callback(action, record, field) {
+         events.push([action, record.hashKey(), field]);
+      }
+
+      list.subscribe(callback);
+
+      // manually delete a record from the observable, which should still trigger notifications
+      v = data[RECS_TOTAL-2];
+      expected.push(['deleted', v.hashKey(), undef]);
+      list.obs.pop();
+
+      // delete the same record again and make sure it doesn't trigger an update
+      list.remove(v); // we already removed this
 
       // delete a record that doesn't exist and make sure it doesn't trigger an update
-      events = [];
-      list.remove(data[RECS_PRELOADED]); // we already removed this
-      strictEqual(events.length, 0, 'deleting record twice doesn\'t send second notification');
+      list.remove(data[RECS_TOTAL-1]);
+
+      // just leave enough time for deleted events to get processed
+      _.delay(function() {
+         // check the results
+         deepEqual(events, expected, 'all events recorded as expected');
+         start();
+      }, 100);
+
+   });
+
+   asyncTest('#subscribe, move ops', function() {
+      expect(5);
+      // tests to see if a manually moving a record in the observed list is recorded as a move
+      // i.e. a delete followed immediately by re-inserting the same record is a move event and not a delete/add
+      var model = TestData.model(), recs = TestData.makeRecords(5), list = new RecordList(model, recs),
+         moveRec = recs[2],
+         prevRecIdExpected;
+      list.subscribe(function(action, rec, prevRecId) {
+         strictEqual(action, 'moved', 'action is "moved"');
+         strictEqual(rec.hashKey(), moveRec.hashKey(), 'correct record moved');
+         prevRecIdExpected && strictEqual(prevRecId && prevRecId.hashKey(), prevRecIdExpected, 'moved after correct record');
+      });
+      // manually moved
+      _.move(list.obs, 2, 0);
+
+      prevRecIdExpected = moveRec.hashKey();
+      moveRec = list.obs()[4];
+      list.move(moveRec, 1);
+
+      _.delay(function() { start(); }, 100);
    });
 
    test('construct with existing observable', function() {

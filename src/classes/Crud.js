@@ -22,22 +22,6 @@
 
    var Crud = ko.sync.Crud;
 
-
-   /**
-    * @param {Object} target
-    * @param {ko.sync.Model} model
-    * @param {ko.sync.Record|ko.sync.RecordList|Object} [dataRecOrList]
-    * @static
-    */
-   Crud.applyTo = function( target, model, dataRecOrList) {
-      if( ko.isObservable(target) && target.push ) {
-         target.crud = new ko.sync.CrudArray(target, model, dataRecOrList);
-      }
-      else {
-         target.crud = new ko.sync.Crud(target, model, dataRecOrList);
-      }
-   };
-
    /**
     * @param {boolean} [b] set the isDirty value (use this with care!)
     * @return {boolean}
@@ -122,7 +106,7 @@
     */
    Crud.prototype.promise = function() {
       return this.def.promise();
-   }
+   };
 
 })(ko);
 

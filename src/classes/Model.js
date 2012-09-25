@@ -24,18 +24,19 @@
          this.factory    = props.recordFactory || new RecordFactory(this);
       },
 
-      getController: function() {
-         return this.controller;
-      },
-
       /**
-       * @return {Object|String} data fields to load into the record or a record ID to load from the database
+       * @param {ko.observableArray|ko.observable} observable
+       * @param {object} [data]
+       * @return {ko.sync.Model} this
        */
-      newView: function(data) {
-         //todo
-         //todo
-         //todo
-         //todo
+      sync: function(observable, data) {
+         if( ko.isObservable(observable) && observable.push ) {
+            observable.crud = new ko.sync.CrudArray(observable, this, _makeList(this, dataRecOrList));
+         }
+         else {
+            observable.crud = new ko.sync.Crud(observable, this, _makeRecord(this, dataRecOrList));
+         }
+         return this;
       },
 
       /**
@@ -47,14 +48,11 @@
       },
 
       /**
-       * @param {object} readFilter
+       * @param {object} data
        * @return {*}
        */
-      newList: function( readFilter ) {
-         //todo
-         //todo
-         //todo
-         //todo
+      newList: function( data ) {
+         return new ko.sync.RecordList(this, data);
       },
 
       toString: function() {
@@ -135,5 +133,24 @@
    RecordFactory.prototype.create = function(data) {
       return new ko.sync.Record(this.model, data);
    };
+
+
+   function _makeList(model, dataOrList) {
+      if( dataOrList instanceof ko.sync.RecordList ) {
+         return dataOrList;
+      }
+      else {
+         return model.newList(dataOrList);
+      }
+   }
+
+   function _makeRecord(model, dataOrRecord) {
+      if( dataOrRecord instanceof ko.sync.Record ) {
+         return dataOrRecord;
+      }
+      else {
+         return model.newRecord(dataOrRecord);
+      }
+   }
 
 })(ko);

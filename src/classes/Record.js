@@ -47,7 +47,7 @@
          return field in this.observed? this.data[field]() : this.data[field];
       },
       set:             function(field, val) {
-         //todo-sort what happens if fields affecting the sort priority change?
+         //todo-sort what should happen if fields affecting the sort priority are changed?
          if( !(field in this.data) ) { return false; }
          var obs = (field in this.observed), currVal = this.data[field];
          if( obs ) {
@@ -63,6 +63,7 @@
                this.data[field] = val;
                // only non-observables generate notifications here; the _watchObservables method handles the remainder
                // somewhat invisibly but quite effectively
+               //todo should this even exist? should we only trigger updates for observables?
                _updateListeners(this.listeners, this, field);
             }
             return true;
@@ -112,7 +113,7 @@
          return {
             dispose: function() {
                var idx = _.indexOf(listeners, callback);
-               if( idx >= 0 ) { listeners.splice(idx, 1); }
+               if( idx > -1 ) { listeners.splice(idx, 1); }
             }
          };
       }
