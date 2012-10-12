@@ -23,11 +23,11 @@ jQuery(function($) {
       function monitor(action, id) {
          results.push([action, id]);
       }
-      var recs = BigData.recs(FIREBASE, 25),
-          model = BigData.model({store: new ko.sync.TestData.TestStore(true, monitor, recs.slice(0, 20))}),
-          list = new ko.sync.RecordList(model, recs.slice(0, 20)),
-          criteria = {limit: 25, start: 100};
-      var sync = new ko.sync.SyncController(model, list, criteria);
+      var recs     = BigData.recs(FIREBASE, 25),
+          model    = BigData.model({store: new ko.sync.TestData.TestStore(true, monitor, recs.slice(0, 20))}),
+          list     = new ko.sync.RecordList(model, recs.slice(0, 20)),
+          criteria = {limit: 25, start: 100},
+          sync     = new ko.sync.SyncController(model, list, criteria);
 
       list.add(recs[21]);
       list.add(recs[22]);
