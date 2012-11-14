@@ -86,7 +86,7 @@ Alternately, if you want to squeeze every byte of bandwidth you can go the manua
 
 ```javascript
     // create a store
-    var store = new ko.sync.stores.FirebaseStore('http://beta.firebase.com/account_name/path/to/store');
+    var store = new ko.sync.stores.FirebaseStore('http://YOUR_ACCOUNT.firebaseio.com/path/to/store');
 ```
 
 ### Create a data model

@@ -37,8 +37,8 @@
       return _.size(Controller.models);
    });
    Controller.hasStores = ko.computed(function() { return Controller.stores().length > 0; });
-   Controller.addStore('muck', 'Firebase', new Firebase('http://gamma.firebase.com/wordspot/muck'), 'http://gamma.firebase.com/wordspot/muck');
-   Controller.addStore('sync', 'Firebase', new Firebase('http://gamma.firebase.com/wordspot/SYNC'), 'http://gamma.firebase.com/wordspot/SYNC');
+   Controller.addStore('muck', 'Firebase', new Firebase('http://wordspot.firebaseio.com/muck'), 'http://wordspot.firebaseio.com/muck');
+   Controller.addStore('sync', 'Firebase', new Firebase('http://wordspot.firebaseio.com/SYNC'), 'http://wordspot.firebaseio.com/SYNC');
 
    /** StoresPanel
     ********************************************************/

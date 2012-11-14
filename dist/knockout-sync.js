@@ -3019,7 +3019,6 @@
     */
    var FirebaseStore = ko.sync.Store.extend({
       init: function(rootPath) {
-         console.log('root path', _.toArray(arguments).join('/'));
          this.base         = new Firebase(_.toArray(arguments).join('/'));
          this.listeners    = [];
          this.observedRecs = [];

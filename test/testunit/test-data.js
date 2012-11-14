@@ -183,7 +183,13 @@
          )
       },
 
-      recs: function(firebaseRoot, max, moreData, model) {
+      /**
+       * @param {int} max
+       * @param {object} [moreData]
+       * @param {Model} [model]
+       * @return {Array}
+       */
+      recs: function(max, moreData, model) {
          var i=0;
          var recs = [];
          while(++i <= max) {
@@ -198,7 +204,6 @@
        * @return {jQuery.Deferred}
        */
       reset: function(firebaseRoot, numrecs, moreData) {
-         console.time('bigData.reset()');
          var i, def = $.Deferred(), count = 0, ref = firebaseRoot.child('BigData');
          ref.set(null, function() {
             var max = numrecs || exports.bigData.COUNT;

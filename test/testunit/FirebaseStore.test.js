@@ -5,7 +5,7 @@ jQuery(function($) {
    //todo-test create a generic Store tester; it should work db agnostic anyways
 
    var undef;
-   var FIREBASE_URL = 'http://gamma.firebase.com/wordspot';
+   var FIREBASE_URL = 'https://wordspot.firebaseio.com';
    var FIREBASE_TEST_URL = 'GitHub/firebase-sync';
    var syncRoot = new window.Firebase(FIREBASE_URL+'/'+FIREBASE_TEST_URL);
    var TestData = ko.sync.TestData;
@@ -295,15 +295,18 @@ jQuery(function($) {
 
       TestData.bigData.reset(syncRoot)
             .pipe(function() {
+               console.log('starting count');
                return store.count(bigModel);
             })
             .pipe(function(count) {
                strictEqual(count, TestData.bigData.COUNT, 'found correct number of records');
             })
             .pipe(function() {
+               console.log('starting delete');
                return store.delete(bigModel, [TestData.makeRecordId(2), TestData.makeRecordId(3)]);
             })
             .pipe(function() {
+               console.log('starting second count');
                return store.count(bigModel);
             })
             .done(function(count) {

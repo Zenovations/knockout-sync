@@ -3,7 +3,7 @@ jQuery(function($) {
    "use strict";
    var undef;
 
-   var FIREBASE_URL = 'http://gamma.firebase.com/wordspot';
+   var FIREBASE_URL = 'http://wordspot.firebaseio.com/';
    var FIREBASE_TEST_URL = 'GitHub/firebase-sync';
 
    var TestData   = ko.sync.TestData,
@@ -23,7 +23,7 @@ jQuery(function($) {
       function monitor(action, id) {
          results.push([action, id]);
       }
-      var recs     = BigData.recs(FIREBASE, 25),
+      var recs     = BigData.recs(25),
           model    = BigData.model({store: new ko.sync.TestData.TestStore(true, monitor, recs.slice(0, 20))}),
           list     = new ko.sync.RecordList(model, recs.slice(0, 20)),
           criteria = {limit: 25, start: 100},

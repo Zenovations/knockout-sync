@@ -21,7 +21,6 @@
     */
    var FirebaseStore = ko.sync.Store.extend({
       init: function(rootPath) {
-         console.log('root path', _.toArray(arguments).join('/'));
          this.base         = new Firebase(_.toArray(arguments).join('/'));
          this.listeners    = [];
          this.observedRecs = [];
@@ -195,6 +194,7 @@
 
       if( filterCriteria ) {
          var opts  = ko.utils.extend({limit: 0, offset: 0, where: null, sort: null}, filterCriteria);
+         console.log('count', opts);
          return Util.filter(model, this.base, opts, iterator);
       }
       else {
