@@ -14,7 +14,7 @@
        * @constructor
        */
       init: function(fields, data, separator) {
-         _.isArray(fields) || (fields = [fields]);
+         _.isArray(fields) || (fields = fields? [fields] : []);
          this.separator = separator || RecordId.DEFAULT_SEPARATOR;
          this.multi = fields.length > 1;
          this.fields = fields;

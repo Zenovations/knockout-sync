@@ -3,6 +3,7 @@
    "use strict";
 
    var exports = ko.sync.TestData = {}, Model = ko.sync.Model;
+   var TIMEOUT = 5000;
 
    var genericModelProps = {
       table: 'TableKeyed',
@@ -231,12 +232,23 @@
       }
    };
 
+   exports.startTimeout = function(def) {
+      return setTimeout(function() {
+         def.reject('timeout expired');
+      }, TIMEOUT);
+   };
 
 
+   /***********************************
+    * TEST STORE
+    **********************************/
    (function() {
 
       /**
-       * A test class used to track calls to the store object for synchronization
+       * A pretend Store object that notifies a callback whenever a method is called on the Store interface. TestStore
+       * meets all the requirements of Store interface and can be used normally in place of an asynchronous Store.
+       *
+       * However, the watch() methods filterCriteria parameter is ignored and does not come into play here.
        */
       exports.TestStore = ko.sync.Store.extend({
          init: function(hasTwoWaySync, testCallback, records) {
@@ -255,8 +267,8 @@
             this.testCallback('create', record.hashKey());
             return $.Deferred(function(def) {
                this.records.push(record);
-//               this.notify('added', record.hashKey(), record.getData(), this.records.length-2);
-               _.delay(function() { def.resolve(record.hashKey()); }, 10);
+               this.notify('added', record.hashKey(), record.getData(), this.records[this.records.length-2].hashKey())
+                  .then(resolve(def, record.hashKey()));
             }.bind(this));
          },
 
@@ -277,47 +289,40 @@
          /**
           * @param {ko.sync.Model}  model
           * @param {ko.sync.Record} rec
-          * @return {Promise} resolves to callback({string}id, {boolean}changed) where changed is false if data was not dirty, rejected if record does not exist
+          * @return {jQuery.Deferred} resolves to callback({string}id, {boolean}changed) where changed is false if data was not dirty, rejected if record does not exist
           */
          update: function(model, rec) {
             this.testCallback('update', rec.hashKey());
             return $.Deferred(function(def) {
-               _.delay(function() {
-                  var oldRec = this.find(rec);
-                  oldRec.updateAll(rec.getData());
-                  def.resolve(oldRec.hashKey(), oldRec.isDirty());
-//                  this.notify('updated', oldRec.hashKey(), oldRec.getData());
-               }.bind(this), 10);
+               var oldRec = this.find(rec);
+               oldRec.updateAll(rec.getData());
+               def.resolve();
+               this.notify('updated', oldRec.hashKey(), oldRec.getData()).then(resolve(def, oldRec.hashKey(), oldRec.isDirty()));
             }.bind(this));
          },
 
          /**
           * @param {ko.sync.Model}           model
           * @param {ko.sync.Record|ko.sync.RecordId} recOrId
-          * @return {Promise} resolves with record's {string}id
+          * @return {jQuery.Deferred} resolves with record's {string}id
           */
          delete: function(model, recOrId) {
             var key = recOrId.hashKey(), rec = this.find(key);
             this.testCallback('delete', key);
-            return $.Deferred(function(def) {
-               _.delay(function() {
-                  var idx = _.indexOf(this.records, rec);
-                  if( idx >= 0 ) {
-//                     this.notify('deleted', key, rec.getData());
-                     def.resolve(key);
-                  }
-                  else {
-                     def.reject('could not find '+key);
-                  }
-               }.bind(this), 10);
-            }.bind(this));
+            var idx = _.indexOf(this.records, rec);
+            if( idx >= 0 ) {
+               return this.notify('deleted', key, rec.getData());
+            }
+            else {
+               return $.Deferred(function(def) { def.reject('could not find '+key); });
+            }
          },
 
          /**
           * @param {Function} iterator
           * @param {ko.sync.Model}  model
           * @param {object} [filterCriteria]
-          * @return {Promise}
+          * @return {jQuery.Deferred}
           */
          query: function(model, iterator, filterCriteria) {
             this.testCallback('query', filterCriteria);
@@ -350,6 +355,8 @@
          },
 
          /**
+          * FILTER CRITERIA DOES NOT WORK HERE :(
+          *
           * @param  {ko.sync.Model} model
           * @param  {Function}     callback
           * @param  {object}       [filterCriteria]
@@ -368,11 +375,11 @@
 
          /**
           * @param {ko.sync.Model}  model
-          * @param  {Function}      callback
           * @param {ko.sync.RecordId|ko.sync.Record} recordId
+          * @param  {Function}      callback
           * @return {Object}
           */
-         watchRecord: function(model, callback, recordId) {
+         watchRecord: function(model, recordId, callback) {
             this.testCallback('watchRecord', recordId.hashKey());
             return this.find(recordId).subscribe(callback);
          },
@@ -384,12 +391,50 @@
             });
          },
 
+         /**
+          * This is triggered whenever add/update/delete/move events occur to simulate the modification
+          * which would be returned by the server after save.
+          *
+          * @param action
+          * @param id
+          * @param [data]
+          * @param [prevId]
+          * @return {jQuery.Deferred} just so test cases know how long to wait before asserting
+          */
          notify: function(action, id, data, prevId) {
-            _.each(this.callbacks, function(fx) {
-               fx(action, id, data, prevId);
-            });
-         }
+            return $.Deferred(function(def) {
+               if( this.hasTwoWaySync() ) {
+                  _.delay(function() { // simulate event returning from server
+                     _.each(this.callbacks, function(fx) {
+                        fx(action, id, data, prevId);
+                     });
+                     def.resolve(id);
+                  }.bind(this), 10);
+               }
+               else {
+                  def.resolve(id);
+               }
+            }.bind(this));
+         },
 
+         /**
+          * Create a fake notification event which would simulate an update occurring on the server and us
+          * getting that update via a push event
+          *
+          * @param {string} action
+          * @param {string} id
+          * @param {object} [changedData]
+          * @param {string} [prevId]
+          * @return {jQuery.Deferred} just so test cases know how long to wait before asserting
+          */
+         fakeNotify: function(action, id, changedData, prevId) {
+            if( arguments.length === 3 && typeof(changedData) === 'string' ){
+               prevId = changedData;
+               changedData = {};
+            }
+            var rec = this.find(id), data = $.extend({}, rec? rec.getData() : {}, changedData);
+            return this.notify(action, id, data, prevId);
+         }
       });
 
       function _buildFilter(opts) {
@@ -453,6 +498,19 @@
       }
 
    })();
+
+   function resolve(def) {
+      var args = $.makeArray(arguments);
+      args.shift();
+      if( args.length ) {
+         return function() {
+            def.resolve.apply(def, args);
+         }
+      }
+      else {
+         return def.resolve;
+      }
+   }
 
 })(ko);
 

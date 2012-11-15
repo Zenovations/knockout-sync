@@ -162,7 +162,7 @@
     * Sends notices to all callbacks listening for events on this Record
     * @param {Array}  callbacks
     * @param {Record} record
-    * @param {string} fieldChanged
+    * @param {string|Array} fieldChanged
     * @private
     */
    function _updateListeners(callbacks, record, fieldChanged) {

@@ -3,8 +3,9 @@
  *******************************************/
 (function(ko) {
    "use strict";
+   var modelInst = 1; // just a counter to make models unique
 
-   var modelInst = 1;
+
    ko.sync.Model = Class.extend({
       /**
        * @param {object} props
@@ -80,6 +81,10 @@
          //todo
          //todo
          //todo
+      },
+
+      equal: function(o) {
+         return o instanceof ko.sync.Model && this.inst == o.inst;
       }
 
    });
@@ -90,7 +95,7 @@
       observe:   true,
       minLength: 0,
       maxLength: 0,
-      sort: null, //todo unused?
+      sort:      null, //todo unused?
       valid:     null, //todo tie this to this.validator?
       updateCounter: 'update_counter',
       auto:  false,

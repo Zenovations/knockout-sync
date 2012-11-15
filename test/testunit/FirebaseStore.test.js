@@ -221,7 +221,7 @@ jQuery(function($) {
          .update(store, model, data)
          .end()
          .fail(function(e) {
-             equal(e[0].toString(), 'invalid key', 'should fail with invalid key error');
+             ok(e[0].toString().indexOf('invalid key') > -1, 'should fail with invalid key error');
          })
          .always(start);
    });

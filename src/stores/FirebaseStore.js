@@ -74,6 +74,7 @@
 
    /**
     * Update an existing record in the database. If the record does not already exist, the promise is rejected.
+    *
     * @param {Model}  model
     * @param {Record} rec
     * @return {Promise} resolves to callback({string}id, {boolean}changed) where changed is false if data was not dirty, rejected if record does not exist
@@ -82,9 +83,9 @@
       var hashKey = rec.hashKey();
       // was the record actually modified?
       if( !rec.hasKey() ) {
-         return $.Deferred().reject('invalid key', hashKey).promise();
+         return $.Deferred().reject('record has a temporary key (did you mean to call create?)', hashKey).promise();
       }
-      else if( rec.isDirty() ) { //todo should we check to see if the record exists?
+      else if( rec.isDirty() ) {
          var table = this.base.child(model.table);
          // does it exist?
          return Util.has(table, hashKey)
@@ -417,7 +418,7 @@
 
    function _updateRecord(table, hashKey, data, sortPriority) {
       var def = $.Deferred(),
-          ref = table.child(hashKey);
+         ref = table.child(hashKey);
       if( sortPriority ) {
          ref.setWithPriority(data, sortPriority, def.resolve);
       }

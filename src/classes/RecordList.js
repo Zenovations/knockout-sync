@@ -106,10 +106,12 @@
       }
       else {
          var key = record.hashKey();
-         record.isDirty(true);
-         this.added[key] = record;
-         this.dirty = true;
-         this.load(record, afterRecordId, true);
+         if( !(key in this.byKey) ) {
+            record.isDirty(true);
+            this.added[key] = record;
+            this.dirty = true;
+            this.load(record, afterRecordId, true);
+         }
       }
       return this;
    };
@@ -219,7 +221,7 @@
             afterRecordId = afterRecordId? record[i].getKey() : undef;
          }
       }
-      else {
+      else if( !(record.hashKey() in this.byKey) ) {
          var loc = putIn(this, record, afterRecordId, sendNotification);
          this.obs.splice(loc, 0, record);
       }
@@ -357,7 +359,7 @@
       _invalidateCache(recList);
       _cacheAndMonitor(recList, record, loc);
       if( sendNotification ) {
-         _updateListeners(recList.listeners, 'added', record, afterRecordId);
+         _updateListeners(recList.listeners, 'added', record, loc < 1? null : recList.obs()[loc-1]);
       }
       return loc;
    }
@@ -365,12 +367,13 @@
    function moveRec(recList, record) {
       _invalidateCache(recList);
       var loc = recList.obs.indexOf(record);
-      _updateListeners(recList.listeners, 'moved', record, loc < 1? null : recList.obs.slice(loc-1, loc)[0]);
+      _updateListeners(recList.listeners, 'moved', record, loc < 1? null : recList.obs()[loc-1]);
    }
 
    /**
     * Only intended to be used during load operations where the observableArray has already been populated.
-    * @param list
+    * @param {ko.sync.RecordList} list
+    * @param {ko.sync.Model} model
     * @private
     */
    function _checkAndCacheAll(list, model) {
@@ -393,8 +396,15 @@
     * @private
     */
    function _cacheAndMonitor(list, record, position) {
-      var key = record.hashKey();
+      var key = record.hashKey(), sortField = list.model.sort;
       list.subs[key] = record.subscribe(function(record, fieldChanged) {
+         //todo
+         //todo
+         //todo
+         //todo
+         //todo
+         //todo
+         //todo differentiate between move events and actual updates
          list.updated(record, fieldChanged);
       });
       list.cache[key] = position;
@@ -542,14 +552,16 @@
     * @private
     */
    function _updateListeners(callbacks, action, record, field) {
-      var i = -1, len = callbacks.length;
+      var i = -1, len = callbacks.length, args = $.makeArray(arguments).slice(1);
 //      console.info(action, record.hashKey(), field, callbacks);
       while(++i < len) {
-         callbacks[i](action, record, field);
+         callbacks[i].apply(null, args);
       }
    }
 
    function _sync(recList) {
+      //todo this is a bit of a mess when combined with the various points where _updateListeners is called
+      //todo how about an event handler/notifier to replace this?
       recList.obsSub = recList.obs.subscribe(function(obsValue) {
          // diff the last version with this one and see what changed; we only have to look for deletions and additions
          // since all of our local changes will change byKey before modifying the observable array, feedback loops
@@ -559,8 +571,6 @@
 
          // look for added keys
          _.each(obsValue, function(v, i) {
-            //todo this is a bit of a mess when combined with the various points where _updateListeners is called
-            //todo create an event controller/handler to process all the incoming requests and send the notifications?
             var key = v.hashKey();
             var prevId = _findPrevId(existingKeys, alreadyDeleted, obsValue, i);
             if( !_.has(existingKeys, key) ) {
@@ -580,7 +590,6 @@
 
          // look for deleted keys
          _.chain(existingKeys).keys().difference(_.keys(alreadyDeleted)).difference(obsKeys).each(function(key) {
-            //todo knockout 2.2 will have move operations (how do they work?) which can replace this craziness
             recList.delayed[key] = setTimeout(function() {
                // it's in the old values and not marked as deleted, and not in the new values
                takeOut(recList, existingKeys[key]);

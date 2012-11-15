@@ -1,4 +1,4 @@
-/*! Knockout Sync - v0.1.0 - 2012-11-14
+/*! Knockout Sync - v0.1.0 - 2012-11-15
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL */
 
@@ -1544,8 +1544,9 @@
  *******************************************/
 (function(ko) {
    "use strict";
+   var modelInst = 1; // just a counter to make models unique
 
-   var modelInst = 1;
+
    ko.sync.Model = Class.extend({
       /**
        * @param {object} props
@@ -1621,6 +1622,10 @@
          //todo
          //todo
          //todo
+      },
+
+      equal: function(o) {
+         return o instanceof ko.sync.Model && this.inst == o.inst;
       }
 
    });
@@ -1631,7 +1636,7 @@
       observe:   true,
       minLength: 0,
       maxLength: 0,
-      sort: null, //todo unused?
+      sort:      null, //todo unused?
       valid:     null, //todo tie this to this.validator?
       updateCounter: 'update_counter',
       auto:  false,
@@ -1859,7 +1864,7 @@
     * Sends notices to all callbacks listening for events on this Record
     * @param {Array}  callbacks
     * @param {Record} record
-    * @param {string} fieldChanged
+    * @param {string|Array} fieldChanged
     * @private
     */
    function _updateListeners(callbacks, record, fieldChanged) {
@@ -1950,7 +1955,7 @@
        * @constructor
        */
       init: function(fields, data, separator) {
-         _.isArray(fields) || (fields = [fields]);
+         _.isArray(fields) || (fields = fields? [fields] : []);
          this.separator = separator || RecordId.DEFAULT_SEPARATOR;
          this.multi = fields.length > 1;
          this.fields = fields;
@@ -2119,10 +2124,12 @@
       }
       else {
          var key = record.hashKey();
-         record.isDirty(true);
-         this.added[key] = record;
-         this.dirty = true;
-         this.load(record, afterRecordId, true);
+         if( !(key in this.byKey) ) {
+            record.isDirty(true);
+            this.added[key] = record;
+            this.dirty = true;
+            this.load(record, afterRecordId, true);
+         }
       }
       return this;
    };
@@ -2158,33 +2165,28 @@
             // store in changelist
             this.moved[key] = record;
 
-            // is the record's status already set to added?
-            var wasAdded = key in this.added;
-
-            // this is a hackish way to trick the notifications system into not marking this item deleted/added
-            // and shooting of events as we move it out and back into the observableArray
-            this.deleted[key] = record;
-            wasAdded || (this.added[key] = record);
+            var underlyingArray = this.obs();
 
             // determine what record we have moved it after
             var afterRecord = null;
             if( newLoc > 0 ) {
                if( newLoc == currentLoc + 1 ) {
                   // we are moving it by 1 slot so the next record is the one we want
-                  afterRecord = this.obs()[newLoc];
+                  afterRecord = underlyingArray[newLoc];
                }
                else {
                   // find the record before the new slot
-                  afterRecord = this.obs()[newLoc-1];
+                  afterRecord = underlyingArray[newLoc-1];
                }
             }
 
-            // now we move it
-            _.move(this.obs, currentLoc, newLoc);
+            // now we move it, we use the underlying element so this doesn't generate
+            // two updates (a delete event followed by an add event)
+            _.move(underlyingArray, currentLoc, newLoc);
 
-            // now we restore the changelists from our devious trickishness
-            delete this.deleted[key];
-            wasAdded || (delete this.added[key]);
+            // because we modified the underlying element knockout does not know it changed
+            // so manually tell knockout the data was updated
+            this.obs.notifySubscribers(underlyingArray);
 
             // now we shoot off the correct notification
             _updateListeners(this.listeners, 'moved', record, afterRecord);
@@ -2237,7 +2239,7 @@
             afterRecordId = afterRecordId? record[i].getKey() : undef;
          }
       }
-      else {
+      else if( !(record.hashKey() in this.byKey) ) {
          var loc = putIn(this, record, afterRecordId, sendNotification);
          this.obs.splice(loc, 0, record);
       }
@@ -2375,7 +2377,7 @@
       _invalidateCache(recList);
       _cacheAndMonitor(recList, record, loc);
       if( sendNotification ) {
-         _updateListeners(recList.listeners, 'added', record, afterRecordId);
+         _updateListeners(recList.listeners, 'added', record, loc < 1? null : recList.obs()[loc-1]);
       }
       return loc;
    }
@@ -2383,12 +2385,13 @@
    function moveRec(recList, record) {
       _invalidateCache(recList);
       var loc = recList.obs.indexOf(record);
-      _updateListeners(recList.listeners, 'moved', record, loc < 1? null : recList.obs.slice(loc-1, loc)[0]);
+      _updateListeners(recList.listeners, 'moved', record, loc < 1? null : recList.obs()[loc-1]);
    }
 
    /**
     * Only intended to be used during load operations where the observableArray has already been populated.
-    * @param list
+    * @param {ko.sync.RecordList} list
+    * @param {ko.sync.Model} model
     * @private
     */
    function _checkAndCacheAll(list, model) {
@@ -2411,8 +2414,15 @@
     * @private
     */
    function _cacheAndMonitor(list, record, position) {
-      var key = record.hashKey();
+      var key = record.hashKey(), sortField = list.model.sort;
       list.subs[key] = record.subscribe(function(record, fieldChanged) {
+         //todo
+         //todo
+         //todo
+         //todo
+         //todo
+         //todo
+         //todo differentiate between move events and actual updates
          list.updated(record, fieldChanged);
       });
       list.cache[key] = position;
@@ -2560,14 +2570,16 @@
     * @private
     */
    function _updateListeners(callbacks, action, record, field) {
-      var i = -1, len = callbacks.length;
+      var i = -1, len = callbacks.length, args = $.makeArray(arguments).slice(1);
 //      console.info(action, record.hashKey(), field, callbacks);
       while(++i < len) {
-         callbacks[i](action, record, field);
+         callbacks[i].apply(null, args);
       }
    }
 
    function _sync(recList) {
+      //todo this is a bit of a mess when combined with the various points where _updateListeners is called
+      //todo how about an event handler/notifier to replace this?
       recList.obsSub = recList.obs.subscribe(function(obsValue) {
          // diff the last version with this one and see what changed; we only have to look for deletions and additions
          // since all of our local changes will change byKey before modifying the observable array, feedback loops
@@ -2577,11 +2589,6 @@
 
          // look for added keys
          _.each(obsValue, function(v, i) {
-            //todo this is a bit of a mess when combined with the various points where _updateListeners is called
-            //todo create an event controller/handler to process all the incoming requests and send the notifications?
-            if(_.isArray(v) ) {
-               debugger;
-            }
             var key = v.hashKey();
             var prevId = _findPrevId(existingKeys, alreadyDeleted, obsValue, i);
             if( !_.has(existingKeys, key) ) {
@@ -2601,7 +2608,6 @@
 
          // look for deleted keys
          _.chain(existingKeys).keys().difference(_.keys(alreadyDeleted)).difference(obsKeys).each(function(key) {
-            //todo knockout 2.2 will have move operations (how do they work?) which can replace this craziness
             recList.delayed[key] = setTimeout(function() {
                // it's in the old values and not marked as deleted, and not in the new values
                takeOut(recList, existingKeys[key]);
@@ -2800,25 +2806,39 @@
        * changes.
        *
        * @param {ko.sync.Model}  model
-       * @param  {Function}      callback
        * @param {ko.sync.RecordId|ko.sync.Record} recordId
+       * @param  {Function}      callback
        * @return {Object}
        */
-      watchRecord: function(model, callback, recordId) { throw new Error('Interface not implemented'); }
+      watchRecord: function(model, recordId, callback) { throw new Error('Interface not implemented'); }
 
    });
 
 })(ko);
+/***********************************************
+ * SyncController connects RecordList to a Store
+ **********************************************/
 (function($) {
 
+   //todo
+   //todo
+   //todo
+   //todo
+   //todo
+   //todo when and where does the isDirty flag get cleared? (for auto-sync?)
+
    /**
-    * Establish and handle client-to-server and server-to-client updates. If the model/store only supports
+    * Establish and handle updates between a Store and a RecordList. If the model/store only supports
     * one-way updates, then we use those. This will also trigger automatic pushes to the server when auto-sync
-    * is true.
+    * is true. When auto-sync is false, then updates are pushed by calling pushUpdates().
     *
     * It is expected that by the time this class is called, that the data has been loaded and the object is ready
     * to be placed into a two-way sync state. Any time a record is reloaded or a list is reloaded with new data or
-    * criterio, this object should probably be disposed and replaced.
+    * criteria, this object should probably be disposed and replaced.
+    *
+    * Additionally, changes to the story are not detected and a new SyncController must be established. For example:
+    * if the model.store property is changed this will not be updated and a new SyncController is needed; if the
+    * model.auto property is toggled then a new SyncController will be needed.
     */
    ko.sync.SyncController = Class.extend({
 
@@ -2838,26 +2858,24 @@
          this.model = model;
          this.subs = [];
 
-         //todo if the model.auto property is toggled this will not be updated; do we care?
          if( model.auto ) {
             // sync client to server (push) updates
             if( isList ) {
-               this.subs.push.apply(this.subs, syncListPush(model, listOrRecord));
+               this.subs.push(syncListPush(model, listOrRecord));
             }
             else         {
-               this.subs.push.apply(this.subs, syncRecordPush(model, listOrRecord));
+               this.subs.push(syncRecordPush(model, listOrRecord));
             }
          }
 
-         //todo if the model.store property is changed this will not be updated; do we care?
          if( store.hasTwoWaySync(model) ) {
             // sync server to client (pull) updates
             // monitor the client (using the libs)
             if( isList ) {
-               this.subs.push.apply(this.subs, syncListPull(model, listOrRecord, criteria));
+               this.subs.push(syncListPull(model, listOrRecord, criteria));
             }
             else {
-               this.subs.push.apply(this.subs, syncRecordPull(model, listOrRecord));
+               this.subs.push(syncRecordPull(model, listOrRecord));
             }
          }
       },
@@ -2890,66 +2908,31 @@
             return $.when(promises);
          }
          else if( listOrRecord.isDirty() ) {
-            return $.Deferred(function(def) {
-               var store = this.store, model = this.model;
-               if( !action ) { action = 'updated'; }
-               switch(action) {
-                  case 'added':
-                     store.create(model, listOrRecord).then(_resolve(def, listOrRecord));
-                     break;
-                  case 'updated':
-                     store.update(model, listOrRecord).then(_resolve(def, listOrRecord));
-                     break;
-                  case 'deleted':
-                     store.delete(model, listOrRecord).then(_resolve(def, listOrRecord));
-                     break;
-                  case 'moved':
-                     //todo-sort does this work? how do we get "moved" notifications?
-                     store.update(model, listOrRecord).then(_resolve(def, listOrRecord));
-                     break;
-                  default:
-                     throw new Error('Invalid action', action);
-               }
-            }.bind(this));
+            return pushUpdate(action||'updated', this.store, this.model, listOrRecord);
          }
-         return $.Deferred().resolve(false);
+         else {
+            return $.Deferred().resolve(false);
+         }
       }
    });
 
    function syncListPush(model, list) {
       var store = model.store;
       list.subscribe(function(action, record, field) {
-         console.log('push::'+action, name, prevSibling, rec.hashKey()); //debug
-         switch(action) {
-            case 'added':
-               store.create(model, record);
-               break;
-            case 'deleted':
-               store.delete(model, record);
-               break;
-            case 'updated':
-               store.update(model, record);
-               break;
-            case 'moved':
-               //todo-sort is this sufficient? will the record even be dirty?
-               store.update(model, record);
-               break;
-            default:
-               console.error('invalid action', _.toArray(arguments));
-         }
+         return pushUpdate(action, store, list.model, record);
       });
    }
 
    function syncListPull(model, list, criteria) {
       model.store.watch(model, function(action, name, value, prevSibling) {
          var rec = list.find(name) || model.newRecord(value);
-         console.log('pull::'+action, name, prevSibling, rec.hashKey()); //debug
          switch(action) {
             case 'added':
                list.add(rec, prevSibling || 0);
                break;
             case 'deleted':
-               list.remove(rec);
+               var key = rec.hasKey() && rec.hashKey();
+               key && !(key in list.deleted) && !(key in list.delayed) && list.remove(rec);
                break;
             case 'updated':
                rec.updateAll(value);
@@ -2958,7 +2941,7 @@
                list.move(rec, prevSibling || 0);
                break;
             default:
-               console.error('invalid action', _.toArray(arguments));
+               typeof(console) === 'object' && console.error && console.error('invalid action', _.toArray(arguments));
          }
       }, criteria);
    }
@@ -2966,22 +2949,44 @@
    function syncRecordPush(model, rec) {
       var store = model.store;
       return rec.subscribe(function(record, fieldChanged) {
-         store.update(model, record);
+         store.update(model, record).then(thenClearDirty(record));
       });
    }
 
+   function pushUpdate(action, store, model, rec) {
+      //todo nothing happens if the sync fails; should we retry here? fix this upstream?
+      var def;
+      switch(action) {
+         case 'added':
+            def = store.create(model, rec);
+            break;
+         case 'updated':
+            def = store.update(model, rec);
+            break;
+         case 'deleted':
+            def = store.delete(model, rec);
+            break;
+         case 'moved':
+            //todo-sort does this work? how do we get "moved" notifications?
+            def = store.update(model, rec);
+            break;
+         default:
+            def = $.Deferred().reject('invalid action: '+action);
+            typeof(console) === 'object' && console.error && console.error('invalid action', _.toArray(arguments));
+      }
+      return def.then(thenClearDirty(rec));
+   }
+
    function syncRecordPull(model, rec) {
-      return model.store.watchRecord(model, rec.getKey(), function(id, val, sortPriority) {
-         //todo-sort need to do something with sortPriority here
+      return model.store.watchRecord(model, rec, function(id, val, sortPriority) {
          rec.updateAll(val);
       });
    }
 
-   function _resolve(def, rec) {
-      return function() {
-         rec.isDirty(false);
-         def.resolve.apply(def, _.toArray(arguments));
-      };
+   function thenClearDirty(rec) {
+      return function(success) {
+         success !== false && rec.isDirty(false);
+      }
    }
 
 })(jQuery);

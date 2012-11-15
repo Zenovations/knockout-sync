@@ -166,11 +166,11 @@
        * changes.
        *
        * @param {ko.sync.Model}  model
-       * @param  {Function}      callback
        * @param {ko.sync.RecordId|ko.sync.Record} recordId
+       * @param  {Function}      callback
        * @return {Object}
        */
-      watchRecord: function(model, callback, recordId) { throw new Error('Interface not implemented'); }
+      watchRecord: function(model, recordId, callback) { throw new Error('Interface not implemented'); }
 
    });
 
