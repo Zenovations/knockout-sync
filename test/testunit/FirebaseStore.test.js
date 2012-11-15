@@ -701,7 +701,6 @@ jQuery(function($) {
             console.warn('what is this?', id, data);
             ok(false, 'Received a change I wasn\'t looking for): '+ id + '::' + ko.toJSON(data));
          }
-         console.log(arguments);
       }
 
       TestData.bigData.reset(syncRoot).then(function(ref) {

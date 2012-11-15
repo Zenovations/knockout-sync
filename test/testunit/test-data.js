@@ -208,9 +208,9 @@
          ref.set(null, function() {
             var max = numrecs || exports.bigData.COUNT;
             _.each(exports.bigData.recs(max, moreData, exports.bigData.model()), function(rec,i) {
-               ref.child(i).setWithPriority(
+               ref.child(i+1).setWithPriority(
                   rec.getData(),
-                  i,
+                  rec.get('id'),
                   function() { if( ++count == max ) {
                      console.timeEnd('bigData.reset()');
                      def.resolve(ref);

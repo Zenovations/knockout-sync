@@ -145,33 +145,28 @@
             // store in changelist
             this.moved[key] = record;
 
-            // is the record's status already set to added?
-            var wasAdded = key in this.added;
-
-            // this is a hackish way to trick the notifications system into not marking this item deleted/added
-            // and shooting of events as we move it out and back into the observableArray
-            this.deleted[key] = record;
-            wasAdded || (this.added[key] = record);
+            var underlyingArray = this.obs();
 
             // determine what record we have moved it after
             var afterRecord = null;
             if( newLoc > 0 ) {
                if( newLoc == currentLoc + 1 ) {
                   // we are moving it by 1 slot so the next record is the one we want
-                  afterRecord = this.obs()[newLoc];
+                  afterRecord = underlyingArray[newLoc];
                }
                else {
                   // find the record before the new slot
-                  afterRecord = this.obs()[newLoc-1];
+                  afterRecord = underlyingArray[newLoc-1];
                }
             }
 
-            // now we move it
-            _.move(this.obs, currentLoc, newLoc);
+            // now we move it, we use the underlying element so this doesn't generate
+            // two updates (a delete event followed by an add event)
+            _.move(underlyingArray, currentLoc, newLoc);
 
-            // now we restore the changelists from our devious trickishness
-            delete this.deleted[key];
-            wasAdded || (delete this.added[key]);
+            // because we modified the underlying element knockout does not know it changed
+            // so manually tell knockout the data was updated
+            this.obs.notifySubscribers(underlyingArray);
 
             // now we shoot off the correct notification
             _updateListeners(this.listeners, 'moved', record, afterRecord);
@@ -566,9 +561,6 @@
          _.each(obsValue, function(v, i) {
             //todo this is a bit of a mess when combined with the various points where _updateListeners is called
             //todo create an event controller/handler to process all the incoming requests and send the notifications?
-            if(_.isArray(v) ) {
-               debugger;
-            }
             var key = v.hashKey();
             var prevId = _findPrevId(existingKeys, alreadyDeleted, obsValue, i);
             if( !_.has(existingKeys, key) ) {
