@@ -380,8 +380,13 @@
           * @return {Object}
           */
          watchRecord: function(model, recordId, callback) {
-            this.testCallback('watchRecord', recordId.hashKey());
-            return this.find(recordId).subscribe(callback);
+            var key = recordId.hashKey();
+            this.testCallback('watchRecord', key);
+            return this.watch(model, function() {
+               if( arguments[1] == key ) {
+                  callback.apply(null, _.toArray(arguments).slice(1));
+               }
+            });
          },
 
          find: function(recordId) {

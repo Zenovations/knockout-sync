@@ -26,7 +26,7 @@ jQuery(function($) {
             deepEqual(results, [
                ['update', '2']
             ], 'correct events invoked on Store object');
-         }, record, true);
+         }, record, {auto: false});
    });
 
    asyncTest('#pushUpdates(record) push update but record isn\'t dirty', function() {
@@ -36,7 +36,7 @@ jQuery(function($) {
       }, function(results) {
          deepEqual(results, [
          ], 'correct events invoked on Store object');
-      }, record, true);
+      }, record, {auto: false});
    });
 
    asyncTest('#pushUpdates, test a host of pushed changes', function() {
@@ -67,7 +67,7 @@ jQuery(function($) {
             ['delete', '16'],
             ['delete', '17']
          ], 'correct events invoked on Store object');
-      }, null, true);
+      }, null, {auto: false});
    });
 
    asyncTest('pull added (list)',   function() {
@@ -95,7 +95,7 @@ jQuery(function($) {
    asyncTest('pull updated (list)', function() {
       var recs     = BigData.recs(5), startRecs = recs.slice(0, 4);
       syncActivity(startRecs, function(sync, list, model) {
-         model.store.fakeNotify('updated', '3', {aBool: true});
+         return model.store.fakeNotify('updated', '3', {aBool: true});
       }, function(storeEvents, listEvents) {
          deepEqual(listEvents, [
             ['updated', '3', ['aBool']]
@@ -117,7 +117,7 @@ jQuery(function($) {
    asyncTest('pull deleted (list)', function() {
       var recs = BigData.recs(5);
       syncActivity(recs, function(sync, list, model) {
-         model.store.fakeNotify('deleted', '2');
+         return model.store.fakeNotify('deleted', '2');
       }, function(storeEvents, listEvents) {
          deepEqual(listEvents, [
             ['deleted', '2']
@@ -139,7 +139,7 @@ jQuery(function($) {
    asyncTest('pull moved (list)',   function() {
       var recs = BigData.recs(5);
       syncActivity(recs, function(sync, list, model) {
-         model.store.fakeNotify('moved', '4', null, '1');
+         return model.store.fakeNotify('moved', '4', null, '1');
       }, function(storeEvents, listEvents) {
          deepEqual(listEvents, [
             ['moved', '4', '1']
@@ -153,30 +153,61 @@ jQuery(function($) {
          list.move(recs[2], 0);
       }, function(storeEvents, listEvents) {
          deepEqual(storeEvents, [
-            ['update', '3', null]
+            ['update', '3']
          ]);
       });
    });
 
-   test('push added (record)', function() {});
-   test('pull added (record)', function() {});
-   test('push updated (record)', function() {});
-   test('pull updated (record)', function() {});
-   test('pull deleted (record)', function() {});
-   test('push deleted (record)', function() {});
-   test('pull moved (record)',   function() {});
-   test('push moved (record)',   function() {});
+   asyncTest('push updated (record)', function() {
+      var rec = BigData.record(5);
+      syncActivity([rec], function(sync, list, model) {
+         rec.set('aBool', true);
+      }, function(storeEvents, listEvents) {
+         deepEqual(storeEvents, [
+            ['update', '5']
+         ]);
+      }, rec);
+   });
 
-   test('push events do not trigger a feedback loop', function() {});
-   test('pull events do not trigger a feedback loop', function() {});
+   asyncTest('pull updated (record)', function() {
+      var recs = BigData.recs(2);
+      syncActivity(recs, function(sync, list, model) {
+         return model.store.fakeNotify('updated', '2', {aString: 'oh joy!'});
+      }, function(storeEvents, listEvents) {
+         deepEqual(listEvents, [
+            ['2', ['aString']]
+         ]);
+      }, recs[1]);
+   });
 
-   test('auto-sync off: push', function() {});
-   test('auto-sync off: pull', function() {});
+   asyncTest('auto-sync off: push does not go through automatically', function() {
+      var recs = BigData.recs(2);
+      syncActivity(recs, function(sync, list, model) {
+         list.remove(recs[0]);
+      }, function(storeEvents, listEvents) {
+         strictEqual(storeEvents.length, 0);
+      }, null, {auto: false});
+   });
 
-   test('hasTwoWay off: push', function() {});
-   test('hasTwoWay off: pull', function() {});
+   asyncTest('auto-sync off (record): push does not go through automatically', function() {
+      var recs = BigData.recs(2);
+      syncActivity(recs, function(sync, list, model) {
+         recs[1].set('aString', 'oh joy!');
+      }, function(storeEvents, listEvents) {
+         strictEqual(storeEvents.length, 0);
+      }, recs[1], {auto: false});
+   });
 
-   function syncActivity(recs, fx, analyzeFx, recToMonitor, noAutoSync) {
+   asyncTest('hasTwoWay off: pull does not get monitored', function() {
+      var recs = BigData.recs(2);
+      syncActivity(recs, function(sync, list, model) {
+         model.store.fakeNotify('updated', '1', {aString: 'oh joy!'});
+      }, function(storeEvents, listEvents) {
+         strictEqual(listEvents.length, 0);
+      }, null, {hasTwoWaySync: false});
+   });
+
+   function syncActivity(recs, fx, analyzeFx, recToMonitor, modelProps) {
       return $.Deferred(function(def) {
          var storeEvents = [], listEvents = [], to = TestData.startTimeout(def);
 
@@ -196,9 +227,10 @@ jQuery(function($) {
          }
 
          // set up the sync controller
-         var model    = BigData.model({store: new TestData.TestStore(true, monitorStore, recs), auto: !noAutoSync}),
-             list     = new RecordList(model, recs),
-             sync     = new ko.sync.SyncController(model, recToMonitor? recToMonitor : list);
+         var twoWaySync = modelProps && modelProps.hasTwoWaySync === false? false : true,
+             model      = BigData.model($.extend({store: new TestData.TestStore(twoWaySync, monitorStore, recs), auto: true}, modelProps)),
+             list       = new RecordList(model, recs),
+             sync       = new ko.sync.SyncController(model, recToMonitor? recToMonitor : list);
 
          if( recToMonitor ) {
             recToMonitor.subscribe(monitorList);

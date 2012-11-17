@@ -1,4 +1,4 @@
-/*! Knockout Sync - v0.1.0 - 2012-11-15
+/*! Knockout Sync - v0.1.0 - 2012-11-16
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL */
 
@@ -2377,7 +2377,7 @@
       _invalidateCache(recList);
       _cacheAndMonitor(recList, record, loc);
       if( sendNotification ) {
-         _updateListeners(recList.listeners, 'added', record, loc < 1? null : recList.obs()[loc-1]);
+         _updateListeners(recList.listeners, 'added', record, loc < 1? null : recList.obs()[loc-1].hashKey());
       }
       return loc;
    }
@@ -2385,7 +2385,7 @@
    function moveRec(recList, record) {
       _invalidateCache(recList);
       var loc = recList.obs.indexOf(record);
-      _updateListeners(recList.listeners, 'moved', record, loc < 1? null : recList.obs()[loc-1]);
+      _updateListeners(recList.listeners, 'moved', record, loc < 1? null : recList.obs()[loc-1].hashKey());
    }
 
    /**
