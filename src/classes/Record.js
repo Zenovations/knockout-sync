@@ -15,6 +15,7 @@
          data || (data = {});
          this.data      = _setFields(model.fields, data);
          this.observed  = _observed(model.fields);
+         this.fields    = _.keys(this.data);
          this.id        = new ko.sync.RecordId(model.key, data);
          this.sort      = model.sort;
          this.changed   = false;
@@ -37,6 +38,12 @@
       hashKey:         function() {
          return this.getKey().hashKey();
       },
+      setHashKey: function( hashKey ) {
+         if( !this.hasKey() && this.id.isComposite() ) {
+            this.set(this.id.fields[0], hashKey);
+            this.id.update(this.getData());
+         }
+      },
       setKey: function( newKey ) {
          this.id = newKey;
       },
@@ -44,7 +51,12 @@
          return _unwrapAll(this.observed, this.data);
       },
       get:             function(field) {
-         return field in this.observed? this.data[field]() : this.data[field];
+         if(_.isArray(field)) {
+            return _unwrapAll(this.observed, _.pick(field));
+         }
+         else {
+            return field in this.observed? this.data[field]() : this.data[field];
+         }
       },
       set:             function(field, val) {
          //todo-sort what should happen if fields affecting the sort priority are changed?
@@ -58,6 +70,9 @@
             //todo-validate !
             if( obs ) {
                this.data[field](val);
+               // set the key if it doesn't exist and we now have all the fields to do so
+               //todo what should happen if fields affecting the id are changed? maybe this? maybe too slow?
+//               !this.hasKey() && _.indexOf(this.id.fields, field) > -1 && this.id.update(this.get(this.id.fields));
             }
             else {
                this.data[field] = val;

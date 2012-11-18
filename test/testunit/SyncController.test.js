@@ -153,7 +153,7 @@ jQuery(function($) {
          list.move(recs[2], 0);
       }, function(storeEvents, listEvents) {
          deepEqual(storeEvents, [
-            ['update', '3', null]
+            ['update', '3']
          ]);
       });
    });

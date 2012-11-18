@@ -3,7 +3,7 @@
 
 # KnockoutSync
 
-<span style="color: red">**This is pre-alpha software (unstable)**</span>
+<span style="color: red">**This is alpha software (unstable)**</span>
 
 KnockoutSync is a persistence, validation, and synchronization library that connects Knockout.js with a data layer.
 
@@ -223,17 +223,14 @@ with `destroy()` and `_destroy` as deleted items are automagically tracked and h
         .promise().then(function(crud) { /* all operations completed and saved */ });
 ```
 
-# Some Mistakes to Avoid
+# Limitations
 
-Why make the same ones everyone else does? Be original!
-
- - a record or list is not synchronized to the database until a read() or create() operation is performed
- - fields which are not observable may be persistent, but they will not trigger auto-updates (we aren't observing them so we don't know when they change)
- - you must call Model.sync(...) on a view before assigning any ko.computed properties which will access those fields (computed properties run at the moment of creation)
- - if you don't set the autoupdate flag to true on the model, delete and create operations are not immediately sent to the server
  - conflicts are not resolved intelligently (yet); updates are just applied blindly (the same as they would be if you did all the synchronizations yourself), but some day, some day
  - you can create() a record with invalid data (this lib doesn't stop you from setting the value on a field) but cannot save it if it fails validation
- - unless you perform a read() on a list, it is only connected to the records you put into the list, not everything in the table
+ - unless you perform a read() on a list, it is not hooked up for two-way sync, but changes can still be saved to the server (you can't just sync an arbitrary set of records to an existing table, how would they resolve differences?)
+ - updating fields that are part of the records ids doesn't affect the ID
+ - updating fields that are part of the sort order doesn't affect actual ordering on client until a save occurs (and server tells us the records moved)
+ - composite keys currently don't work well with creates from client unless all data exists in the record when it is created (updating a composite field doesn't change the compiled ID)
 
 # API
 
@@ -439,26 +436,6 @@ If we wanted to create a list of new records to be added into the database, we c
    list.push.apply(list, preLoadedRecordsArray );
    list.isDirty(); // true!
    list.update();  // creates everything in preLoadedRecordsArray as new records in the database
-```
-
-### Model.newView( [data] )
-
-@param {Object|String} [data] either a {string}recordId to load from the database or a {object} field/value hash representing a new record to create
-@returns {object} with `Crud` methods attached
-
-Creates a view representing a single Record. This method behaves nearly identical to `Model.sync`, except that rather
-than apply the fields to an existing view, a new object is created from scratch.
-
-If `data` is specified, then it is loaded into the new record. If the loaded data contains a valid ID, then it is
-connected immediately to the database record. If they differ, the database record will update the local content.
-
-In the case that `data` is a string, it is assumed to be a record ID and loaded from the database accordingly.
-
-If there is no ID provided or the ID doesn't exist in the database, it can be added by invoking `view.crud.create()`.
-
-```javascript
-   // apply the model to a plain object
-   var view = model.newView();
 ```
 
 <a name="crud" id="crud"></a>
@@ -923,7 +900,11 @@ Read over src/classes/Store.js and implement each method according the purview o
 
 # Testing
 
-Browse to test/index.html and enjoy the pretty colors
+Browse to test/index.html and enjoy the pretty colors (hopefully they are green)
+
+# Contributing
+
+Use the pull request feature in GitHub to contribute changes. Please provide or modify unit tests in test/testunit as needed
 
 # TODO
 

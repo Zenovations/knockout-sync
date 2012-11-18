@@ -26,6 +26,13 @@
       hashKey:            function() { return this.hash; },
       toString:           function() { return this.hashKey(); },
       getCompositeFields: function() { return this.fields; },
+      update: function(data) {
+         var h = _createHash(this.separator, this.fields, data);
+         if( !_isTempId(h) ) {
+            this.hash = h;
+            this.tmpId = false;
+         }
+      },
       equals:             function(o) {
          // it is possible to match a RecordId even if it has no key, because you can check the Record's ID
          // against this one to see if they are actually the same instance this has some limitations but it

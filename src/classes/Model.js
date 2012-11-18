@@ -27,15 +27,17 @@
 
       /**
        * @param {ko.observableArray|ko.observable} observable
-       * @param {object} [data]
+       * @param {object} [recordOrList]
        * @return {ko.sync.Model} this
        */
-      sync: function(observable, data) {
+      sync: function(observable, recordOrList) {
          if( ko.isObservable(observable) && observable.push ) {
-            observable.crud = new ko.sync.CrudArray(observable, this, _makeList(this, dataRecOrList));
+            console.log('CrudArray');//debug
+            observable.crud = new ko.sync.CrudArray(observable, this, _makeList(this, recordOrList));
          }
          else {
-            observable.crud = new ko.sync.Crud(observable, this, _makeRecord(this, dataRecOrList));
+            console.log('Crud');//debug
+            observable.crud = new ko.sync.Crud(observable, this, _makeRecord(this, recordOrList));
          }
          return this;
       },
@@ -58,29 +60,6 @@
 
       toString: function() {
          return this.table+'['+this.inst+']';
-      },
-
-      mapping: function() {
-         var keyFx = _.bind(function(rec) {
-            return rec.hashKey? rec.hashKey() : rec[this.key];
-         }, this);
-         var out = { key: keyFx, copy: [] }, fields = this.fields;
-         for (var key in fields) {
-            if (fields.hasOwnProperty(key)) {
-               if( !fields[key].observe ) {
-                  out.copy.push(key);
-               }
-               //todo apply validate or format here??
-            }
-         }
-         return out;
-      },
-
-      reverseMapping: function() {
-         //todo
-         //todo
-         //todo
-         //todo
       },
 
       equal: function(o) {

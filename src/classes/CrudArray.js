@@ -1,7 +1,10 @@
 (function($) {
 
    /**
+    * @param {ko.observable} target
+    * @param {ko.sync.Model} model
     * @param {ko.sync.RecordList} list a RecordList we will use as our base
+    * @param {object} [criteria]
     * @constructor
     */
    ko.sync.CrudArray = function(target, model, list, criteria) {

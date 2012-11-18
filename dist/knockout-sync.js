@@ -1,4 +1,4 @@
-/*! Knockout Sync - v0.1.0 - 2012-11-15
+/*! Knockout Sync - v0.1.0 - 2012-11-17
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL */
 
@@ -1323,8 +1323,10 @@
          this.record = recordOrData;
       }
       else {
+         console.log('model.newRecord');//debug
          this.record = model.newRecord(recordOrData);
       }
+      console.log('new syncController');//debug
       this.controller = new ko.sync.SyncController(model, this.record);
    };
 
@@ -1343,13 +1345,13 @@
     * @return {ko.sync.Crud} this
     */
    Crud.prototype.create = function() {
-      this.def = this.def.pipe(_.bind(function() {
+      this.def = this.def.pipe(function() {
 
          //todo
          //todo
          //todo
 
-      }, this));
+      }.bind(this));
       return this;
    };
 
@@ -1359,13 +1361,13 @@
     * @return {ko.sync.Crud} this
     */
    Crud.prototype.read = function( recordId ) {
-      this.def = this.def.pipe(_.bind(function() {
+      this.def = this.def.pipe(function() {
 
          //todo
          //todo
          //todo
 
-      }, this));
+      }.bind(this));
       return this;
    };
 
@@ -1374,12 +1376,12 @@
     * @return {ko.sync.Crud} this
     */
    Crud.prototype.update = function() {
-      this.def = this.def.pipe(_.bind(function() {
+      this.def = this.def.pipe(function() {
          if( this.record.isDirty() ) {
             return this.controller.pushUpdates(this.record);
          }
          return this;
-      }, this));
+      }.bind(this));
       return this;
    };
 
@@ -1422,7 +1424,10 @@
 (function($) {
 
    /**
+    * @param {ko.observable} target
+    * @param {ko.sync.Model} model
     * @param {ko.sync.RecordList} list a RecordList we will use as our base
+    * @param {object} [criteria]
     * @constructor
     */
    ko.sync.CrudArray = function(target, model, list, criteria) {
@@ -1568,15 +1573,17 @@
 
       /**
        * @param {ko.observableArray|ko.observable} observable
-       * @param {object} [data]
+       * @param {object} [recordOrList]
        * @return {ko.sync.Model} this
        */
-      sync: function(observable, data) {
+      sync: function(observable, recordOrList) {
          if( ko.isObservable(observable) && observable.push ) {
-            observable.crud = new ko.sync.CrudArray(observable, this, _makeList(this, dataRecOrList));
+            console.log('CrudArray');//debug
+            observable.crud = new ko.sync.CrudArray(observable, this, _makeList(this, recordOrList));
          }
          else {
-            observable.crud = new ko.sync.Crud(observable, this, _makeRecord(this, dataRecOrList));
+            console.log('Crud');//debug
+            observable.crud = new ko.sync.Crud(observable, this, _makeRecord(this, recordOrList));
          }
          return this;
       },
@@ -1599,29 +1606,6 @@
 
       toString: function() {
          return this.table+'['+this.inst+']';
-      },
-
-      mapping: function() {
-         var keyFx = _.bind(function(rec) {
-            return rec.hashKey? rec.hashKey() : rec[this.key];
-         }, this);
-         var out = { key: keyFx, copy: [] }, fields = this.fields;
-         for (var key in fields) {
-            if (fields.hasOwnProperty(key)) {
-               if( !fields[key].observe ) {
-                  out.copy.push(key);
-               }
-               //todo apply validate or format here??
-            }
-         }
-         return out;
-      },
-
-      reverseMapping: function() {
-         //todo
-         //todo
-         //todo
-         //todo
       },
 
       equal: function(o) {
@@ -1717,6 +1701,7 @@
          data || (data = {});
          this.data      = _setFields(model.fields, data);
          this.observed  = _observed(model.fields);
+         this.fields    = _.keys(this.data);
          this.id        = new ko.sync.RecordId(model.key, data);
          this.sort      = model.sort;
          this.changed   = false;
@@ -1739,6 +1724,12 @@
       hashKey:         function() {
          return this.getKey().hashKey();
       },
+      setHashKey: function( hashKey ) {
+         if( !this.hasKey() && this.id.isComposite() ) {
+            this.set(this.id.fields[0], hashKey);
+            this.id.update(this.getData());
+         }
+      },
       setKey: function( newKey ) {
          this.id = newKey;
       },
@@ -1746,7 +1737,12 @@
          return _unwrapAll(this.observed, this.data);
       },
       get:             function(field) {
-         return field in this.observed? this.data[field]() : this.data[field];
+         if(_.isArray(field)) {
+            return _unwrapAll(this.observed, _.pick(field));
+         }
+         else {
+            return field in this.observed? this.data[field]() : this.data[field];
+         }
       },
       set:             function(field, val) {
          //todo-sort what should happen if fields affecting the sort priority are changed?
@@ -1760,6 +1756,9 @@
             //todo-validate !
             if( obs ) {
                this.data[field](val);
+               // set the key if it doesn't exist and we now have all the fields to do so
+               //todo what should happen if fields affecting the id are changed? maybe this? maybe too slow?
+//               !this.hasKey() && _.indexOf(this.id.fields, field) > -1 && this.id.update(this.get(this.id.fields));
             }
             else {
                this.data[field] = val;
@@ -1967,6 +1966,13 @@
       hashKey:            function() { return this.hash; },
       toString:           function() { return this.hashKey(); },
       getCompositeFields: function() { return this.fields; },
+      update: function(data) {
+         var h = _createHash(this.separator, this.fields, data);
+         if( !_isTempId(h) ) {
+            this.hash = h;
+            this.tmpId = false;
+         }
+      },
       equals:             function(o) {
          // it is possible to match a RecordId even if it has no key, because you can check the Record's ID
          // against this one to see if they are actually the same instance this has some limitations but it
@@ -2820,13 +2826,6 @@
  **********************************************/
 (function($) {
 
-   //todo
-   //todo
-   //todo
-   //todo
-   //todo
-   //todo when and where does the isDirty flag get cleared? (for auto-sync?)
-
    /**
     * Establish and handle updates between a Store and a RecordList. If the model/store only supports
     * one-way updates, then we use those. This will also trigger automatic pushes to the server when auto-sync
@@ -2858,13 +2857,26 @@
          this.model = model;
          this.subs = [];
 
+         var next = $.Deferred(function(def) { def.resolve(); });
+
          if( model.auto ) {
             // sync client to server (push) updates
             if( isList ) {
                this.subs.push(syncListPush(model, listOrRecord));
             }
-            else         {
-               this.subs.push(syncRecordPush(model, listOrRecord));
+            else {
+               //todo this is not enough; existence of a key doesn't ensure record exists on the server
+               if( !listOrRecord.hasKey() ) {
+                  next.pipe(function() {
+                     // record is new, must be created on server
+                     return store.create(model, listOrRecord).then(function(id) {
+                        listOrRecord.setHashKey(id);
+                     }.bind(this)).then(thenClearDirty(listOrRecord));
+                  }.bind(this));
+               }
+               next.then(function() {
+                  this.subs.push(syncRecordPush(model, listOrRecord));
+               }.bind(this));
             }
          }
 
@@ -2875,7 +2887,16 @@
                this.subs.push(syncListPull(model, listOrRecord, criteria));
             }
             else {
-               this.subs.push(syncRecordPull(model, listOrRecord));
+               //todo this is not enough, existence of a key doesn't ensure the record exists on the server
+               if( listOrRecord.hasKey() ) {
+                  this.subs.push(syncRecordPull(model, listOrRecord));
+               }
+               else {
+                  next.then(function() {
+                     // if the record must be created, wait before trying to sync for updates
+                     this.subs.push(syncRecordPush(model, listOrRecord));
+                  }.bind(this));
+               }
             }
          }
       },
@@ -2896,10 +2917,13 @@
        * Force updates (for use when auto-sync is off). It is safe to call this on unchanged records or empty lists
        *
        * @param {Array|ko.sync.Record} listOrRecord
-       * @param {string} [action]  added, updated, or deleted
+       * @param {string} [action]  added, updated, moved, or deleted
        * @return {Promise} fulfilled when all updates are marked completed by the server
        */
       pushUpdates: function(listOrRecord, action) {
+         //todo make this work if a RecordList is passed in
+         //todo this method signature is wrong; we should be checking the list/record we received in init rather
+         //todo than operating on any list we see come through
          if(_.isArray(listOrRecord) ) {
             var promises = [];
             _.each(listOrRecord, function(v) {
@@ -2908,7 +2932,7 @@
             return $.when(promises);
          }
          else if( listOrRecord.isDirty() ) {
-            return pushUpdate(action||'updated', this.store, this.model, listOrRecord);
+            return pushUpdate(_updateAction(listOrRecord, action), this.store, this.model, listOrRecord);
          }
          else {
             return $.Deferred().resolve(false);
@@ -2935,6 +2959,7 @@
                key && !(key in list.deleted) && !(key in list.delayed) && list.remove(rec);
                break;
             case 'updated':
+               //todo this doesn't deal with conflicts (update on server and client at same time)
                rec.updateAll(value);
                break;
             case 'moved':
@@ -2943,6 +2968,7 @@
             default:
                typeof(console) === 'object' && console.error && console.error('invalid action', _.toArray(arguments));
          }
+         rec.isDirty(false); // record now matches server
       }, criteria);
    }
 
@@ -2954,11 +2980,12 @@
    }
 
    function pushUpdate(action, store, model, rec) {
-      //todo nothing happens if the sync fails; should we retry here? fix this upstream?
       var def;
       switch(action) {
          case 'added':
-            def = store.create(model, rec);
+            def = store.create(model, rec).then(function(id) {
+               rec.setHashKey(id);
+            });
             break;
          case 'updated':
             def = store.update(model, rec);
@@ -2979,13 +3006,26 @@
 
    function syncRecordPull(model, rec) {
       return model.store.watchRecord(model, rec, function(id, val, sortPriority) {
+         //todo this doesn't deal with conflicts (update on server and client at same time)
+         //todo-sort this ignores sortPriority, which is presably in the data, but should we rely on that?
          rec.updateAll(val);
+         rec.isDirty(false); // record now matches server
       });
    }
 
    function thenClearDirty(rec) {
       return function(success) {
          success !== false && rec.isDirty(false);
+      }
+   }
+
+   function _updateAction(rec, action) {
+      if( action ) { return action; }
+      else if( rec.hasKey() ) {
+         return 'updated';
+      }
+      else {
+         return 'created';
       }
    }
 
@@ -3051,7 +3091,7 @@
    FirebaseStore.prototype.create = function(model, rec) {
       var base = this.base;
       var table = base.child(model.table);
-      return _createRecord(table, rec.getKey(), cleanData(model.fields, rec.getData()), rec.getSortPriority());
+      return _createRecord(table, rec, model.fields);
    };
 
    /**
@@ -3390,31 +3430,46 @@
     * with the unique id of `key`, otherwise an ID is generated automagically (and chronologically)
     * by Firebase.
     *
-    * @param table
-    * @param {RecordId}  key
-    * @param {object}    data
-    * @param {int}      [sortPriority]
+    * @param {Firebase}  table
+    * @param {ko.sync.Record} rec
+    * @param {Array} fields
     * @return {jQuery.Deferred}
     * @private
     */
-   function _createRecord(table, key, data, sortPriority) {
+   function _createRecord(table, rec, fields) {
       var def = $.Deferred(), ref,
-          cb = function(success) { success? def.resolve(ref.name()) : def.reject(ref.name()); };
+          cleanedData = cleanData(model.fields, rec.getData()),
+          key = rec.getKey(),
+          sortPriority = rec.getSortPriority(),
+          cb;
       if( key.isSet() ) {
          ref = table.child(key.hashKey());
+         cb = thenResolve(def, ref);
          if( sortPriority ) {
-            ref.setWithPriority(data, sortPriority, cb);
+            ref.setWithPriority(cleanedData, sortPriority, cb);
          }
          else {
-            ref.set(data, cb);
+            ref.set(cleanedData, cb);
          }
       }
+      else if( key.isComposite() ) {
+         // the key consists of more than one field value; it cannot be created on the fly
+         def.reject('composite keys cannot be created by the server');
+      }
       else if( sortPriority ) {
-         ref = table.push(data);
+         ref = table.push(cleanedData);
+         cb = thenResolve(def, ref);
          ref.setPriority(sortPriority, cb);
       }
       else {
-         ref = table.push(data, cb);
+         ref = table.push(cleanedData, function(success) {
+            if( success ) {
+               def.resolve(ref.name());
+            }
+            else {
+               def.reject(ref.name());
+            }
+         });
       }
       return def.promise();
    }
@@ -3839,6 +3894,17 @@
             if( success ) { def.resolve(key, true); }
             else { def.reject('synchronize failed'); }
          });
+      }
+   }
+
+   function thenResolve(def, ref) {
+      return function(success) {
+         if( success ) {
+            def.resolve(ref.name())
+         }
+         else {
+            def.reject(ref.name());
+         }
       }
    }
 

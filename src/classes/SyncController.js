@@ -3,13 +3,6 @@
  **********************************************/
 (function($) {
 
-   //todo
-   //todo
-   //todo
-   //todo
-   //todo
-   //todo when and where does the isDirty flag get cleared? (for auto-sync?)
-
    /**
     * Establish and handle updates between a Store and a RecordList. If the model/store only supports
     * one-way updates, then we use those. This will also trigger automatic pushes to the server when auto-sync
@@ -41,13 +34,26 @@
          this.model = model;
          this.subs = [];
 
+         var next = $.Deferred(function(def) { def.resolve(); });
+
          if( model.auto ) {
             // sync client to server (push) updates
             if( isList ) {
                this.subs.push(syncListPush(model, listOrRecord));
             }
-            else         {
-               this.subs.push(syncRecordPush(model, listOrRecord));
+            else {
+               //todo this is not enough; existence of a key doesn't ensure record exists on the server
+               if( !listOrRecord.hasKey() ) {
+                  next.pipe(function() {
+                     // record is new, must be created on server
+                     return store.create(model, listOrRecord).then(function(id) {
+                        listOrRecord.setHashKey(id);
+                     }.bind(this)).then(thenClearDirty(listOrRecord));
+                  }.bind(this));
+               }
+               next.then(function() {
+                  this.subs.push(syncRecordPush(model, listOrRecord));
+               }.bind(this));
             }
          }
 
@@ -58,7 +64,16 @@
                this.subs.push(syncListPull(model, listOrRecord, criteria));
             }
             else {
-               this.subs.push(syncRecordPull(model, listOrRecord));
+               //todo this is not enough, existence of a key doesn't ensure the record exists on the server
+               if( listOrRecord.hasKey() ) {
+                  this.subs.push(syncRecordPull(model, listOrRecord));
+               }
+               else {
+                  next.then(function() {
+                     // if the record must be created, wait before trying to sync for updates
+                     this.subs.push(syncRecordPush(model, listOrRecord));
+                  }.bind(this));
+               }
             }
          }
       },
@@ -79,10 +94,13 @@
        * Force updates (for use when auto-sync is off). It is safe to call this on unchanged records or empty lists
        *
        * @param {Array|ko.sync.Record} listOrRecord
-       * @param {string} [action]  added, updated, or deleted
+       * @param {string} [action]  added, updated, moved, or deleted
        * @return {Promise} fulfilled when all updates are marked completed by the server
        */
       pushUpdates: function(listOrRecord, action) {
+         //todo make this work if a RecordList is passed in
+         //todo this method signature is wrong; we should be checking the list/record we received in init rather
+         //todo than operating on any list we see come through
          if(_.isArray(listOrRecord) ) {
             var promises = [];
             _.each(listOrRecord, function(v) {
@@ -91,7 +109,7 @@
             return $.when(promises);
          }
          else if( listOrRecord.isDirty() ) {
-            return pushUpdate(action||'updated', this.store, this.model, listOrRecord);
+            return pushUpdate(_updateAction(listOrRecord, action), this.store, this.model, listOrRecord);
          }
          else {
             return $.Deferred().resolve(false);
@@ -118,6 +136,7 @@
                key && !(key in list.deleted) && !(key in list.delayed) && list.remove(rec);
                break;
             case 'updated':
+               //todo this doesn't deal with conflicts (update on server and client at same time)
                rec.updateAll(value);
                break;
             case 'moved':
@@ -126,6 +145,7 @@
             default:
                typeof(console) === 'object' && console.error && console.error('invalid action', _.toArray(arguments));
          }
+         rec.isDirty(false); // record now matches server
       }, criteria);
    }
 
@@ -137,11 +157,12 @@
    }
 
    function pushUpdate(action, store, model, rec) {
-      //todo nothing happens if the sync fails; should we retry here? fix this upstream?
       var def;
       switch(action) {
          case 'added':
-            def = store.create(model, rec);
+            def = store.create(model, rec).then(function(id) {
+               rec.setHashKey(id);
+            });
             break;
          case 'updated':
             def = store.update(model, rec);
@@ -162,13 +183,26 @@
 
    function syncRecordPull(model, rec) {
       return model.store.watchRecord(model, rec, function(id, val, sortPriority) {
+         //todo this doesn't deal with conflicts (update on server and client at same time)
+         //todo-sort this ignores sortPriority, which is presably in the data, but should we rely on that?
          rec.updateAll(val);
+         rec.isDirty(false); // record now matches server
       });
    }
 
    function thenClearDirty(rec) {
       return function(success) {
          success !== false && rec.isDirty(false);
+      }
+   }
+
+   function _updateAction(rec, action) {
+      if( action ) { return action; }
+      else if( rec.hasKey() ) {
+         return 'updated';
+      }
+      else {
+         return 'created';
       }
    }
 

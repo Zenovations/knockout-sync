@@ -48,7 +48,7 @@
    FirebaseStore.prototype.create = function(model, rec) {
       var base = this.base;
       var table = base.child(model.table);
-      return _createRecord(table, rec.getKey(), cleanData(model.fields, rec.getData()), rec.getSortPriority());
+      return _createRecord(table, rec, model.fields);
    };
 
    /**
@@ -387,31 +387,46 @@
     * with the unique id of `key`, otherwise an ID is generated automagically (and chronologically)
     * by Firebase.
     *
-    * @param table
-    * @param {RecordId}  key
-    * @param {object}    data
-    * @param {int}      [sortPriority]
+    * @param {Firebase}  table
+    * @param {ko.sync.Record} rec
+    * @param {Array} fields
     * @return {jQuery.Deferred}
     * @private
     */
-   function _createRecord(table, key, data, sortPriority) {
+   function _createRecord(table, rec, fields) {
       var def = $.Deferred(), ref,
-          cb = function(success) { success? def.resolve(ref.name()) : def.reject(ref.name()); };
+          cleanedData = cleanData(model.fields, rec.getData()),
+          key = rec.getKey(),
+          sortPriority = rec.getSortPriority(),
+          cb;
       if( key.isSet() ) {
          ref = table.child(key.hashKey());
+         cb = thenResolve(def, ref);
          if( sortPriority ) {
-            ref.setWithPriority(data, sortPriority, cb);
+            ref.setWithPriority(cleanedData, sortPriority, cb);
          }
          else {
-            ref.set(data, cb);
+            ref.set(cleanedData, cb);
          }
       }
+      else if( key.isComposite() ) {
+         // the key consists of more than one field value; it cannot be created on the fly
+         def.reject('composite keys cannot be created by the server');
+      }
       else if( sortPriority ) {
-         ref = table.push(data);
+         ref = table.push(cleanedData);
+         cb = thenResolve(def, ref);
          ref.setPriority(sortPriority, cb);
       }
       else {
-         ref = table.push(data, cb);
+         ref = table.push(cleanedData, function(success) {
+            if( success ) {
+               def.resolve(ref.name());
+            }
+            else {
+               def.reject(ref.name());
+            }
+         });
       }
       return def.promise();
    }
@@ -836,6 +851,17 @@
             if( success ) { def.resolve(key, true); }
             else { def.reject('synchronize failed'); }
          });
+      }
+   }
+
+   function thenResolve(def, ref) {
+      return function(success) {
+         if( success ) {
+            def.resolve(ref.name())
+         }
+         else {
+            def.reject(ref.name());
+         }
       }
    }
 

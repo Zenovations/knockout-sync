@@ -15,8 +15,10 @@
          this.record = recordOrData;
       }
       else {
+         console.log('model.newRecord');//debug
          this.record = model.newRecord(recordOrData);
       }
+      console.log('new syncController');//debug
       this.controller = new ko.sync.SyncController(model, this.record);
    };
 
@@ -35,13 +37,13 @@
     * @return {ko.sync.Crud} this
     */
    Crud.prototype.create = function() {
-      this.def = this.def.pipe(_.bind(function() {
+      this.def = this.def.pipe(function() {
 
          //todo
          //todo
          //todo
 
-      }, this));
+      }.bind(this));
       return this;
    };
 
@@ -51,13 +53,13 @@
     * @return {ko.sync.Crud} this
     */
    Crud.prototype.read = function( recordId ) {
-      this.def = this.def.pipe(_.bind(function() {
+      this.def = this.def.pipe(function() {
 
          //todo
          //todo
          //todo
 
-      }, this));
+      }.bind(this));
       return this;
    };
 
@@ -66,12 +68,12 @@
     * @return {ko.sync.Crud} this
     */
    Crud.prototype.update = function() {
-      this.def = this.def.pipe(_.bind(function() {
+      this.def = this.def.pipe(function() {
          if( this.record.isDirty() ) {
             return this.controller.pushUpdates(this.record);
          }
          return this;
-      }, this));
+      }.bind(this));
       return this;
    };
 
