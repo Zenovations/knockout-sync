@@ -11,7 +11,7 @@
 
    /**
     * @param {ko.sync.Model} model
-    * @param {Array} [records] ko.sync.Record objects to initialize the list
+    * @param {Array} [records] ko.sync.Record or key/value objects to initialize the list
     * @constuctor
     */
    ko.sync.RecordList = function(model, records) {
@@ -221,6 +221,9 @@
             afterRecordId = afterRecordId? record[i].getKey() : undef;
          }
       }
+      else if( !(record instanceof ko.sync.Record) ) {
+         this.load(this.model.newRecord(record), afterRecordId, sendNotification);
+      }
       else if( !(record.hashKey() in this.byKey) ) {
          var loc = putIn(this, record, afterRecordId, sendNotification);
          this.obs.splice(loc, 0, record);
@@ -359,7 +362,7 @@
       _invalidateCache(recList);
       _cacheAndMonitor(recList, record, loc);
       if( sendNotification ) {
-         _updateListeners(recList.listeners, 'added', record, loc < 1? null : recList.obs()[loc-1]);
+         _updateListeners(recList.listeners, 'added', record, loc < 1? null : recList.obs()[loc-1].hashKey());
       }
       return loc;
    }
@@ -367,7 +370,7 @@
    function moveRec(recList, record) {
       _invalidateCache(recList);
       var loc = recList.obs.indexOf(record);
-      _updateListeners(recList.listeners, 'moved', record, loc < 1? null : recList.obs()[loc-1]);
+      _updateListeners(recList.listeners, 'moved', record, loc < 1? null : recList.obs()[loc-1].hashKey());
    }
 
    /**

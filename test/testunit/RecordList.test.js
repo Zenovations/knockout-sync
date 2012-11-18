@@ -1,5 +1,5 @@
 
-jQuery(function($) {
+(function($) {
    "use strict";
    var undef;
 
@@ -338,7 +338,7 @@ jQuery(function($) {
       var i, v,
           data     = TestData.makeRecords(RECS_TOTAL+1), //create one extra for the manual push/delete ops; it won't be in list
           // create the list with 2 records pre-populated
-          list     =  new RecordList(TestData.model(), data.slice(0, RECS_PRELOADED)),
+          list     =  new RecordList(TestData.model(), data.slice(0, RECS_PRELOADED+1)),
           events   = [],
           expected = [];
 
@@ -359,17 +359,19 @@ jQuery(function($) {
       };
 
       function callback(action, record, field) {
-         events.push([action, record.hashKey(), field]);
+         var args = $.makeArray(arguments);
+         args[1] = record.hashKey();
+         events.push(args);
       }
 
       list.subscribe(callback);
 
       // add our new records
-      i = RECS_TOTAL;
-      while(i-- > RECS_PRELOADED) {
+      i = RECS_PRELOADED;
+      while(++i < RECS_TOTAL) {
          v = data[i];
          list.add(data[i]);
-         expected.push(['added', v.hashKey(), undef]);
+         expected.push(['added', v.hashKey(), data[i-1].hashKey()]);
       }
 
       // try updating each record using a different field each time for fun
@@ -385,19 +387,9 @@ jQuery(function($) {
       i = RECS_PRELOADED+2;
       while(i-- > RECS_PRELOADED) {
          var rec = data[i];
-         expected.push(['deleted', rec.hashKey(), undef]);
+         expected.push(['deleted', rec.hashKey()]);
          list.remove(rec);
       }
-
-      // manually push a record to the observable, which should still trigger notifications
-      expected.push(['added', data[RECS_TOTAL].hashKey(), undef]);
-      list.obs.push(data[RECS_TOTAL]);
-
-      // manually delete a record from the observable, which should still trigger notifications
-      expected.push(['deleted', data[RECS_TOTAL].hashKey(), undef]);
-      list.obs.pop();
-
-      //todo manual update
 
       // just leave enough time for deleted events to get processed
       _.delay(function() {
@@ -405,6 +397,31 @@ jQuery(function($) {
          deepEqual(events, expected, 'all events recorded as expected');
          start();
       }, 100);
+   });
+
+   asyncTest('#subscribe, manual add/delete (to observable) trigger events', function() {
+      var expected = [], events = [];
+      var recs = TestData.makeRecords(1);
+      var list = new RecordList(TestData.model());
+      list.subscribe(function(action, rec) {
+         var args = $.makeArray(arguments);
+         args[1] = rec.hashKey();
+         events.push(args);
+      });
+
+      // manually push a record to the observable, which should still trigger notifications
+      expected.push(['added', recs[0].hashKey(), null]);
+      list.obs.push(recs[0]);
+
+      // manually delete a record from the observable, which should still trigger notifications
+      expected.push(['deleted', recs[0].hashKey()]);
+      list.obs.pop();
+
+      _.delay(function() {
+         // check the results
+         deepEqual(events, expected, 'all events recorded correctly');
+         start();
+      });
    });
 
    test('#subscribe, invalid update ops', function() {
@@ -606,4 +623,4 @@ jQuery(function($) {
       return new RecordList.Iterator(list);
    }
 
-});
+})(jQuery);

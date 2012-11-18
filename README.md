@@ -295,16 +295,11 @@ for every field)
 
 {Boolean=false} When true the field must be set to a truthy value. For integers, required means it must not be zero.
 
-##### fields.persist
-
-{Boolean=true} When false, this field is not sent to the data store during save operations. It is possible to observe
-fields which are not persistent.
-
 ##### fields.observe
 
-{Boolean=true} When false, the field is not wrapped in a Knockout.js observable. It is important to note than
-fields which are not observed cannot trigger an auto-update or affect the isDirty flag (we aren't observing them
-so we can't know). They can still be stored when a save occurs, however, assuming `persist` is true.
+{Boolean=true} When false, the field is not wrapped in a Knockout.js observable. They are still be stored when a save occurs.
+
+//todo CrudArray behaves differently than Crud; account for this? fix it so they behave the same?
 
 ##### fields.type
 

@@ -1,6 +1,6 @@
 
 
-jQuery(function($) {
+(function($) {
 
    module("Validator");
    test("should be tested", function() {
@@ -8,5 +8,5 @@ jQuery(function($) {
       ok(false, 'Implement me!')
    });
 
-});
+})(jQuery);
 

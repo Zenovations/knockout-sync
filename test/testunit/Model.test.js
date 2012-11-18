@@ -1,5 +1,5 @@
 
-jQuery(function($) {
+(function($) {
    "use strict";
    var undef;
 
@@ -51,22 +51,47 @@ jQuery(function($) {
       expect(2);
       var obs = ko.observable();
       var model = TestData.model({store: new TestData.TestStore(true, function() {}, {})});
+      var defaults = TestData.defaults(model);
       model.sync(obs);
       var crud = obs.crud;
       ok(crud instanceof ko.sync.Crud, 'is a Crud instance');
-      deepEqual(crud.rec.data, {}, 'contains no data');
+      deepEqual(crud.record.getData(), defaults, 'contains default data');
    });
 
    test("#sync, observable (with data)", function() {
-      //todo
+      expect(2);
+      var genericData = TestData.genericData();
+      var obs = ko.observable(genericData);
+      var model = TestData.model({store: new TestData.TestStore(true, function() {}, {})});
+      model.sync(obs);
+      var crud = obs.crud;
+      ok(crud instanceof ko.sync.Crud, 'is a Crud instance');
+      deepEqual(crud.record.getData(), TestData.forCompare(TestData.fullData(genericData)), 'contains default data');
    });
 
    test("#sync, observableArray (empty)", function() {
-      //todo
+      expect(2);
+      var obs = ko.observableArray();
+      var model = TestData.model({store: new TestData.TestStore(true, function() {}, {})});
+      model.sync(obs);
+      var crud = obs.crud;
+      ok(crud instanceof ko.sync.CrudArray, 'is CrudArray instance');
+      strictEqual(crud.list.obs().length, 0, 'contains no records');
    });
 
    test("#sync, observableArray (with data)", function() {
-      //todo
+      expect(3);
+      // create observable array and put some pre-populated data into it
+      var obs = ko.observableArray();
+      $.each(TestData.makeRecords(5), function(i,v) {
+         obs.push(v.getData());
+      });
+      var model = TestData.model({store: new TestData.TestStore(true, function() {}, {})});
+      model.sync(obs);
+      var crud = obs.crud;
+      ok(crud instanceof ko.sync.CrudArray, 'is CrudArray instance');
+      ok(crud.list.obs()[0] instanceof ko.sync.Record, 'Elements are records');
+      strictEqual(crud.list.obs().length, 5, 'contains correct number of records');
    });
 
    //todo-test data sorting
@@ -83,4 +108,4 @@ jQuery(function($) {
          deepEqual(rec.getData(), data, 'create record has all fields set');
    });
 
-});
+})(jQuery);

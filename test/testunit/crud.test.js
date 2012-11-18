@@ -1,19 +1,19 @@
-
-jQuery(function($) {
+(function($) {
    "use strict";
 
-   var undef;
+   var undef, Crud = ko.sync.Crud, TestData = ko.sync.TestData;
 
    module('Crud');
 
-   test('#applyTo', function() {
-      var o = {};
-
-      //todo-test
-   });
-
    test('#isDirty', function() {
-      //todo-test
+      expect(2);
+      var model = _model();
+      var view = TestData.genericData();
+      model.sync(view);
+      view.intOptional(5);
+      strictEqual(view.crud.isDirty(), true, 'is dirty after update');
+      view.crud.record.isDirty(false);
+      strictEqual(view.crud.isDirty(), false, 'not dirty after record cleared');
    });
 
    test('#create', function() {
@@ -49,5 +49,9 @@ jQuery(function($) {
    });
 
 
-});
+   function _model() {
+      return TestData.model({store: new TestData.TestStore(true, function() {}, {})});
+   }
+
+})(jQuery);
 

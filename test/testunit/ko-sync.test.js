@@ -1,5 +1,5 @@
 
-jQuery(function($) {
+(function($) {
    var undef;
 
 //   module("ko.sync");
@@ -18,5 +18,5 @@ jQuery(function($) {
 //      ok(false, 'Implement me!')
 //   });
 
-});
+})(jQuery);
 

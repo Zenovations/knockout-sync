@@ -3,16 +3,15 @@
    /**
     * @param {ko.observable} target
     * @param {ko.sync.Model} model
-    * @param {ko.sync.RecordList} list a RecordList we will use as our base
     * @param {object} [criteria]
     * @constructor
     */
-   ko.sync.CrudArray = function(target, model, list, criteria) {
-      this.list = list; //todo create new lists? may not have one to start?
+   ko.sync.CrudArray = function(target, model, criteria) {
+      //todo what do we do with lists that are already populated? SyncController will expect the sync op to populate data
+      this.list = model.newList(target());
       this.parent = target;
       this.def = $.Deferred().resolve().promise();
-      //todo what do we do with lists that are already populated? SyncController will expect the sync op to populate data
-      this.controller = new ko.sync.SyncController(model, list, criteria);
+      this.controller = new ko.sync.SyncController(model, this.list, criteria);
    };
 
    var CrudArray = ko.sync.CrudArray;

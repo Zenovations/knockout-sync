@@ -1,5 +1,5 @@
 
-jQuery(function($) {
+(function($) {
    "use strict";
 
    //todo-test create a generic Store tester; it should work db agnostic anyways
@@ -220,8 +220,11 @@ jQuery(function($) {
          .create(store, model, TestData.genericData())
          .update(store, model, data)
          .end()
+         .then(function() {
+            ok(false, 'should have failed');
+         })
          .fail(function(e) {
-             ok(e[0].toString().indexOf('invalid key') > -1, 'should fail with invalid key error');
+             ok(e[0].toString().indexOf('temporary key') > -1, 'should fail with invalid key error but got: '+e);
          })
          .always(start);
    });
@@ -903,5 +906,5 @@ jQuery(function($) {
       }
    }
 
-});
+})(jQuery);
 

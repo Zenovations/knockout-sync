@@ -1285,16 +1285,8 @@
 (function(ko) {
    "use strict";
 
-   ko.extenders.crud = function(target, model, startDirty) {
-
-      //todo
-      //todo
-      //todo
-      //todo
-      //todo
-
-      // add crud operations
-      ko.sync.Crud.applyTo(target, model, startDirty);
+   ko.extenders.crud = function(target, model) {
+      model.sync(target);
    };
 
    //todo-feature: ko.sync.remote to perform operations remotely without having to download records first? example: ko.sync.remote.delete( model, 'recordXYZ' );
@@ -1311,23 +1303,16 @@
    "use strict";
 
    /**
-    * @param {Object}        target   an object, observable, or view containing the record data
+    * @param {Object}        target   an object or view containing the record data
     * @param {ko.sync.Model} model
-    * @param {ko.sync.Record|Object} [recordOrData]
     * @constructor
     */
-   ko.sync.Crud = function(target, model, recordOrData) {
+   ko.sync.Crud = function(target, model) {
       this.parent = target;
       this.def = $.Deferred().resolve().promise();
-      if( recordOrData instanceof ko.sync.Record ) {
-         this.record = recordOrData;
-      }
-      else {
-         console.log('model.newRecord');//debug
-         this.record = model.newRecord(recordOrData);
-      }
-      console.log('new syncController');//debug
+      this.record = model.newRecord(target);
       this.controller = new ko.sync.SyncController(model, this.record);
+      _updateTarget(this.record, model);
    };
 
    var Crud = ko.sync.Crud;
@@ -1378,7 +1363,7 @@
    Crud.prototype.update = function() {
       this.def = this.def.pipe(function() {
          if( this.record.isDirty() ) {
-            return this.controller.pushUpdates(this.record);
+            return this.controller.pushUpdates(this.record, 'updated');
          }
          return this;
       }.bind(this));
@@ -1418,6 +1403,12 @@
       return this.def.promise();
    };
 
+   function _updateTarget(model, target, record) {
+      _.each(model.fields, function(field, key) {
+         target[key] = record.data[key];
+      });
+   }
+
 })(ko);
 
 
@@ -1426,16 +1417,15 @@
    /**
     * @param {ko.observable} target
     * @param {ko.sync.Model} model
-    * @param {ko.sync.RecordList} list a RecordList we will use as our base
     * @param {object} [criteria]
     * @constructor
     */
-   ko.sync.CrudArray = function(target, model, list, criteria) {
-      this.list = list; //todo create new lists? may not have one to start?
+   ko.sync.CrudArray = function(target, model, criteria) {
+      //todo what do we do with lists that are already populated? SyncController will expect the sync op to populate data
+      this.list = model.newList(target());
       this.parent = target;
       this.def = $.Deferred().resolve().promise();
-      //todo what do we do with lists that are already populated? SyncController will expect the sync op to populate data
-      this.controller = new ko.sync.SyncController(model, list, criteria);
+      this.controller = new ko.sync.SyncController(model, this.list, criteria);
    };
 
    var CrudArray = ko.sync.CrudArray;
@@ -1572,18 +1562,16 @@
       },
 
       /**
-       * @param {ko.observableArray|ko.observable} observable
-       * @param {object} [recordOrList]
+       * @param {ko.observableArray|object} target an observable array we'll store a list of records in or an object to sync to a single record
+       * @param {object} [criteria] only used for observableArray to tell it which table records to monitor/sync
        * @return {ko.sync.Model} this
        */
-      sync: function(observable, recordOrList) {
-         if( ko.isObservable(observable) && observable.push ) {
-            console.log('CrudArray');//debug
-            observable.crud = new ko.sync.CrudArray(observable, this, _makeList(this, recordOrList));
+      sync: function(target, criteria) {
+         if( ko.isObservable(target) && target.push && _.isArray(target()) ) {
+            target.crud = new ko.sync.CrudArray(target, this, criteria);
          }
          else {
-            console.log('Crud');//debug
-            observable.crud = new ko.sync.Crud(observable, this, _makeRecord(this, recordOrList));
+            target.crud = new ko.sync.Crud(target, this);
          }
          return this;
       },
@@ -1616,7 +1604,6 @@
    ko.sync.Model.FIELD_DEFAULTS = {
       type:      'string',
       required:  false,
-      persist:   true,
       observe:   true,
       minLength: 0,
       maxLength: 0,
@@ -1661,6 +1648,7 @@
       this.model = model;
    }
    RecordFactory.prototype.create = function(data) {
+      data instanceof ko.sync.Record && (data = data.getData());
       return new ko.sync.Record(this.model, data);
    };
 
@@ -2035,7 +2023,7 @@
 
    /**
     * @param {ko.sync.Model} model
-    * @param {Array} [records] ko.sync.Record objects to initialize the list
+    * @param {Array} [records] ko.sync.Record or key/value objects to initialize the list
     * @constuctor
     */
    ko.sync.RecordList = function(model, records) {
@@ -2245,6 +2233,9 @@
             afterRecordId = afterRecordId? record[i].getKey() : undef;
          }
       }
+      else if( !(record instanceof ko.sync.Record) ) {
+         this.load(this.model.newRecord(record), afterRecordId, sendNotification);
+      }
       else if( !(record.hashKey() in this.byKey) ) {
          var loc = putIn(this, record, afterRecordId, sendNotification);
          this.obs.splice(loc, 0, record);
@@ -2383,7 +2374,7 @@
       _invalidateCache(recList);
       _cacheAndMonitor(recList, record, loc);
       if( sendNotification ) {
-         _updateListeners(recList.listeners, 'added', record, loc < 1? null : recList.obs()[loc-1]);
+         _updateListeners(recList.listeners, 'added', record, loc < 1? null : recList.obs()[loc-1].hashKey());
       }
       return loc;
    }
@@ -2391,7 +2382,7 @@
    function moveRec(recList, record) {
       _invalidateCache(recList);
       var loc = recList.obs.indexOf(record);
-      _updateListeners(recList.listeners, 'moved', record, loc < 1? null : recList.obs()[loc-1]);
+      _updateListeners(recList.listeners, 'moved', record, loc < 1? null : recList.obs()[loc-1].hashKey());
    }
 
    /**
@@ -3438,7 +3429,7 @@
     */
    function _createRecord(table, rec, fields) {
       var def = $.Deferred(), ref,
-          cleanedData = cleanData(model.fields, rec.getData()),
+          cleanedData = cleanData(fields, rec.getData()),
           key = rec.getKey(),
           sortPriority = rec.getSortPriority(),
           cb;

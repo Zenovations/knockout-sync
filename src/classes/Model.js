@@ -26,18 +26,16 @@
       },
 
       /**
-       * @param {ko.observableArray|ko.observable} observable
-       * @param {object} [recordOrList]
+       * @param {ko.observableArray|object} target an observable array we'll store a list of records in or an object to sync to a single record
+       * @param {object} [criteria] only used for observableArray to tell it which table records to monitor/sync
        * @return {ko.sync.Model} this
        */
-      sync: function(observable, recordOrList) {
-         if( ko.isObservable(observable) && observable.push ) {
-            console.log('CrudArray');//debug
-            observable.crud = new ko.sync.CrudArray(observable, this, _makeList(this, recordOrList));
+      sync: function(target, criteria) {
+         if( ko.isObservable(target) && target.push && _.isArray(target()) ) {
+            target.crud = new ko.sync.CrudArray(target, this, criteria);
          }
          else {
-            console.log('Crud');//debug
-            observable.crud = new ko.sync.Crud(observable, this, _makeRecord(this, recordOrList));
+            target.crud = new ko.sync.Crud(target, this);
          }
          return this;
       },
@@ -70,7 +68,6 @@
    ko.sync.Model.FIELD_DEFAULTS = {
       type:      'string',
       required:  false,
-      persist:   true,
       observe:   true,
       minLength: 0,
       maxLength: 0,
@@ -115,6 +112,7 @@
       this.model = model;
    }
    RecordFactory.prototype.create = function(data) {
+      data instanceof ko.sync.Record && (data = data.getData());
       return new ko.sync.Record(this.model, data);
    };
 

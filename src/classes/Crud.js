@@ -3,23 +3,16 @@
    "use strict";
 
    /**
-    * @param {Object}        target   an object, observable, or view containing the record data
+    * @param {Object}        target   an object or view containing the record data
     * @param {ko.sync.Model} model
-    * @param {ko.sync.Record|Object} [recordOrData]
     * @constructor
     */
-   ko.sync.Crud = function(target, model, recordOrData) {
+   ko.sync.Crud = function(target, model) {
       this.parent = target;
       this.def = $.Deferred().resolve().promise();
-      if( recordOrData instanceof ko.sync.Record ) {
-         this.record = recordOrData;
-      }
-      else {
-         console.log('model.newRecord');//debug
-         this.record = model.newRecord(recordOrData);
-      }
-      console.log('new syncController');//debug
+      this.record = model.newRecord(target);
       this.controller = new ko.sync.SyncController(model, this.record);
+      _updateTarget(this.record, model);
    };
 
    var Crud = ko.sync.Crud;
@@ -70,7 +63,7 @@
    Crud.prototype.update = function() {
       this.def = this.def.pipe(function() {
          if( this.record.isDirty() ) {
-            return this.controller.pushUpdates(this.record);
+            return this.controller.pushUpdates(this.record, 'updated');
          }
          return this;
       }.bind(this));
@@ -109,6 +102,12 @@
    Crud.prototype.promise = function() {
       return this.def.promise();
    };
+
+   function _updateTarget(model, target, record) {
+      _.each(model.fields, function(field, key) {
+         target[key] = record.data[key];
+      });
+   }
 
 })(ko);
 

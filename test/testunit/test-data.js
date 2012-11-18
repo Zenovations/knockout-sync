@@ -9,19 +9,19 @@
       table: 'TableKeyed',
       key: 'id',
       fields: {
-         id:             { required: true,  observe: false, persist: true, type: 'string' },
-         stringOptional: { required: false, observe: true,  persist: true, type: 'string' },
-         stringRequired: { required: true,  observe: true,  persist: true, type: 'string' },
-         dateOptional:   { required: false, observe: false, persist: true, type: 'date' },
-         dateRequired:   { required: true,  observe: true,  persist: true, type: 'date' },
-         intOptional:    { required: false, observe: true,  persist: true, type: 'int' },
-         intRequired:    { required: true,  observe: false, persist: true, type: 'int' },
-         boolOptional:   { required: false, observe: true,  persist: true, type: 'boolean' },
-         boolRequired:   { required: true,  observe: true,  persist: true, type: 'boolean' },
-         floatOptional:  { required: false, observe: true,  persist: true, type: 'float' },
-         floatRequired:  { required: true,  observe: false, persist: true, type: 'float' },
-         emailOptional:  { required: false, observe: true,  persist: true, type: 'email' },
-         emailRequired:  { required: true,  observe: true,  persist: true, type: 'email' }
+         id:             { required: true,  observe: false, type: 'string' },
+         stringOptional: { required: false, observe: true,  type: 'string' },
+         stringRequired: { required: true,  observe: true,  type: 'string' },
+         dateOptional:   { required: false, observe: false, type: 'date' },
+         dateRequired:   { required: true,  observe: true,  type: 'date' },
+         intOptional:    { required: false, observe: true,  type: 'int' },
+         intRequired:    { required: true,  observe: false, type: 'int' },
+         boolOptional:   { required: false, observe: true,  type: 'boolean' },
+         boolRequired:   { required: true,  observe: true,  type: 'boolean' },
+         floatOptional:  { required: false, observe: true,  type: 'float' },
+         floatRequired:  { required: true,  observe: false, type: 'float' },
+         emailOptional:  { required: false, observe: true,  type: 'email' },
+         emailRequired:  { required: true,  observe: true,  type: 'email' }
       }
    };
 
@@ -152,10 +152,10 @@
          key: 'id',
          sort:  'sort',
          fields: {
-            id:      { required: true,  persist: true, type: 'string'  },
-            aString: { required: false, persist: true, type: 'string'  },
-            sort:    { required: false, persist: true, type: 'int'     },
-            aBool:   { required: false, persist: true, type: 'boolean' }
+            id:      { required: true,  type: 'string'  },
+            aString: { required: false, type: 'string'  },
+            sort:    { required: false, type: 'int'     },
+            aBool:   { required: false, type: 'boolean' }
          }
       },
 
@@ -380,8 +380,13 @@
           * @return {Object}
           */
          watchRecord: function(model, recordId, callback) {
-            this.testCallback('watchRecord', recordId.hashKey());
-            return this.find(recordId).subscribe(callback);
+            var key = recordId.hashKey();
+            this.testCallback('watchRecord', key);
+            return this.watch(model, function() {
+               if( arguments[1] == key ) {
+                  callback.apply(null, _.toArray(arguments).slice(1));
+               }
+            });
          },
 
          find: function(recordId) {

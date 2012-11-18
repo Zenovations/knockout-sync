@@ -1,5 +1,5 @@
 
-jQuery(function($) {
+(function($) {
    "use strict";
    var undef, S = ko.sync.RecordId.DEFAULT_SEPARATOR;
 
@@ -205,5 +205,5 @@ jQuery(function($) {
       return out;
    }
 
-});
+})(jQuery);
 

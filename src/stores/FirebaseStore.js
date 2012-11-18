@@ -395,7 +395,7 @@
     */
    function _createRecord(table, rec, fields) {
       var def = $.Deferred(), ref,
-          cleanedData = cleanData(model.fields, rec.getData()),
+          cleanedData = cleanData(fields, rec.getData()),
           key = rec.getKey(),
           sortPriority = rec.getSortPriority(),
           cb;

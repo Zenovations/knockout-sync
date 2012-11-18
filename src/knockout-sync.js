@@ -6,16 +6,8 @@
 (function(ko) {
    "use strict";
 
-   ko.extenders.crud = function(target, model, startDirty) {
-
-      //todo
-      //todo
-      //todo
-      //todo
-      //todo
-
-      // add crud operations
-      ko.sync.Crud.applyTo(target, model, startDirty);
+   ko.extenders.crud = function(target, model) {
+      model.sync(target);
    };
 
    //todo-feature: ko.sync.remote to perform operations remotely without having to download records first? example: ko.sync.remote.delete( model, 'recordXYZ' );
