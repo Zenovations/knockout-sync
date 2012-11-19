@@ -55,7 +55,7 @@ module.exports = function(grunt) {
 //         files: ['grunt.js', 'src/**/*.js', 'test/**/*.js', 'lib/**/*.js']
 //      },
       watch: {
-         files: ['grunt.js', 'src/**/*.js', 'test/**/*.js', 'lib/**/*.js'],
+         files: ['grunt.js*', 'src/**/*.js', 'lib/**/*.js'],
          tasks: 'make'
       },
 //      mocha: {

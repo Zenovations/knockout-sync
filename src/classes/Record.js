@@ -19,6 +19,7 @@
          this.id        = new ko.sync.RecordId(model.key, data);
          this.sort      = model.sort;
          this.changed   = false;
+         this.type      = model.table;
          this.validator = model.validator;
          this.listeners = [];
          _watchObservables(this);
@@ -38,15 +39,28 @@
       hashKey:         function() {
          return this.getKey().hashKey();
       },
-      setHashKey: function( hashKey ) {
-         if( !this.hasKey() && this.id.isComposite() ) {
-            this.set(this.id.fields[0], hashKey);
-            this.id.update(this.getData());
+      /**
+       * Updating the key is intended to be used after a create operation during which the database sets the ID.
+       * Thus, it does not mark the record dirty or send out notifications.
+       *
+       * This method will ignore any set requests if an ID already exists on the record
+       * @param {string|object} hashKey
+       */
+      updateHashKey: function( hashKey ) {
+         if( !this.hasKey() ) {
+            this.id.update(hashKey);
+            applyUpdates(this, this.id.parse(hashKey));
          }
+         return this;
       },
+      /**
+       * This physically changes the record ID. This does update fields on the record and can result in notifications
+       * being sent and database transactions. The old record is not deleted by this change (it's just forgotten).
+       * @param {ko.sync.RecordId} newKey
+       */
       setKey: function( newKey ) {
          this.id = newKey;
-         newKey.isSet() && this.updateAll(_.object(newKey.getCompositeFields(), newKey.hashKey().split(newKey.separator)));
+         newKey.isSet() && this.updateAll(newKey.parse());
       },
       getData:         function() {
          return _unwrapAll(this.observed, this.data);
@@ -60,27 +74,14 @@
          }
       },
       set:             function(field, val) {
-         //todo-sort what should happen if fields affecting the sort priority are changed?
-         if( !(field in this.data) ) { return false; }
-         if( this.get(field) !== val ) {
+         if( setWithoutNotice(this, field, val) ) {
             this.changed = true;
-            //todo-validate !
-            if( field in this.observed ) {
-               this.data[field](val);
-               // set the key if it doesn't exist and we now have all the fields to do so
-               //todo what should happen if fields affecting the id are changed? maybe this? maybe too slow?
-//               !this.hasKey() && _.indexOf(this.id.fields, field) > -1 && this.id.update(this.get(this.id.fields));
-            }
-            else {
-               this.data[field] = val;
-               // only non-observables generate notifications here; the _watchObservables method handles the remainder
-               // somewhat invisibly but quite effectively
-               //todo should this even exist? should we only trigger updates for observables?
-               _updateListeners(this.listeners, this, field);
-            }
-            return true;
+
+            // only non-observables generate notifications here; the _watchObservables method handles the remainder
+            // somewhat invisibly but quite effectively
+            _updateListeners(this.listeners, this, field);
          }
-         return false;
+         return this.changed;
       },
       isDirty:         function(newVal) {
          if( typeof(newVal) === 'boolean' ) {
@@ -89,7 +90,8 @@
          return this.changed;
       },
       clearDirty:      function() {
-         return this.isDirty(false);
+         this.isDirty(false);
+         return this;
       },
       isValid:         function() {
          return !this.validator || this.validator.validate(this);
@@ -98,24 +100,13 @@
        * @param {ko.sync.Record|object} newVals
        */
       updateAll: function(newVals) {
-         var self = this, observed = self.observed, changed = [];
-         var data = (newVals instanceof ko.sync.Record)? newVals.getData() : newVals;
-         console.log('updateAll', newVals);//debug
-         _.each(self.data, function(v,k) {
-            if( data.hasOwnProperty(k) ) {
-               var newVal = data[k];
-               // this little magic trick prevents change events from being sent for each field
-               if( k in observed ) { observed[k].last = newVal; }
-               if( self.set(k, newVal) ) {
-                  changed.push(k);
-               }
-            }
-         });
+         var changed = applyUpdates(this, newVals);
          if( changed.length ) {
+            this.changed = true;
             // send a single notification for all the field changes
-            _updateListeners(self.listeners,  self, changed);
+            _updateListeners(this.listeners,  this, changed);
          }
-         return self.changed;
+         return this;
       },
       /**
        * Invokes `callback` with this record object whenever a change occurs to the data
@@ -161,10 +152,10 @@
                // nothing to do
          }
      }
-      else {
-         v = field.default;
-      }
-      return field.observe? ko.observable(v) : v;
+     else {
+        v = field.default;
+     }
+     return field.observe? ko.observable(v) : v;
    }
 
    function exists(v) {
@@ -246,6 +237,56 @@
             _updateListeners(record.listeners, record, field);
          }
       });
+   }
+
+   function applyUpdates(rec, newVals) {
+      var changed = [];
+
+      var data = (newVals instanceof ko.sync.Record)? newVals.getData() : newVals;
+      _.each(rec.data, function(v,k) {
+         if( data.hasOwnProperty(k) ) {
+            var newVal = data[k];
+            if( setWithoutNotice(rec, k, newVal) ) {
+               changed.push(k);
+            }
+         }
+      });
+
+      // changes may affect the record id
+      rec.id.update(rec.get(rec.id.fields));
+
+      return changed;
+   }
+
+   /**
+    *
+    * @param rec
+    * @param field
+    * @param newVal
+    * @return {Boolean}
+    */
+   function setWithoutNotice(rec, field, newVal) {
+      var res = false;
+      //todo-sort update sort stuff (move? notify of move?) when sort fields update
+      if( field in rec.data && rec.get(field) !== newVal ) {
+         //todo-validate !
+         var observed = rec.observed;
+         if( field in observed ) {
+            // prevents observables from triggering this record's update notifications
+            observed[field].last = newVal;
+
+            // sets the observable value
+            rec.data[field](newVal);
+         }
+         else {
+            rec.data[field] = newVal;
+         }
+         res = true;
+      }
+      else if( !field in rec.data ) {
+         console.warn('field '+field+' does not exist for record type '+rec.type);
+      }
+      return res;
    }
 
 })(ko);

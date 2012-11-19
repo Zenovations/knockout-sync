@@ -66,7 +66,7 @@
       ok(list.find(key) !== null, 'list contains record after push');
    });
 
-   test('#remove (using Record)', function() {
+   test('#remove using Record', function() {
       var data = TestData.makeRecords(5),
          list = new RecordList(TestData.model(), data),
             key = 'record-5', recToDelete = list.find(key);
@@ -74,16 +74,11 @@
       ok(list.find(key) !== null, 'list should contain our record before remove');
       list.remove(recToDelete); // delete using the Record object
       strictEqual(list.isDirty(), true, 'list is dirty after remove');
-      strictEqual(recToDelete.isDirty(), true, 'rec should be dirty after remove');
+      strictEqual(recToDelete.isDirty(), true, 'rec should be dirty after remove'); // true until it saves
       strictEqual(list.find(key), null, 'record has been removed');
-      // make sure the record isn't in the observable anymore
-      var vals = list.obs(), i = vals.length;
-      while(i--) {
-         if( vals[i].hashKey() == key ) { ok(false, 'found deleted record in the observable array'); }
-      }
    });
 
-   test('#remove (using RecordId)', function() {
+   test('#remove using RecordId', function() {
       var data = TestData.makeRecords(5),
          list = new RecordList(TestData.model(), data),
           key = 'record-5', recToDelete = list.find(key);
@@ -92,162 +87,153 @@
       strictEqual(list.isDirty(), true, 'list is dirty after remove');
       strictEqual(recToDelete.isDirty(), true, 'rec should be dirty after remove');
       strictEqual(list.find(key), null, 'list does not contain record after remove');
-      // make sure the record isn't in the observable anymore
-      var vals = list.obs(), i = vals.length;
-      while(i--) {
-         if( vals[i].hashKey() == key ) { ok(false, 'found deleted record in the observable array'); }
-      }
    });
 
-   test('#move (using record id)', function() {
+   test('#move using record id', function() {
       expect(9);
       var list = new RecordList(TestData.model(), TestData.makeRecords(5)),
-          rec = list.obs()[1], after = list.obs()[2], callbackInvoked = false;
+          rec = RecordList.atPos(list, 0), after = RecordList.atPos(list, 2), callbackInvoked = false;
 
       function callback(action, record, afterRec) {
          callbackInvoked = true;
          strictEqual(action, 'moved', 'notification was a move event');
          strictEqual(record.hashKey(), rec.hashKey(), 'notification with correct record id');
-         strictEqual(afterRec.hashKey(), after.hashKey(), 'notification with correct "after" record');
+         strictEqual(afterRec, after.hashKey(), 'notification with correct "after" record');
       }
 
       list.subscribe(callback);
 
       // move record
       list.move(rec, after);
-      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 2, 'record in correct position after move');
+      strictEqual(_.indexOf(RecordList.ids(list), rec.hashKey()), 2, 'record in correct position after move');
 
       // switch it back
-      after = list.obs()[0];
+      after = RecordList.atPos(list, 0);
+      list.move(rec.getKey(), after.getKey());
+      strictEqual(_.indexOf(RecordList.ids(list), rec.hashKey()), 1, 'record in correct position after move');
+
+      ok(callbackInvoked, 'callback was invoked');
+   });
+
+   test('#move with undefined', function() {
+      expect(6);
+      var list = new RecordList(TestData.model(), TestData.makeRecords(5)),
+         rec = RecordList.atPos(list, 0), after = RecordList.atPos(list, 4), callbackInvoked = false;
+
+      function callback(action, record, afterRec) {
+         callbackInvoked = true;
+         strictEqual(action, 'moved', 'notification was a move event');
+         strictEqual(record.hashKey(), rec.hashKey(), 'notification with correct record id');
+         strictEqual(afterRec, after.hashKey(), 'notification with correct "after" record');
+      }
+
+      list.subscribe(callback);
+
+      strictEqual(_.indexOf(RecordList.ids(list), rec.hashKey()), 0, 'record starts in correct position');
       list.move(rec, after);
-      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 1, 'record in correct position after move');
+      strictEqual(_.indexOf(RecordList.ids(list), rec.hashKey()), 4, 'record in correct position after move');
 
       ok(callbackInvoked, 'callback was invoked');
    });
 
-   test('#move (with undefined)', function() {
+   test('#move, with null', function() {
       expect(6);
       var list = new RecordList(TestData.model(), TestData.makeRecords(5)),
-         rec = list.obs()[0], after = list.obs()[4], callbackInvoked = false;
+         rec = RecordList.atPos(list, 2), after = RecordList.atPos(list, 4), callbackInvoked = false;
 
       function callback(action, record, afterRec) {
          callbackInvoked = true;
          strictEqual(action, 'moved', 'notification was a move event');
          strictEqual(record.hashKey(), rec.hashKey(), 'notification with correct record id');
-         strictEqual(afterRec.hashKey(), after.hashKey(), 'notification with correct "after" record');
+         strictEqual(afterRec, after.hashKey(), 'notification with correct "after" record');
       }
 
       list.subscribe(callback);
 
-      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 0, 'record starts in correct position');
-      list.move(rec);
-      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 4, 'record in correct position after move');
-
-      ok(callbackInvoked, 'callback was invoked');
-   });
-
-   test('#move (with null)', function() {
-      expect(6);
-      var list = new RecordList(TestData.model(), TestData.makeRecords(5)),
-         rec = list.obs()[2], after = list.obs()[4], callbackInvoked = false;
-
-      function callback(action, record, afterRec) {
-         callbackInvoked = true;
-         strictEqual(action, 'moved', 'notification was a move event');
-         strictEqual(record.hashKey(), rec.hashKey(), 'notification with correct record id');
-         strictEqual(afterRec.hashKey(), after.hashKey(), 'notification with correct "after" record');
-      }
-
-      list.subscribe(callback);
-
-      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 2, 'record starts in correct position');
+      strictEqual(_.indexOf(RecordList.ids(list), rec.hashKey()), 2, 'record starts in correct position');
       list.move(rec, null);
-      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 4, 'record in correct position after move');
+      strictEqual(_.indexOf(RecordList.ids(list), rec.hashKey()), 4, 'record in correct position after move');
 
       ok(callbackInvoked, 'callback was invoked');
    });
 
-   test('#move (with integer)', function() {
+   test('#move, integer', function() {
       expect(17);
       var list = new RecordList(TestData.model(), TestData.makeRecords(10)),
           callbackInvoked = false, rec, after,
-          obs = list.obs();
+          ids = list.sorted;
 
       function callback(action, record, afterRec) {
          callbackInvoked = true;
+         console.log(action, record, afterRec);//debug
          strictEqual(action, 'moved', 'notification was a move event');
          strictEqual(record.hashKey(), rec.hashKey(), 'notification with correct record id');
-         if( afterRec === null ) {
-            strictEqual(afterRec, after, 'notification with correct "after" record');
-         }
-         else {
-            strictEqual(afterRec.hashKey(), after.hashKey(), 'notification with correct "after" record');
-         }
+         strictEqual(afterRec, after, 'notification with correct "after" record');
       }
 
       list.subscribe(callback);
 
       // move forwards
-      rec = obs[0];
-      after = obs[5];
-      list.move(rec, 6);
-      strictEqual(_indexOfKey(obs, rec.hashKey()), 6, 'moved forwards');
+      rec = list.find(ids[0]);
+      after = ids[5];
+      list.move(rec, 5);
+      strictEqual(_.indexOf(ids, rec.hashKey()), 5, 'moved forwards');
+      console.log(ids);//debug
 
       // move backwards
-      rec = obs[7];
-      after = obs[2];
-      list.move(rec, 3);
-      strictEqual(_indexOfKey(obs, rec.hashKey()), 3, 'moved backward');
+      rec = list.find(ids[7]);
+      after = ids[1];
+      list.move(rec, 2);
+      strictEqual(_.indexOf(ids, rec.hashKey()), 2, 'moved backward');
+      console.log(ids);//debug
 
       // move first to last
-      rec = obs[0];
-      after = obs[9];
-      list.move(rec, 10);
-      strictEqual(_indexOfKey(obs, rec.hashKey()), 9, 'moved first to last');
+      rec = list.find(ids[0]);
+      after = ids[9];
+      list.move(rec, 9);
+      strictEqual(_.indexOf(ids, rec.hashKey()), 9, 'moved first to last');
+      console.log(ids);//debug
 
       // move last to first
-      rec = obs[9];
-      after = null;
+      rec = list.find(ids[9]);
+      after = undef;
       list.move(rec, 0);
-      strictEqual(_indexOfKey(obs, rec.hashKey()), 0, 'moved last to first');
+      strictEqual(_.indexOf(ids, rec.hashKey()), 0, 'moved last to first');
+      console.log(ids);//debug
 
       ok(callbackInvoked, 'callback was invoked');
    });
 
-   test('#move (with negative integer)', function() {
+   test('#move with negative integer', function() {
       expect(9);
-      var list = new RecordList(TestData.model(), TestData.makeRecords(10)), callbackInvoked = false, rec, after;
+      var list = new RecordList(TestData.model(), TestData.makeRecords(10)), callbackInvoked = false,
+         ids = list.sorted, rec, after;
 
       function callback(action, record, afterRec) {
          callbackInvoked = true;
          strictEqual(action, 'moved', 'notification was a move event');
          strictEqual(record.hashKey(), rec.hashKey(), 'notification with correct record id');
-         if( !afterRec ) {
-            strictEqual(afterRec, after, 'notification with correct "after" record');
-         }
-         else {
-            strictEqual(afterRec.hashKey(), after.hashKey(), 'notification with correct "after" record');
-         }
+         strictEqual(afterRec, after, 'notification with correct "after" record');
       }
 
       list.subscribe(callback);
 
-      rec = list.obs()[3];
-      after = list.obs()[7];
+      rec = list.find(ids[3]);
+      after = ids[8];
       list.move(rec, -1);
-      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 8, 'record before last position');
+      strictEqual(_.indexOf(ids, rec.hashKey()), 8, 'record before last position');
 
-      rec = list.obs()[3];
-      after = list.obs()[5];
+      rec = list.find(ids[3]);
+      after = ids[6];
       list.move(rec, -3);
-      strictEqual(_indexOfKey(list.obs(), rec.hashKey()), 6, 'record before third from last');
+      strictEqual(_.indexOf(ids, rec.hashKey()), 6, 'record before third from last');
 
       ok(callbackInvoked, 'callback was invoked');
    });
 
-   test('#move (invalid move options)', function() {
+   test('#move invalid move options', function() {
       var data = TestData.makeRecords(10), list = new RecordList(TestData.model(), data.slice(0, 5)),
-          origList = list.obs().slice(), a = data[1], b = data[8];
+          origList = RecordList.ids(list), a = data[1], b = data[8];
 
       function callback() {
          ok(false, 'should not invoke callback');
@@ -255,21 +241,12 @@
 
       list.subscribe(callback);
       list.move(b, 0);
-      deepEqual(origList, list.obs(), 'list should not change');
+      deepEqual(origList, RecordList.ids(list), 'list should not change');
 
       list.subscribe(callback);
       list.move(b, a);
-      deepEqual(origList, list.obs(), 'list should not change');
+      deepEqual(origList, RecordList.ids(list), 'list should not change');
    });
-
-   function _indexOfKey(arr, key) {
-      var idx = -1;
-      var x = _.find(arr, function(v) {
-         idx++;
-         return v.hashKey() === key;
-      });
-      return idx;
-   }
 
    test('change tracking', function() {
       var RECS_TOTAL = 6;
@@ -313,7 +290,7 @@
       function getHashKey(v) { return v.hashKey(); }
    });
 
-   test('#updated (dirty)', function() {
+   test('#updated dirty', function() {
       var data = TestData.makeRecords(5),
          list  = new RecordList(TestData.model(), data),
          rec   = list.find('record-4');
@@ -323,7 +300,7 @@
       strictEqual(list.isDirty(), true, 'list is dirty after updated()');
    });
 
-   test('#updated (not dirty)', function() {
+   test('#updated not dirty', function() {
       var data = TestData.makeRecords(5),
          list  = new RecordList(TestData.model(), data),
          key   = 'record-4', rec = list.find(key);
@@ -399,31 +376,6 @@
       }, 100);
    });
 
-   asyncTest('#subscribe, manual add/delete (to observable) trigger events', function() {
-      var expected = [], events = [];
-      var recs = TestData.makeRecords(1);
-      var list = new RecordList(TestData.model());
-      list.subscribe(function(action, rec) {
-         var args = $.makeArray(arguments);
-         args[1] = rec.hashKey();
-         events.push(args);
-      });
-
-      // manually push a record to the observable, which should still trigger notifications
-      expected.push(['added', recs[0].hashKey(), null]);
-      list.obs.push(recs[0]);
-
-      // manually delete a record from the observable, which should still trigger notifications
-      expected.push(['deleted', recs[0].hashKey()]);
-      list.obs.pop();
-
-      _.delay(function() {
-         // check the results
-         deepEqual(events, expected, 'all events recorded correctly');
-         start();
-      });
-   });
-
    test('#subscribe, invalid update ops', function() {
       var RECS_TOTAL = 5;
       var i, data = TestData.makeRecords(RECS_TOTAL),
@@ -494,7 +446,7 @@
       // manually delete a record from the observable, which should still trigger notifications
       v = data[RECS_TOTAL-2];
       expected.push(['deleted', v.hashKey(), undef]);
-      list.obs.pop();
+      list.remove(v);
 
       // delete the same record again and make sure it doesn't trigger an update
       list.remove(v); // we already removed this
@@ -508,51 +460,6 @@
          deepEqual(events, expected, 'all events recorded as expected');
          start();
       }, 100);
-
-   });
-
-   asyncTest('#subscribe, move ops', function() {
-      expect(5);
-      // tests to see if a manually moving a record in the observed list is recorded as a move
-      // i.e. a delete followed immediately by re-inserting the same record is a move event and not a delete/add
-      var model = TestData.model(), recs = TestData.makeRecords(5), list = new RecordList(model, recs),
-         moveRec = recs[2],
-         prevRecIdExpected;
-      list.subscribe(function(action, rec, prevRecId) {
-         strictEqual(action, 'moved', 'action is "moved"');
-         strictEqual(rec.hashKey(), moveRec.hashKey(), 'correct record moved');
-         prevRecIdExpected && strictEqual(prevRecId && prevRecId.hashKey(), prevRecIdExpected, 'moved after correct record');
-      });
-      // manually moved
-      _.move(list.obs, 2, 0);
-
-      prevRecIdExpected = moveRec.hashKey();
-      moveRec = list.obs()[4];
-      list.move(moveRec, 1);
-
-      _.delay(function() { start(); }, 100);
-   });
-
-   test('construct with existing observable', function() {
-      expect(9);
-      var model = TestData.model(), recs = TestData.makeRecords(6), data = recs.slice(0, 3);
-      data[3] = recs[3].data;
-      data[4] = recs[4].data;
-      var obs = ko.observableArray(data), obsVals = obs();
-      var list = new RecordList(model, obs);
-      ok( list.obs === obs, 'is the same observableArray' );
-      strictEqual(list.obs().length, obs().length, 'has right number of records');
-      var i = obs().length;
-      while(i--) {
-         ok( obsVals[i] instanceof ko.sync.Record, 'All entries are a record' );
-      }
-
-      var appendedRecord = recs[5];
-      list.subscribe(function(event, record) {
-         strictEqual(event, 'added', 'adding record to original observable triggers add in list');
-         strictEqual(record, appendedRecord, 'added record matches one in original observable');
-      });
-      obs.push(appendedRecord);
 
    });
 

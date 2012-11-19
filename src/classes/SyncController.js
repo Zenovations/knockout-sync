@@ -24,19 +24,18 @@
        * is true.
        *
        * @param {ko.sync.Model} model
-       * @param {Object|ko.observable|ko.observableArray} target
+       * @param {Object|ko.observable|ko.observableArray} target if listOrRecord is a RecordList this must be an observableArray
        * @param {ko.sync.RecordList|ko.sync.Record} listOrRecord
        * @param {object} [criteria] used with lists to specify the filter parameters used by server and to load initial data
        * @constructor
        */
       init: function(model, target, listOrRecord, criteria) {
-         var isList = listOrRecord instanceof ko.sync.RecordList;
          this.model = model;
-         var subs = [];
+         this.subs = [];
          var next = $.Deferred(function(def) { def.resolve(); });
-         syncTarget(model, target, listOrRecord, subs, next);
-         syncPush(model, target, listOrRecord, subs, next);
-         syncPull(model, listOrRecord, subs, next, criteria);
+         syncTarget(model, target, listOrRecord, this.subs);
+         syncPush(model, listOrRecord, this.subs, next);
+         syncPull(model, listOrRecord, this.subs, next, criteria);
       },
 
       /**
@@ -79,7 +78,7 @@
       }
    });
 
-   function syncPush(model, target, listOrRecord, subs, next) {
+   function syncPush(model, listOrRecord, subs, next) {
       if (model.auto) {
          // sync client to server (push) updates
          if (listOrRecord instanceof ko.sync.RecordList) {
@@ -91,7 +90,7 @@
                next.pipe(function () {
                   // record is new, must be created on server
                   return model.store.create(model, listOrRecord).then(function (id) {
-                     listOrRecord.setHashKey(id);
+                     listOrRecord.updateHashKey(id);
                      //todo target
                   }).then(thenClearDirty(listOrRecord));
                });
@@ -169,7 +168,7 @@
       switch(action) {
          case 'added':
             def = store.create(model, rec).then(function(id) {
-               rec.setHashKey(id);
+               rec.updateHashKey(id);
             });
             break;
          case 'updated':
@@ -215,7 +214,19 @@
    }
 
    function syncTarget(model, target, listOrRecord, subs, next) {
-      if( ko.sync.isObservableArray(target) ) {
+      console.log('syncTarget', target);
+      var isObservableArray = ko.sync.isObservableArray(target);
+      if( listOrRecord instanceof ko.sync.RecordList && !isObservableArray ) {
+         throw new Error('RecordList only works with ko.observableArray instances '+target+', '+listOrRecord);
+      }
+      else if( isObservableArray ) {
+         target.removeAll();
+         var rec, data, it = listOrRecord.iterator();
+         while(it.hasNext()) {
+            rec = it.next();
+            target.push(rec.getData());
+            subs.push(new DataSync(target, rec, true));
+         }
          //todo target
          //todo target
          //todo target
@@ -228,6 +239,94 @@
          //todo target
          //todo target
       }
+   }
+
+   function DataSync(target, record, isObservable) {
+      this.isList = record instanceof ko.sync.RecordList;
+      this.isObs  = isObservable;
+      this.target = target;
+
+   }
+
+   DataSync.prototype.dispose = function() {
+
+   };
+
+   function _sync(recList, obsArray, subs) {
+      //todo-sync this belongs in SyncController
+      subs = obsArray.subscribe(function(obsValue) {
+         // diff the last version with this one and see what changed; we only have to look for deletions and additions
+         // since all of our local changes will change byKey before modifying the observable array, feedback loops
+         // are prevented here because anything already marked as added/deleted can be considered a prior change
+         var existingRecords = recList.byKey;
+         var alreadyDeleted  = recList.deleted;
+         var currentData     = buildKeysForDataList(obsValue);
+
+         // look for added keys
+         _.each(currentData, function(key, i) {
+            var v, prevId = _findPrevId(existingRecords, alreadyDeleted, currentData.keys, i);
+            if( !_.has(existingRecords, key) ) {
+               v = recList.model.newRecord(currentData.data[key]);
+               // it's in the new values but not in the old values
+               recList.added[key] = v;
+               recList.numChanges++;
+               putIn(recList, v, prevId, true);
+            }
+            else if(_.has(recList.delayed, key)) {
+               v = recList.get(key);
+               // clear the pending delete action
+               clearTimeout(recList.delayed[key]);
+               delete recList.delayed[key];
+               // add the record to the cached and monitored content
+               moveRec(recList, v, prevId);
+            }
+         });
+
+         // look for deleted keys by seeing what our existing keys are are not already deleted and
+         // do not appear in the new keyedValues list
+         _.chain(existingRecords).keys().difference(_.keys(alreadyDeleted)).difference(currentData.keys).each(function(key) {
+            recList.delayed[key] = setTimeout(function() {
+               // it's in the old values and not marked as deleted, and not in the new values
+               takeOut(recList, existingRecords[key]);
+            }, 0);
+         });
+      });
+   }
+
+   /**
+    * Only intended for use in _sync()
+    * @private
+    */
+   function _findPrevId(existingRecords, deletedKeys, newKeys, idx) {
+      //todo-sync this belongs in SyncController
+      if( idx === 0 ) { return 0; }
+      else if( idx < newKeys.length - 1 ) {
+         var i = idx, key;
+         while(i--) {
+            key = newKeys[i];
+            if( key in existingRecords && !key in deletedKeys ) {
+               return key;
+            }
+         }
+         return undef;
+      }
+      else {
+         return undef;
+      }
+   }
+
+   /**
+    * Only intended for use in _sync
+    */
+   function buildKeysForDataList(model, obsValues) {
+      //todo-sync this belongs in SyncController
+      var keys = [], data = {};
+      _.each(obsValues, function(data) {
+         var key = RecordId.for(model, data);
+         keys.push(key);
+         data[key] = data;
+      });
+      return { keys: keys, data: data };
    }
 
 })(jQuery);

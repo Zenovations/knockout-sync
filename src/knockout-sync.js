@@ -22,9 +22,11 @@
    ko.sync.validators || (ko.sync.validators = []);
 
    ko.sync.isObservableArray = function(o) {
-      return o && ko.isObservable(o) && o.push;
+      console.log(ko.isObservable);
+      return typeof(o) === 'function' && ko.isObservable(o) && _.isArray(o());
    };
 
+   // the fromat of this value is coupled with RecordId's privade _isTempId() method :(
    ko.sync.instanceId = moment().unix()+':'+(((1+Math.random())*1000)|0);
 
 })(ko);

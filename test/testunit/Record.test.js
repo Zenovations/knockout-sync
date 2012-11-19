@@ -101,9 +101,16 @@
          ok(rec.set(k, newData[k]), 'set worked');
          strictEqual(rec.get(k), newData[k], 'updated: get('+k+')');
       });
+   });
+
+   test("#get/#set (field doesn't exist)", function() {
+      var rec = _buildARecord(), origData = rec.getData();
 
       // try to set a field that doesn't exist
-      ok(!rec.set('notAField', 10), 'can\'t set a field that doesn\'t exist');
+      rec.set('notAField', 10);
+      strictEqual(rec.get('notAField'), undef, 'get returns undefined');
+      strictEqual(rec.isDirty(), false, 'record was not changed');
+      ok(!('notAField' in rec.data), 'field does not exist in record data');
    });
 
    test("#isDirty/#clearDirty", function() {
@@ -129,43 +136,81 @@
       strictEqual(rec.hashKey(), rec.getKey().hashKey(), 'with permanent id');
    });
 
+
    test('#subscribe', function() {
-      expect(6);
-
-      // change a value
-      var onlyCallOnce, rec = _buildARecord(false);
+      // set up subscription
+      var rec = _buildARecord(false), events = [];
+      var key = rec.hashKey();
       var sub = rec.subscribe(function(record, field) {
-         if( onlyCallOnce ) {
-            ok(false, 'should not be notified after subscription is disposed');
-         }
-         strictEqual(record.hashKey(), rec.hashKey(), 'listener passed correct record');
-         strictEqual(field, 'stringOptional', 'correct field provided');
-         onlyCallOnce = true;
+         events.push([record.hashKey(), field]);
       });
-      rec.set('stringOptional', 'new value for stringOptional');
 
-      // once disposed, doesn't get any more updates
+      // change some values
+      rec.set('stringOptional', 'new value');
+      rec.set('floatOptional', 2.25);
+      rec.set('stringOptional', 'a nudder value');
       sub.dispose();
-      rec.set('stringOptional', 'a nudder value that should not trigger a notification');
 
-      // call set without changing the value
-      rec = _buildARecord(true);
-      sub  = rec.subscribe(function() {
-         ok(false, 'should not be notified if the field does not change');
+      // test the results
+      deepEqual(events, [
+         [key, 'stringOptional'],
+         [key, 'floatOptional'],
+         [key, 'stringOptional']
+      ]);
+   });
+
+   test('#subscribe (using updateAll)', function() {
+      // set up subscription
+      var rec = _buildARecord(false), events = [];
+      var key = rec.hashKey();
+      var sub = rec.subscribe(function(record, field) {
+         events.push([record.hashKey(), field]);
       });
+
+      // change some values
+      rec.updateAll({'stringOptional': 'new value', 'floatOptional': 2.25});
+      rec.set('stringOptional', 'a nudder value');
+      sub.dispose();
+
+      // test the results
+      deepEqual(events, [
+         [key, ['floatOptional', 'stringOptional']],
+         [key, 'stringOptional']
+      ]);
+   });
+
+   test('#subscribe (no change to value)', function() {
+      // set up subscription
+      var rec = _buildARecord(false), events = [];
+      var key = rec.hashKey();
+      var sub = rec.subscribe(function(record, field) {
+         events.push([record.hashKey(), field]);
+      });
+
+      // this shouldn't create a notification (not changed)
       rec.set('floatOptional', rec.get('floatOptional'));
 
-      // change the underlying observable (should still trigger a notification)
       sub.dispose();
-      rec.subscribe(function(record, field) {
-         strictEqual(record.hashKey(), rec.hashKey(), 'listener passed correct record');
-         strictEqual(field, 'intOptional', 'correct field provided');
-         strictEqual(record.get(field), 987, 'value set correctly');
-      });
-      var obsField = rec.data.intOptional;
-      ok( ko.isObservable(obsField), 'is an observable field');
-      obsField(987);
 
+      // test the results
+      deepEqual(events, []);
+   });
+
+   test('#dispose', function() {
+      expect(1);
+
+      // change a value
+      var alreadyCalled, rec = _buildARecord(false);
+      var sub = rec.subscribe(function(record, field) {
+         if( alreadyCalled ) {
+            ok(false, 'should not be notified after subscription is disposed');
+         }
+         ok(true, 'subscribe called');
+         alreadyCalled = true;
+      });
+      rec.set('stringOptional', 'new value for stringOptional');
+      sub.dispose();
+      rec.set('stringOptional', 'even newer value for stringOptional');
    });
 
    test("#isValid", function() {

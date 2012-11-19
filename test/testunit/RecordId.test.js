@@ -75,5 +75,35 @@
       deepEqual(id.getCompositeFields(), ['id', 'intOptional']);
    });
 
+   test('#update (object)', function() {
+      var data = {a: 'aa', b: 'bb', c: 'cc'};
+      var id = new ko.sync.RecordId(['a', 'b'], data), sep = id.separator;
+      strictEqual(id.update(_.extend({}, data, {b: 'bbb'})).hashKey(), 'aa'+sep+'bbb');
+   });
+
+   test('#update (invalid)', function() {
+      var id = new ko.sync.RecordId(['a', 'b'], {a: 'aa', b: 'bb', c: 'cc'}), sep = id.separator;
+      strictEqual(id.update({b: 'bbb'}).hashKey(), 'aa'+sep+'bb');
+   });
+
+   test('#update (string)', function() {
+      var data = {a: 'aa', b: 'bb', c: 'cc'};
+      var id = new ko.sync.RecordId(['a', 'b'], data), sep = id.separator;
+      strictEqual(id.update('aaa'+sep+'bb').hashKey(), 'aaa'+sep+'bb');
+   });
+
+   test('#parse (composite)', function() {
+      var data = {a: 'aa', b: 'bb', c: 'cc'};
+      var keys = ['b', 'c'];
+      var id = new ko.sync.RecordId(keys, data), sep = id.separator;
+      deepEqual(id.parse(), _.pick(data, keys));
+   });
+
+   test('#parse (not composite)', function() {
+      var data = {a: 'aa', b: 'bb', c: 'cc'};
+      var id = new ko.sync.RecordId('a', data), sep = id.separator;
+      deepEqual(id.parse(), _.pick(data, 'a'));
+   });
+
 })(jQuery);
 

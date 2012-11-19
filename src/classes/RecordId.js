@@ -26,13 +26,29 @@
       hashKey:            function() { return this.hash; },
       toString:           function() { return this.hashKey(); },
       getCompositeFields: function() { return this.fields; },
-      update: function(data) {
-         var h = _createHash(this.separator, this.fields, data);
+
+      /**
+       * @param {String|Object} hashOrData
+       */
+      update: function(hashOrData) {
+         var h = typeof(hashOrData)==='string'? hashOrData : _createHash(this.separator, this.fields, hashOrData);
          if( !_isTempId(h) ) {
             this.hash = h;
             this.tmpId = false;
          }
+         else {
+            console.warn('tried to update ID with a temp id; ignored');
+         }
+         return this;
       },
+
+      /**
+       * @return {object} the field/value pairs used to create this key.
+       */
+      parse: function() {
+         return RecordId.parse(this.hash, this.fields, this.separator);
+      },
+
       equals:             function(o) {
          // it is possible to match a RecordId even if it has no key, because you can check the Record's ID
          // against this one to see if they are actually the same instance this has some limitations but it
@@ -44,11 +60,36 @@
       }
    });
    RecordId.DEFAULT_SEPARATOR = '|||';
+
+   /**
+    * @param {Model} model
+    * @param {Record|Object} record
+    * @return {RecordId}
+    */
    RecordId.for = function(model, record) {
-      return new RecordId(model.key, record.getData());
+      var data = record instanceof RecordId? record.getData() : record;
+      return new RecordId(model.key, data);
+   };
+   RecordId.parse = function(hashKey, fields, separator) {
+      var out = {}, vals;
+      if( !_isTempId(hashKey) ) {
+         if( fields.length > 1 ) {
+            separator || (separator = RecordId.DEFAULT_SEPARATOR);
+            vals = hashKey.split(separator);
+            _.each(fields, function(k, i) {
+               out[k] = vals[i];
+            });
+         }
+         else {
+            out[fields[0]] = hashKey;
+         }
+      }
+      return out;
    };
 
    function _isTempId(hash) {
+      // the parts of a temporary id are "tmp" followed by the ko.sync.instanceId (a timestamp, a colon,
+      // and a random number), and a uuid all joined by "."
       return (hash && hash.match(/^tmp[.][0-9]+:[0-9]+[.]/))? true : false;
    }
 
@@ -58,15 +99,15 @@
 
    function _createHash(separator, fields, data) {
       if( typeof(data) === 'object' && !_.isEmpty(data) ) {
-         var s = '', f, i = fields.length;
-         while(i--) {
+         var s = '', f, i = -1, len = fields.length;
+         while(++i < len) {
             f = fields[i];
             // if any of the composite key fields are missing, there is no key value
             if( !exists(data[f]) ) {
                return _createTempHash();
             }
-            // we're iterating in reverse (50% faster in IE) so prepend
-            s = data[ f ] + (s.length? separator+s : s);
+            if( i > 0 ) { s += separator; }
+            s += data[f];
          }
          return s;
       }

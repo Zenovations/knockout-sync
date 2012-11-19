@@ -2,8 +2,6 @@
 (function($) {
    "use strict";
 
-   //todo-test create a generic Store tester; it should work db agnostic anyways
-
    var undef;
    var FIREBASE_URL = 'https://wordspot.firebaseio.com';
    var FIREBASE_TEST_URL = 'GitHub/firebase-sync';
@@ -12,23 +10,6 @@
    //todo composite key
    var Util = ko.sync.stores.FirebaseStore.Util;
    var TIMELIMIT = 10000; // 10 seconds
-
-   // override asyncTest for some logging
-   var _asyncTest = asyncTest, currName;
-   asyncTest = function(name, fx) {
-      return _asyncTest(name, function() {
-         console.log('starting', name);
-         console.time(name);
-         currName = name;
-         fx();
-      });
-   };
-
-   var _start = start;
-   start = function() {
-      console.timeEnd(currName);
-      _start();
-   };
 
    var sequenceMethods = {
       create: function(store, model, data) {

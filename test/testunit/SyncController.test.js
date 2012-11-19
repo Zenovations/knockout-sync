@@ -26,7 +26,7 @@
             deepEqual(results, [
                ['update', '2']
             ], 'correct events invoked on Store object');
-         }, record, {auto: false});
+         }, {rec: record, model: {auto: false}});
    });
 
    asyncTest('#pushUpdates(record) push update but record isn\'t dirty', function() {
@@ -36,13 +36,14 @@
       }, function(results) {
          deepEqual(results, [
          ], 'correct events invoked on Store object');
-      }, record, {auto: false});
+      }, {rec: record, model: {auto: false}});
    });
 
    asyncTest('#pushUpdates, test a host of pushed changes', function() {
       var recs     = BigData.recs(25), startRecs = recs.slice(0, 20);
 
       syncActivity(startRecs, function(sync, list) {
+         console.log('running test');
          list.add(recs[21]);
          list.add(recs[22]);
          list.find('14').set('sort', 25);
@@ -67,7 +68,7 @@
             ['delete', '16'],
             ['delete', '17']
          ], 'correct events invoked on Store object');
-      }, null, {auto: false});
+      }, {model: {auto: false}});
    });
 
    asyncTest('pull added (list)',   function() {
@@ -166,7 +167,7 @@
          deepEqual(storeEvents, [
             ['update', '5']
          ]);
-      }, rec);
+      }, {rec: rec});
    });
 
    asyncTest('pull updated (record)', function() {
@@ -177,7 +178,7 @@
          deepEqual(listEvents, [
             ['2', ['aString']]
          ]);
-      }, recs[1]);
+      }, {rec: recs[1]});
    });
 
    asyncTest('auto-sync off: push does not go through automatically', function() {
@@ -186,7 +187,7 @@
          list.remove(recs[0]);
       }, function(storeEvents, listEvents) {
          strictEqual(storeEvents.length, 0);
-      }, null, {auto: false});
+      }, {model: {auto: false}});
    });
 
    asyncTest('auto-sync off (record): push does not go through automatically', function() {
@@ -195,7 +196,7 @@
          recs[1].set('aString', 'oh joy!');
       }, function(storeEvents, listEvents) {
          strictEqual(storeEvents.length, 0);
-      }, recs[1], {auto: false});
+      }, {rec: recs[1], model: {auto: false}});
    });
 
    asyncTest('hasTwoWay off: pull does not get monitored', function() {
@@ -204,18 +205,19 @@
          model.store.fakeNotify('updated', '1', {aString: 'oh joy!'});
       }, function(storeEvents, listEvents) {
          strictEqual(listEvents.length, 0);
-      }, null, {hasTwoWaySync: false});
+      }, {hasTwoWaySync: false});
    });
 
    asyncTest('hasTwoWay: record does not exist at sync time', function() {
-      var recs = BigData.recs(1, {id: null});
-      syncActivity(recs, function(sync, list, model) {
+      var recs = BigData.recs(1, {id: null}), oldKey = recs[0].hashKey();
+      syncActivity([], function(sync, list, model) {
          //recs[0].set('aString', 'It looks, not good.')
       }, function(storeEvents, listEvents) {
+         console.log(listEvents);
          deepEqual(storeEvents, [
-            ['create', recs[0].hashKey()]
+            ['create', oldKey]
          ])
-      }, recs[0]);
+      }, {rec: recs[0]});
    });
 
    asyncTest('target: an observable gets set up correctly', function() {
@@ -238,7 +240,8 @@
       start(); //todo-test
    });
 
-   function syncActivity(recs, fx, analyzeFx, recToMonitor, modelProps) {
+   function syncActivity(recs, fx, analyzeFx, conf) {
+      conf = _.extend({}, conf);
       return $.Deferred(function(def) {
          var storeEvents = [], listEvents = [], to = TestData.startTimeout(def);
 
@@ -258,36 +261,37 @@
          }
 
          // set up the sync controller
-         var twoWaySync = modelProps && modelProps.hasTwoWaySync === false? false : true,
-             model      = BigData.model($.extend({store: new TestData.TestStore(twoWaySync, monitorStore, recs), auto: true}, modelProps)),
+         var model      = BigData.model($.extend({store: new TestData.TestStore(conf.twoWaySync, monitorStore, recs), auto: true}, conf.model)),
              list       = new RecordList(model, recs),
-             target     = {}, //todo-test do something with target
-             sync       = new ko.sync.SyncController(model, target, recToMonitor? recToMonitor : list);
+             target     = conf.target? conf.target : (conf.rec? ko.observable() : ko.observableArray()),
+             sync       = new ko.sync.SyncController(model, target, conf.rec? conf.rec: list);
 
-         if( recToMonitor ) {
-            recToMonitor.subscribe(monitorList);
+         if( conf.rec ) {
+            conf.rec.subscribe(monitorList);
          }
          else {
             list.subscribe(monitorList);
          }
 
-         // invoke the activity (the test)
+         // invoke the test
          var res = fx(sync, list, model);
 
-         // resolve and call the results analyzer
+         // callback to resolve and invoke the test analysis
          function _resolve() {
             clearTimeout(to);
-            analyzeFx(storeEvents, listEvents);
+            analyzeFx(storeEvents, listEvents, target);
             def.resolve(storeEvents, listEvents);
          }
 
          if( res && res.then ) {
+            // the test returned a deferred so wait for it to finish up
             res.then(_resolve).fail(function() {
                clearTimeout(to);
                def.reject.apply(def, $.makeArray(arguments));
             });
          }
          else {
+            // test did not return deferred, just wait long enough for notifications to resolve
             _.delay(_resolve, 100);
          }
 

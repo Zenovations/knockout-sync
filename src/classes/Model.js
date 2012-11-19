@@ -70,6 +70,8 @@
 
    });
    ko.sync.Model.FIELD_DEFAULTS = {
+      //todo make update_counter work?
+      //todo add read-only property?
       type:      'string',
       required:  false,
       observe:   true,

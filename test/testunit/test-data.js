@@ -267,14 +267,15 @@
             this.testCallback('create', record.hashKey());
             return $.Deferred(function(def) {
                this.records.push(record);
-               this.fakeNotify('added', record.hashKey(), record.getData(), this.records[this.records.length-2].hashKey())
+               var newId = this.records.length+'';
+               var prevId = this.records.length > 1? this.records[this.records.length-2].hashKey() : null;
+               this.fakeNotify('added', newId, record.getData(), prevId)
                   .then(function() {
                      if( !record.hasKey() ) {
-                        console.log('building record id');
-                        record.setKey(exports.makeRecordId( this.records.length-1 ));
+                        record.updateHashKey(exports.makeRecordId( newId ));
                      }
                   }.bind(this))
-                  .then(resolve(def, record.hashKey()));
+                  .then(resolve(def, newId));
             }.bind(this));
          },
 
@@ -398,7 +399,8 @@
          },
 
          find: function(recordId) {
-            typeof(recordId) === 'string' || (recordId = recordId.hashKey());
+            typeof(recordId) === 'object' && (recordId = recordId.hashKey());
+            typeof(recordId) !== 'string' && (recordId = recordId + '');
             return _.find(this.records, function(v) {
                return v.hashKey() == recordId;
             });
@@ -415,7 +417,8 @@
           * @return {jQuery.Deferred} just so test cases know how long to wait before asserting
           */
          fakeNotify: function(action, id, changedData, prevId) {
-            if( arguments.length === 3 && typeof(changedData) === 'string' ){
+            console.log('fakeNotify', action, id, changedData, prevId);
+            if( arguments.length === 3 && typeof(changedData) !== 'object' ){
                prevId = changedData;
                changedData = {};
             }
@@ -511,5 +514,23 @@
       }
    }
 
-})(ko);
+   //todo make these work with exports/et al
+// override asyncTest for some logging
+   //todo why don't these work here??
+   var _asyncTest = asyncTest, currName;
+   asyncTest = function(name, fx) {
+      return _asyncTest(name, function() {
+         console.log('starting', name);
+         console.time(name);
+         currName = name;
+         fx();
+      });
+   };
 
+   var _start = start;
+   start = function() {
+      console.timeEnd(currName);
+      _start();
+   };
+
+})(ko);
