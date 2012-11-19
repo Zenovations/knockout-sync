@@ -46,6 +46,7 @@
       },
       setKey: function( newKey ) {
          this.id = newKey;
+         newKey.isSet() && this.updateAll(_.object(newKey.getCompositeFields(), newKey.hashKey().split(newKey.separator)));
       },
       getData:         function() {
          return _unwrapAll(this.observed, this.data);
@@ -61,14 +62,10 @@
       set:             function(field, val) {
          //todo-sort what should happen if fields affecting the sort priority are changed?
          if( !(field in this.data) ) { return false; }
-         var obs = (field in this.observed), currVal = this.data[field];
-         if( obs ) {
-            currVal = currVal();
-         }
-         if( currVal !== val ) {
+         if( this.get(field) !== val ) {
             this.changed = true;
             //todo-validate !
-            if( obs ) {
+            if( field in this.observed ) {
                this.data[field](val);
                // set the key if it doesn't exist and we now have all the fields to do so
                //todo what should happen if fields affecting the id are changed? maybe this? maybe too slow?
@@ -101,23 +98,24 @@
        * @param {ko.sync.Record|object} newVals
        */
       updateAll: function(newVals) {
-         var k, observed = this.observed, changed = [];
+         var self = this, observed = self.observed, changed = [];
          var data = (newVals instanceof ko.sync.Record)? newVals.getData() : newVals;
-         for(k in data) {
+         console.log('updateAll', newVals);//debug
+         _.each(self.data, function(v,k) {
             if( data.hasOwnProperty(k) ) {
-               var v = data[k];
+               var newVal = data[k];
                // this little magic trick prevents change events from being sent for each field
-               if( k in observed ) { observed[k].last = v; }
-               if( this.set(k, v) ) {
+               if( k in observed ) { observed[k].last = newVal; }
+               if( self.set(k, newVal) ) {
                   changed.push(k);
                }
             }
-         }
+         });
          if( changed.length ) {
             // send a single notification for all the field changes
-            _updateListeners(this.listeners,  this, changed);
+            _updateListeners(self.listeners,  self, changed);
          }
-         return this.changed;
+         return self.changed;
       },
       /**
        * Invokes `callback` with this record object whenever a change occurs to the data
@@ -135,7 +133,7 @@
    });
 
    function _setFields(fields, data) {
-      //todo validate the data before applying it somehow
+      //todo validate the data before applying it
       var k, out = {}, keys = _.keys(fields), i = keys.length;
       while(i--) {
          k = keys[i];

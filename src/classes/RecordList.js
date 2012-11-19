@@ -11,7 +11,7 @@
 
    /**
     * @param {ko.sync.Model} model
-    * @param {Array} [records] ko.sync.Record or key/value objects to initialize the list
+    * @param {Array} [records] ko.sync.RecordList or key/value objects to initialize the list
     * @constuctor
     */
    ko.sync.RecordList = function(model, records) {
@@ -21,6 +21,7 @@
       this.listeners = [];   // a list of subscribers to events in this list
       this.subs      = [];   // a list of records to which this list has subscribed
       this.delayed   = {};
+      this.records   = {};   // where we store the Record objects
       this.obsSub    = null; // a subscription to the observableArray (added by _sync, used by ko.sync.RecordList::dispose)
       this.checkpoint();     // refresh our changelists (added/changed/moved/deleted records)
       if( records && ko.isObservable(records) ) {
@@ -51,7 +52,7 @@
       this.added   = {};
       this.deleted = {};
       this.moved   = {};
-      this.dirty   = false;
+      this.numChanges = 0;
       if( purge ) {
          this.dispose();
          this.byKey = {};
@@ -74,7 +75,7 @@
     * @return {boolean}
     */
    ko.sync.RecordList.prototype.isDirty = function() {
-      return this.dirty;
+      return this.numChanges > 0;
    };
 
    /**
@@ -109,7 +110,7 @@
          if( !(key in this.byKey) ) {
             record.isDirty(true);
             this.added[key] = record;
-            this.dirty = true;
+            this.numChanges++;
             this.load(record, afterRecordId, true);
          }
       }
@@ -146,6 +147,7 @@
 
             // store in changelist
             this.moved[key] = record;
+            this.numChanges++;
 
             var underlyingArray = this.obs();
 
@@ -280,8 +282,8 @@
             if( !(hashKey in this.added) ) {
                // if the record is already marked as newly added, don't mark it as updated and lose that status
                this.changed[hashKey] = record;
+               this.numChanges++;
             }
-            this.dirty = true;
             _updateListeners(this.listeners, 'updated', record, field);
          }
          else {
@@ -334,11 +336,11 @@
       var key = record.hashKey();
 
       // mark dirty
-      recList.dirty = true;
       record.isDirty(true);
 
       // mark it deleted
       recList.deleted[key] = record;
+      recList.numChanges++;
 
       // if rec is removed, that supersedes added/updated/moved status
       delete recList.added[key];
@@ -382,6 +384,8 @@
    function _checkAndCacheAll(list, model) {
       var vals = ko.utils.unwrapObservable(list.obs), i = vals.length, r;
       while(i--) {
+         //todo-fix-data change this so the Record is stored locally and not in list.obs()
+         //todo-fix-data sync Record to list.obs()[i]
          r = vals[i];
          if( !(r instanceof ko.sync.Record) ) {
             vals[i] = r = model.newRecord(r);
@@ -579,6 +583,7 @@
             if( !_.has(existingKeys, key) ) {
                // it's in the new values but not in the old values
                recList.added[key] = v;
+               recList.numChanges++;
                putIn(recList, v, prevId, true);
             }
             else if(_.has(recList.delayed, key)) {

@@ -26,7 +26,8 @@
          this.observedRecs = [];
       }
       // we don't need to include all the methods here because there is no _super to deal with
-      // we're just inheriting for the "is a" behavior and to enforce the contract of Store
+      // we're just inheriting an interface for "is a" and to enforce the contract of Store
+      // by using prototype to declare all the methods we make the IDE happier
    });
 
    /**
@@ -80,6 +81,8 @@
     * @return {Promise} resolves to callback({string}id, {boolean}changed) where changed is false if data was not dirty, rejected if record does not exist
     */
    FirebaseStore.prototype.update = function(model, rec) {
+      //todo make this use the new ref.update() feature in Firebase
+      //todo nameRef.update({first: 'Fred', last: 'Swanson'});
       var hashKey = rec.hashKey();
       // was the record actually modified?
       if( !rec.hasKey() ) {

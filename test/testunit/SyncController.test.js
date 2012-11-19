@@ -208,6 +208,33 @@
    });
 
    asyncTest('hasTwoWay: record does not exist at sync time', function() {
+      var recs = BigData.recs(1, {id: null});
+      syncActivity(recs, function(sync, list, model) {
+         //recs[0].set('aString', 'It looks, not good.')
+      }, function(storeEvents, listEvents) {
+         deepEqual(storeEvents, [
+            ['create', recs[0].hashKey()]
+         ])
+      }, recs[0]);
+   });
+
+   asyncTest('target: an observable gets set up correctly', function() {
+      start(); //todo-test
+   });
+
+   asyncTest('target: an observableArray gets set up correctly', function() {
+      start(); //todo-test
+   });
+
+   asyncTest('target: an object gets set up correctly', function() {
+      start(); //todo-test
+   });
+
+   asyncTest('isDirty: cleared after updates on Record', function() {
+      start(); //todo-test
+   });
+
+   asyncTest('isDirty: checkpoint called on RecordList', function() {
       start(); //todo-test
    });
 
@@ -234,7 +261,8 @@
          var twoWaySync = modelProps && modelProps.hasTwoWaySync === false? false : true,
              model      = BigData.model($.extend({store: new TestData.TestStore(twoWaySync, monitorStore, recs), auto: true}, modelProps)),
              list       = new RecordList(model, recs),
-             sync       = new ko.sync.SyncController(model, recToMonitor? recToMonitor : list);
+             target     = {}, //todo-test do something with target
+             sync       = new ko.sync.SyncController(model, target, recToMonitor? recToMonitor : list);
 
          if( recToMonitor ) {
             recToMonitor.subscribe(monitorList);

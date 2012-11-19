@@ -267,7 +267,13 @@
             this.testCallback('create', record.hashKey());
             return $.Deferred(function(def) {
                this.records.push(record);
-               this.notify('added', record.hashKey(), record.getData(), this.records[this.records.length-2].hashKey())
+               this.fakeNotify('added', record.hashKey(), record.getData(), this.records[this.records.length-2].hashKey())
+                  .then(function() {
+                     if( !record.hasKey() ) {
+                        console.log('building record id');
+                        record.setKey(exports.makeRecordId( this.records.length-1 ));
+                     }
+                  }.bind(this))
                   .then(resolve(def, record.hashKey()));
             }.bind(this));
          },
@@ -280,9 +286,8 @@
          read: function(model, recordId) {
             this.testCallback('read', recordId.hashKey());
             return $.Deferred(function(def) {
-               _.delay(function() {
-                  def.resolve(this.find(recordId));
-               }.bind(this), 10);
+               var rec = this.find(recordId);
+               _.delay(resolve(def, rec), 10);
             }.bind(this));
          },
 
@@ -296,8 +301,8 @@
             return $.Deferred(function(def) {
                var oldRec = this.find(rec);
                oldRec.updateAll(rec.getData());
-               def.resolve();
-               this.notify('updated', oldRec.hashKey(), oldRec.getData()).then(resolve(def, oldRec.hashKey(), oldRec.isDirty()));
+               _.delay(resolve(def, oldRec.hashKey(), oldRec.isDirty()), 10);
+//               this.notify('updated', oldRec.hashKey(), oldRec.getData()).then(resolve(def, oldRec.hashKey(), oldRec.isDirty()));
             }.bind(this));
          },
 
@@ -311,7 +316,10 @@
             this.testCallback('delete', key);
             var idx = _.indexOf(this.records, rec);
             if( idx >= 0 ) {
-               return this.notify('deleted', key, rec.getData());
+               return $.Deferred(function(def) {
+                  _.delay(resolve(def, key), 10);
+               });
+//               return this.notify('deleted', key, rec.getData());
             }
             else {
                return $.Deferred(function(def) { def.reject('could not find '+key); });
@@ -397,32 +405,6 @@
          },
 
          /**
-          * This is triggered whenever add/update/delete/move events occur to simulate the modification
-          * which would be returned by the server after save.
-          *
-          * @param action
-          * @param id
-          * @param [data]
-          * @param [prevId]
-          * @return {jQuery.Deferred} just so test cases know how long to wait before asserting
-          */
-         notify: function(action, id, data, prevId) {
-            return $.Deferred(function(def) {
-               if( this.hasTwoWaySync() ) {
-                  _.delay(function() { // simulate event returning from server
-                     _.each(this.callbacks, function(fx) {
-                        fx(action, id, data, prevId);
-                     });
-                     def.resolve(id);
-                  }.bind(this), 10);
-               }
-               else {
-                  def.resolve(id);
-               }
-            }.bind(this));
-         },
-
-         /**
           * Create a fake notification event which would simulate an update occurring on the server and us
           * getting that update via a push event
           *
@@ -438,7 +420,19 @@
                changedData = {};
             }
             var rec = this.find(id), data = $.extend({}, rec? rec.getData() : {}, changedData);
-            return this.notify(action, id, data, prevId);
+            return $.Deferred(function(def) {
+               if( this.hasTwoWaySync() ) {
+                  _.delay(function() { // simulate event returning from server
+                     _.each(this.callbacks, function(fx) {
+                        fx(action, id, data, prevId);
+                     });
+                     def.resolve(id);
+                  }.bind(this), 1);
+               }
+               else {
+                  def.resolve(id);
+               }
+            }.bind(this));
          }
       });
 

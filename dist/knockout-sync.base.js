@@ -1,4 +1,4 @@
-/*! Knockout Sync - v0.1.0 - 2012-11-17
+/*! Knockout Sync - v0.1.0 - 2012-11-18
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL */
 
@@ -176,13 +176,10 @@
 })(window.console);
 
 
-//     Underscore.js 1.3.3
+//     Underscore.js 1.4.2
+//     http://underscorejs.org
 //     (c) 2009-2012 Jeremy Ashkenas, DocumentCloud Inc.
-//     Underscore is freely distributable under the MIT license.
-//     Portions of Underscore are inspired or borrowed from Prototype,
-//     Oliver Steele's Functional, and John Resig's Micro-Templating.
-//     For all details and documentation:
-//     http://documentcloud.github.com/underscore
+//     Underscore may be freely distributed under the MIT license.
 
 (function() {
 
@@ -203,29 +200,34 @@
 
    // Create quick reference variables for speed access to core prototypes.
    var push             = ArrayProto.push,
-      slice            = ArrayProto.slice,
-      unshift          = ArrayProto.unshift,
-      toString         = ObjProto.toString,
-      hasOwnProperty   = ObjProto.hasOwnProperty;
+         slice            = ArrayProto.slice,
+         concat           = ArrayProto.concat,
+         unshift          = ArrayProto.unshift,
+         toString         = ObjProto.toString,
+         hasOwnProperty   = ObjProto.hasOwnProperty;
 
    // All **ECMAScript 5** native function implementations that we hope to use
    // are declared here.
    var
-      nativeForEach      = ArrayProto.forEach,
-      nativeMap          = ArrayProto.map,
-      nativeReduce       = ArrayProto.reduce,
-      nativeReduceRight  = ArrayProto.reduceRight,
-      nativeFilter       = ArrayProto.filter,
-      nativeEvery        = ArrayProto.every,
-      nativeSome         = ArrayProto.some,
-      nativeIndexOf      = ArrayProto.indexOf,
-      nativeLastIndexOf  = ArrayProto.lastIndexOf,
-      nativeIsArray      = Array.isArray,
-      nativeKeys         = Object.keys,
-      nativeBind         = FuncProto.bind;
+         nativeForEach      = ArrayProto.forEach,
+         nativeMap          = ArrayProto.map,
+         nativeReduce       = ArrayProto.reduce,
+         nativeReduceRight  = ArrayProto.reduceRight,
+         nativeFilter       = ArrayProto.filter,
+         nativeEvery        = ArrayProto.every,
+         nativeSome         = ArrayProto.some,
+         nativeIndexOf      = ArrayProto.indexOf,
+         nativeLastIndexOf  = ArrayProto.lastIndexOf,
+         nativeIsArray      = Array.isArray,
+         nativeKeys         = Object.keys,
+         nativeBind         = FuncProto.bind;
 
    // Create a safe reference to the Underscore object for use below.
-   var _ = function(obj) { return new wrapper(obj); };
+   var _ = function(obj) {
+      if (obj instanceof _) return obj;
+      if (!(this instanceof _)) return new _(obj);
+      this._wrapped = obj;
+   };
 
    // Export the Underscore object for **Node.js**, with
    // backwards-compatibility for the old `require()` API. If we're in
@@ -241,7 +243,7 @@
    }
 
    // Current version.
-   _.VERSION = '1.3.3';
+   _.VERSION = '1.4.2';
 
    // Collection Functions
    // --------------------
@@ -306,11 +308,24 @@
       if (obj == null) obj = [];
       if (nativeReduceRight && obj.reduceRight === nativeReduceRight) {
          if (context) iterator = _.bind(iterator, context);
-         return initial ? obj.reduceRight(iterator, memo) : obj.reduceRight(iterator);
+         return arguments.length > 2 ? obj.reduceRight(iterator, memo) : obj.reduceRight(iterator);
       }
-      var reversed = _.toArray(obj).reverse();
-      if (context && !initial) iterator = _.bind(iterator, context);
-      return initial ? _.reduce(reversed, iterator, memo, context) : _.reduce(reversed, iterator);
+      var length = obj.length;
+      if (length !== +length) {
+         var keys = _.keys(obj);
+         length = keys.length;
+      }
+      each(obj, function(value, index, list) {
+         index = keys ? keys[--length] : --length;
+         if (!initial) {
+            memo = obj[index];
+            initial = true;
+         } else {
+            memo = iterator.call(context, memo, obj[index], index, list);
+         }
+      });
+      if (!initial) throw new TypeError('Reduce of empty array with no initial value');
+      return memo;
    };
 
    // Return the first value which passes a truth test. Aliased as `detect`.
@@ -352,6 +367,7 @@
    // Delegates to **ECMAScript 5**'s native `every` if available.
    // Aliased as `all`.
    _.every = _.all = function(obj, iterator, context) {
+      iterator || (iterator = _.identity);
       var result = true;
       if (obj == null) return result;
       if (nativeEvery && obj.every === nativeEvery) return obj.every(iterator, context);
@@ -375,9 +391,9 @@
       return !!result;
    };
 
-   // Determine if a given value is included in the array or object using `===`.
-   // Aliased as `contains`.
-   _.include = _.contains = function(obj, target) {
+   // Determine if the array or object contains a given value (using `===`).
+   // Aliased as `include`.
+   _.contains = _.include = function(obj, target) {
       var found = false;
       if (obj == null) return found;
       if (nativeIndexOf && obj.indexOf === nativeIndexOf) return obj.indexOf(target) != -1;
@@ -398,6 +414,18 @@
    // Convenience version of a common use case of `map`: fetching a property.
    _.pluck = function(obj, key) {
       return _.map(obj, function(value){ return value[key]; });
+   };
+
+   // Convenience version of a common use case of `filter`: selecting only objects
+   // with specific `key:value` pairs.
+   _.where = function(obj, attrs) {
+      if (_.isEmpty(attrs)) return [];
+      return _.filter(obj, function(value) {
+         for (var key in attrs) {
+            if (attrs[key] !== value[key]) return false;
+         }
+         return true;
+      });
    };
 
    // Return the maximum element or (element-based computation).
@@ -436,66 +464,90 @@
       var index = 0;
       var shuffled = [];
       each(obj, function(value) {
-         rand = Math.floor(Math.random() * ++index);
+         rand = _.random(index++);
          shuffled[index - 1] = shuffled[rand];
          shuffled[rand] = value;
       });
       return shuffled;
    };
 
+   // An internal function to generate lookup iterators.
+   var lookupIterator = function(value) {
+      return _.isFunction(value) ? value : function(obj){ return obj[value]; };
+   };
+
    // Sort the object's values by a criterion produced by an iterator.
-   _.sortBy = function(obj, val, context) {
-      var iterator = _.isFunction(val) ? val : function(obj) { return obj[val]; };
+   _.sortBy = function(obj, value, context) {
+      var iterator = lookupIterator(value);
       return _.pluck(_.map(obj, function(value, index, list) {
          return {
             value : value,
+            index : index,
             criteria : iterator.call(context, value, index, list)
          };
       }).sort(function(left, right) {
-            var a = left.criteria, b = right.criteria;
-            if (a === void 0) return 1;
-            if (b === void 0) return -1;
-            return a < b ? -1 : a > b ? 1 : 0;
-         }), 'value');
+               var a = left.criteria;
+               var b = right.criteria;
+               if (a !== b) {
+                  if (a > b || a === void 0) return 1;
+                  if (a < b || b === void 0) return -1;
+               }
+               return left.index < right.index ? -1 : 1;
+            }), 'value');
    };
 
-   // Groups the object's values by a criterion. Pass either a string attribute
-   // to group by, or a function that returns the criterion.
-   _.groupBy = function(obj, val) {
+   // An internal function used for aggregate "group by" operations.
+   var group = function(obj, value, context, behavior) {
       var result = {};
-      var iterator = _.isFunction(val) ? val : function(obj) { return obj[val]; };
+      var iterator = lookupIterator(value);
       each(obj, function(value, index) {
-         var key = iterator(value, index);
-         (result[key] || (result[key] = [])).push(value);
+         var key = iterator.call(context, value, index, obj);
+         behavior(result, key, value);
       });
       return result;
    };
 
+   // Groups the object's values by a criterion. Pass either a string attribute
+   // to group by, or a function that returns the criterion.
+   _.groupBy = function(obj, value, context) {
+      return group(obj, value, context, function(result, key, value) {
+         (_.has(result, key) ? result[key] : (result[key] = [])).push(value);
+      });
+   };
+
+   // Counts instances of an object that group by a certain criterion. Pass
+   // either a string attribute to count by, or a function that returns the
+   // criterion.
+   _.countBy = function(obj, value, context) {
+      return group(obj, value, context, function(result, key, value) {
+         if (!_.has(result, key)) result[key] = 0;
+         result[key]++;
+      });
+   };
+
    // Use a comparator function to figure out the smallest index at which
    // an object should be inserted so as to maintain order. Uses binary search.
-   _.sortedIndex = function(array, obj, iterator) {
-      iterator || (iterator = _.identity);
-      var value = iterator(obj);
+   _.sortedIndex = function(array, obj, iterator, context) {
+      iterator = iterator == null ? _.identity : lookupIterator(iterator);
+      var value = iterator.call(context, obj);
       var low = 0, high = array.length;
       while (low < high) {
-         var mid = (low + high) >> 1;
-         iterator(array[mid]) < value ? low = mid + 1 : high = mid;
+         var mid = (low + high) >>> 1;
+         iterator.call(context, array[mid]) < value ? low = mid + 1 : high = mid;
       }
       return low;
    };
 
    // Safely convert anything iterable into a real, live array.
    _.toArray = function(obj) {
-      if (!obj)                                     return [];
-      if (_.isArray(obj))                           return slice.call(obj);
-      if (_.isArguments(obj))                       return slice.call(obj);
-      if (obj.toArray && _.isFunction(obj.toArray)) return obj.toArray();
+      if (!obj) return [];
+      if (obj.length === +obj.length) return slice.call(obj);
       return _.values(obj);
    };
 
    // Return the number of elements in an object.
    _.size = function(obj) {
-      return _.isArray(obj) ? obj.length : _.keys(obj).length;
+      return (obj.length === +obj.length) ? obj.length : _.keys(obj).length;
    };
 
    // Array Functions
@@ -526,12 +578,12 @@
       }
    };
 
-   // Returns everything but the first entry of the array. Aliased as `tail`.
-   // Especially useful on the arguments object. Passing an **index** will return
-   // the rest of the values in the array from that index onward. The **guard**
+   // Returns everything but the first entry of the array. Aliased as `tail` and `drop`.
+   // Especially useful on the arguments object. Passing an **n** will return
+   // the rest N values in the array. The **guard**
    // check allows it to work with `_.map`.
-   _.rest = _.tail = function(array, index, guard) {
-      return slice.call(array, (index == null) || guard ? 1 : index);
+   _.rest = _.tail = _.drop = function(array, n, guard) {
+      return slice.call(array, (n == null) || guard ? 1 : n);
    };
 
    // Trim out all falsy values from an array.
@@ -564,23 +616,23 @@
    // Produce a duplicate-free version of the array. If the array has already
    // been sorted, you have the option of using a faster algorithm.
    // Aliased as `unique`.
-   _.uniq = _.unique = function(array, isSorted, iterator) {
-      var initial = iterator ? _.map(array, iterator) : array;
+   _.uniq = _.unique = function(array, isSorted, iterator, context) {
+      var initial = iterator ? _.map(array, iterator, context) : array;
       var results = [];
-      _.reduce(initial, function(memo, value, index) {
-         if (isSorted ? (_.last(memo) !== value || !memo.length) : !_.include(memo, value)) {
-            memo.push(value);
+      var seen = [];
+      each(initial, function(value, index) {
+         if (isSorted ? (!index || seen[seen.length - 1] !== value) : !_.contains(seen, value)) {
+            seen.push(value);
             results.push(array[index]);
          }
-         return memo;
-      }, []);
+      });
       return results;
    };
 
    // Produce an array that contains the union: each distinct element from all of
    // the passed-in arrays.
    _.union = function() {
-      return _.uniq(flatten(arguments, true, []));
+      return _.uniq(concat.apply(ArrayProto, arguments));
    };
 
    // Produce an array that contains every item shared between all the
@@ -597,8 +649,8 @@
    // Take the difference between one array and a number of other arrays.
    // Only the elements present in just the first array will remain.
    _.difference = function(array) {
-      var rest = flatten(slice.call(arguments, 1), true, []);
-      return _.filter(array, function(value){ return !_.include(rest, value); });
+      var rest = concat.apply(ArrayProto, slice.call(arguments, 1));
+      return _.filter(array, function(value){ return !_.contains(rest, value); });
    };
 
    // Zip together multiple lists into a single array -- elements that share
@@ -613,12 +665,17 @@
       return results;
    };
 
-   // Zip together two arrays -- an array of keys and an array of values -- into
-   // a single object.
-   _.zipObject = function(keys, values) {
+   // Converts lists into objects. Pass either a single array of `[key, value]`
+   // pairs, or two parallel arrays of the same length -- one of keys, and one of
+   // the corresponding values.
+   _.object = function(list, values) {
       var result = {};
-      for (var i = 0, l = keys.length; i < l; i++) {
-         result[keys[i]] = values[i];
+      for (var i = 0, l = list.length; i < l; i++) {
+         if (values) {
+            result[list[i]] = values[i];
+         } else {
+            result[list[i][0]] = list[i][1];
+         }
       }
       return result;
    };
@@ -631,21 +688,28 @@
    // for **isSorted** to use binary search.
    _.indexOf = function(array, item, isSorted) {
       if (array == null) return -1;
-      var i, l;
+      var i = 0, l = array.length;
       if (isSorted) {
-         i = _.sortedIndex(array, item);
-         return array[i] === item ? i : -1;
+         if (typeof isSorted == 'number') {
+            i = (isSorted < 0 ? Math.max(0, l + isSorted) : isSorted);
+         } else {
+            i = _.sortedIndex(array, item);
+            return array[i] === item ? i : -1;
+         }
       }
-      if (nativeIndexOf && array.indexOf === nativeIndexOf) return array.indexOf(item);
-      for (i = 0, l = array.length; i < l; i++) if (array[i] === item) return i;
+      if (nativeIndexOf && array.indexOf === nativeIndexOf) return array.indexOf(item, isSorted);
+      for (; i < l; i++) if (array[i] === item) return i;
       return -1;
    };
 
    // Delegates to **ECMAScript 5**'s native `lastIndexOf` if available.
-   _.lastIndexOf = function(array, item) {
+   _.lastIndexOf = function(array, item, from) {
       if (array == null) return -1;
-      if (nativeLastIndexOf && array.lastIndexOf === nativeLastIndexOf) return array.lastIndexOf(item);
-      var i = array.length;
+      var hasIndex = from != null;
+      if (nativeLastIndexOf && array.lastIndexOf === nativeLastIndexOf) {
+         return hasIndex ? array.lastIndexOf(item, from) : array.lastIndexOf(item);
+      }
+      var i = (hasIndex ? from : array.length);
       while (i--) if (array[i] === item) return i;
       return -1;
    };
@@ -738,7 +802,9 @@
          context = this; args = arguments;
          var later = function() {
             timeout = null;
-            if (more) func.apply(context, args);
+            if (more) {
+               result = func.apply(context, args);
+            }
             whenDone();
          };
          if (!timeout) timeout = setTimeout(later, wait);
@@ -758,17 +824,18 @@
    // N milliseconds. If `immediate` is passed, trigger the function on the
    // leading edge, instead of the trailing.
    _.debounce = function(func, wait, immediate) {
-      var timeout;
+      var timeout, result;
       return function() {
          var context = this, args = arguments;
          var later = function() {
             timeout = null;
-            if (!immediate) func.apply(context, args);
+            if (!immediate) result = func.apply(context, args);
          };
          var callNow = immediate && !timeout;
          clearTimeout(timeout);
          timeout = setTimeout(later, wait);
-         if (callNow) func.apply(context, args);
+         if (callNow) result = func.apply(context, args);
+         return result;
       };
    };
 
@@ -779,7 +846,9 @@
       return function() {
          if (ran) return memo;
          ran = true;
-         return memo = func.apply(this, arguments);
+         memo = func.apply(this, arguments);
+         func = null;
+         return memo;
       };
    };
 
@@ -788,7 +857,8 @@
    // conditionally execute the original function.
    _.wrap = function(func, wrapper) {
       return function() {
-         var args = [func].concat(slice.call(arguments, 0));
+         var args = [func];
+         push.apply(args, arguments);
          return wrapper.apply(this, args);
       };
    };
@@ -830,7 +900,23 @@
 
    // Retrieve the values of an object's properties.
    _.values = function(obj) {
-      return _.map(obj, _.identity);
+      var values = [];
+      for (var key in obj) if (_.has(obj, key)) values.push(obj[key]);
+      return values;
+   };
+
+   // Convert an object into a list of `[key, value]` pairs.
+   _.pairs = function(obj) {
+      var pairs = [];
+      for (var key in obj) if (_.has(obj, key)) pairs.push([key, obj[key]]);
+      return pairs;
+   };
+
+   // Invert the keys and values of an object. The values must be serializable.
+   _.invert = function(obj) {
+      var result = {};
+      for (var key in obj) if (_.has(obj, key)) result[obj[key]] = key;
+      return result;
    };
 
    // Return a sorted list of the function names available on the object.
@@ -855,11 +941,22 @@
 
    // Return a copy of the object only containing the whitelisted properties.
    _.pick = function(obj) {
-      var result = {};
-      each(flatten(slice.call(arguments, 1), true, []), function(key) {
-         if (key in obj) result[key] = obj[key];
+      var copy = {};
+      var keys = concat.apply(ArrayProto, slice.call(arguments, 1));
+      each(keys, function(key) {
+         if (key in obj) copy[key] = obj[key];
       });
-      return result;
+      return copy;
+   };
+
+   // Return a copy of the object without the blacklisted properties.
+   _.omit = function(obj) {
+      var copy = {};
+      var keys = concat.apply(ArrayProto, slice.call(arguments, 1));
+      for (var key in obj) {
+         if (!_.contains(keys, key)) copy[key] = obj[key];
+      }
+      return copy;
    };
 
    // Fill in a given object with default properties.
@@ -887,18 +984,15 @@
    };
 
    // Internal recursive comparison function for `isEqual`.
-   function eq(a, b, stack) {
+   var eq = function(a, b, aStack, bStack) {
       // Identical objects are equal. `0 === -0`, but they aren't identical.
       // See the Harmony `egal` proposal: http://wiki.ecmascript.org/doku.php?id=harmony:egal.
       if (a === b) return a !== 0 || 1 / a == 1 / b;
       // A strict comparison is necessary because `null == undefined`.
       if (a == null || b == null) return a === b;
       // Unwrap any wrapped objects.
-      if (a._chain) a = a._wrapped;
-      if (b._chain) b = b._wrapped;
-      // Invoke a custom `isEqual` method if one is provided.
-      if (a.isEqual && _.isFunction(a.isEqual)) return a.isEqual(b);
-      if (b.isEqual && _.isFunction(b.isEqual)) return b.isEqual(a);
+      if (a instanceof _) a = a._wrapped;
+      if (b instanceof _) b = b._wrapped;
       // Compare `[[Class]]` names.
       var className = toString.call(a);
       if (className != toString.call(b)) return false;
@@ -921,21 +1015,22 @@
          // RegExps are compared by their source patterns and flags.
          case '[object RegExp]':
             return a.source == b.source &&
-               a.global == b.global &&
-               a.multiline == b.multiline &&
-               a.ignoreCase == b.ignoreCase;
+                  a.global == b.global &&
+                  a.multiline == b.multiline &&
+                  a.ignoreCase == b.ignoreCase;
       }
       if (typeof a != 'object' || typeof b != 'object') return false;
       // Assume equality for cyclic structures. The algorithm for detecting cyclic
       // structures is adapted from ES 5.1 section 15.12.3, abstract operation `JO`.
-      var length = stack.length;
+      var length = aStack.length;
       while (length--) {
          // Linear search. Performance is inversely proportional to the number of
          // unique nested structures.
-         if (stack[length] == a) return true;
+         if (aStack[length] == a) return bStack[length] == b;
       }
       // Add the first object to the stack of traversed objects.
-      stack.push(a);
+      aStack.push(a);
+      bStack.push(b);
       var size = 0, result = true;
       // Recursively compare objects and arrays.
       if (className == '[object Array]') {
@@ -945,20 +1040,24 @@
          if (result) {
             // Deep compare the contents, ignoring non-numeric properties.
             while (size--) {
-               // Ensure commutative equality for sparse arrays.
-               if (!(result = size in a == size in b && eq(a[size], b[size], stack))) break;
+               if (!(result = eq(a[size], b[size], aStack, bStack))) break;
             }
          }
       } else {
-         // Objects with different constructors are not equivalent.
-         if ('constructor' in a != 'constructor' in b || a.constructor != b.constructor) return false;
+         // Objects with different constructors are not equivalent, but `Object`s
+         // from different frames are.
+         var aCtor = a.constructor, bCtor = b.constructor;
+         if (aCtor !== bCtor && !(_.isFunction(aCtor) && (aCtor instanceof aCtor) &&
+               _.isFunction(bCtor) && (bCtor instanceof bCtor))) {
+            return false;
+         }
          // Deep compare objects.
          for (var key in a) {
             if (_.has(a, key)) {
                // Count the expected number of properties.
                size++;
                // Deep compare each member.
-               if (!(result = _.has(b, key) && eq(a[key], b[key], stack))) break;
+               if (!(result = _.has(b, key) && eq(a[key], b[key], aStack, bStack))) break;
             }
          }
          // Ensure that both objects contain the same number of properties.
@@ -970,13 +1069,14 @@
          }
       }
       // Remove the first object from the stack of traversed objects.
-      stack.pop();
+      aStack.pop();
+      bStack.pop();
       return result;
-   }
+   };
 
    // Perform a deep comparison to check if two objects are equal.
    _.isEqual = function(a, b) {
-      return eq(a, b, []);
+      return eq(a, b, [], []);
    };
 
    // Is a given array, string, or object empty?
@@ -990,7 +1090,7 @@
 
    // Is a given value a DOM element?
    _.isElement = function(obj) {
-      return !!(obj && obj.nodeType == 1);
+      return !!(obj && obj.nodeType === 1);
    };
 
    // Is a given value an array?
@@ -1019,15 +1119,21 @@
       };
    }
 
+   // Optimize `isFunction` if appropriate.
+   if (typeof (/./) !== 'function') {
+      _.isFunction = function(obj) {
+         return typeof obj === 'function';
+      };
+   }
+
    // Is a given object a finite number?
    _.isFinite = function(obj) {
       return _.isNumber(obj) && isFinite(obj);
    };
 
-   // Is the given value `NaN`?
+   // Is the given value `NaN`? (NaN is the only number which does not equal itself).
    _.isNaN = function(obj) {
-      // `NaN` is the only value for which `===` is not reflexive.
-      return obj !== obj;
+      return _.isNumber(obj) && obj != +obj;
    };
 
    // Is a given value a boolean?
@@ -1071,25 +1177,43 @@
       for (var i = 0; i < n; i++) iterator.call(context, i);
    };
 
+   // Return a random integer between min and max (inclusive).
+   _.random = function(min, max) {
+      if (max == null) {
+         max = min;
+         min = 0;
+      }
+      return min + (0 | Math.random() * (max - min + 1));
+   };
+
    // List of HTML entities for escaping.
-   var htmlEscapes = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#x27;',
-      '/': '&#x2F;'
+   var entityMap = {
+      escape: {
+         '&': '&amp;',
+         '<': '&lt;',
+         '>': '&gt;',
+         '"': '&quot;',
+         "'": '&#x27;',
+         '/': '&#x2F;'
+      }
+   };
+   entityMap.unescape = _.invert(entityMap.escape);
+
+   // Regexes containing the keys and values listed immediately above.
+   var entityRegexes = {
+      escape:   new RegExp('[' + _.keys(entityMap.escape).join('') + ']', 'g'),
+      unescape: new RegExp('(' + _.keys(entityMap.unescape).join('|') + ')', 'g')
    };
 
-   // Regex containing the keys listed immediately above.
-   var htmlEscaper = /[&<>"'\/]/g;
-
-   // Escape a string for HTML interpolation.
-   _.escape = function(string) {
-      return ('' + string).replace(htmlEscaper, function(match) {
-         return htmlEscapes[match];
-      });
-   };
+   // Functions for escaping and unescaping strings to/from HTML interpolation.
+   _.each(['escape', 'unescape'], function(method) {
+      _[method] = function(string) {
+         if (string == null) return '';
+         return ('' + string).replace(entityRegexes[method], function(match) {
+            return entityMap[method][match];
+         });
+      };
+   });
 
    // If the value of the named property is a function then invoke it;
    // otherwise, return it.
@@ -1099,11 +1223,15 @@
       return _.isFunction(value) ? value.call(object) : value;
    };
 
-   // Add your own custom functions to the Underscore object, ensuring that
-   // they're correctly added to the OOP wrapper as well.
+   // Add your own custom functions to the Underscore object.
    _.mixin = function(obj) {
       each(_.functions(obj), function(name){
-         addToWrapper(name, _[name] = obj[name]);
+         var func = _[name] = obj[name];
+         _.prototype[name] = function() {
+            var args = [this._wrapped];
+            push.apply(args, arguments);
+            return result.call(this, func.apply(_, args));
+         };
       });
    };
 
@@ -1126,63 +1254,63 @@
    // When customizing `templateSettings`, if you don't want to define an
    // interpolation, evaluation or escaping regex, we need one that is
    // guaranteed not to match.
-   var noMatch = /.^/;
+   var noMatch = /(.)^/;
 
    // Certain characters need to be escaped so that they can be put into a
    // string literal.
    var escapes = {
-      '\\':   '\\',
-      "'":    "'",
-      r:      '\r',
-      n:      '\n',
-      t:      '\t',
-      u2028:  '\u2028',
-      u2029:  '\u2029'
+      "'":      "'",
+      '\\':     '\\',
+      '\r':     'r',
+      '\n':     'n',
+      '\t':     't',
+      '\u2028': 'u2028',
+      '\u2029': 'u2029'
    };
 
-   for (var key in escapes) escapes[escapes[key]] = key;
    var escaper = /\\|'|\r|\n|\t|\u2028|\u2029/g;
-   var unescaper = /\\(\\|'|r|n|t|u2028|u2029)/g;
-
-   // Within an interpolation, evaluation, or escaping, remove HTML escaping
-   // that had been previously added.
-   var unescape = function(code) {
-      return code.replace(unescaper, function(match, escape) {
-         return escapes[escape];
-      });
-   };
 
    // JavaScript micro-templating, similar to John Resig's implementation.
    // Underscore templating handles arbitrary delimiters, preserves whitespace,
    // and correctly escapes quotes within interpolated code.
    _.template = function(text, data, settings) {
-      settings = _.defaults(settings || {}, _.templateSettings);
+      settings = _.defaults({}, settings, _.templateSettings);
 
-      // Compile the template source, taking care to escape characters that
-      // cannot be included in a string literal and then unescape them in code
-      // blocks.
-      var source = "__p+='" + text
-         .replace(escaper, function(match) {
-            return '\\' + escapes[match];
-         })
-         .replace(settings.escape || noMatch, function(match, code) {
-            return "'+\n((__t=(" + unescape(code) + "))==null?'':_.escape(__t))+\n'";
-         })
-         .replace(settings.interpolate || noMatch, function(match, code) {
-            return "'+\n((__t=(" + unescape(code) + "))==null?'':__t)+\n'";
-         })
-         .replace(settings.evaluate || noMatch, function(match, code) {
-            return "';\n" + unescape(code) + "\n__p+='";
-         }) + "';\n";
+      // Combine delimiters into one regular expression via alternation.
+      var matcher = new RegExp([
+         (settings.escape || noMatch).source,
+         (settings.interpolate || noMatch).source,
+         (settings.evaluate || noMatch).source
+      ].join('|') + '|$', 'g');
+
+      // Compile the template source, escaping string literals appropriately.
+      var index = 0;
+      var source = "__p+='";
+      text.replace(matcher, function(match, escape, interpolate, evaluate, offset) {
+         source += text.slice(index, offset)
+               .replace(escaper, function(match) { return '\\' + escapes[match]; });
+         source +=
+               escape ? "'+\n((__t=(" + escape + "))==null?'':_.escape(__t))+\n'" :
+                     interpolate ? "'+\n((__t=(" + interpolate + "))==null?'':__t)+\n'" :
+                           evaluate ? "';\n" + evaluate + "\n__p+='" : '';
+         index = offset + match.length;
+      });
+      source += "';\n";
 
       // If a variable is not specified, place data values in local scope.
       if (!settings.variable) source = 'with(obj||{}){\n' + source + '}\n';
 
       source = "var __t,__p='',__j=Array.prototype.join," +
-         "print=function(){__p+=__j.call(arguments,'')};\n" +
-         source + "return __p;\n";
+            "print=function(){__p+=__j.call(arguments,'');};\n" +
+            source + "return __p;\n";
 
-      var render = new Function(settings.variable || 'obj', '_', source);
+      try {
+         var render = new Function(settings.variable || 'obj', '_', source);
+      } catch (e) {
+         e.source = source;
+         throw e;
+      }
+
       if (data) return render(data, _);
       var template = function(data) {
          return render.call(this, data, _);
@@ -1199,29 +1327,15 @@
       return _(obj).chain();
    };
 
-   // The OOP Wrapper
+   // OOP
    // ---------------
-
    // If Underscore is called as a function, it returns a wrapped object that
    // can be used OO-style. This wrapper holds altered versions of all the
    // underscore functions. Wrapped objects may be chained.
-   var wrapper = function(obj) { this._wrapped = obj; };
-
-   // Expose `wrapper.prototype` as `_.prototype`
-   _.prototype = wrapper.prototype;
 
    // Helper function to continue chaining intermediate results.
-   var result = function(obj, chain) {
-      return chain ? _(obj).chain() : obj;
-   };
-
-   // A method to easily add functions to the OOP wrapper.
-   var addToWrapper = function(name, func) {
-      wrapper.prototype[name] = function() {
-         var args = slice.call(arguments);
-         unshift.call(args, this._wrapped);
-         return result(func.apply(_, args), this._chain);
-      };
+   var result = function(obj) {
+      return this._chain ? _(obj).chain() : obj;
    };
 
    // Add all of the Underscore functions to the wrapper object.
@@ -1230,32 +1344,36 @@
    // Add all mutator Array functions to the wrapper.
    each(['pop', 'push', 'reverse', 'shift', 'sort', 'splice', 'unshift'], function(name) {
       var method = ArrayProto[name];
-      wrapper.prototype[name] = function() {
+      _.prototype[name] = function() {
          var obj = this._wrapped;
          method.apply(obj, arguments);
          if ((name == 'shift' || name == 'splice') && obj.length === 0) delete obj[0];
-         return result(obj, this._chain);
+         return result.call(this, obj);
       };
    });
 
    // Add all accessor Array functions to the wrapper.
    each(['concat', 'join', 'slice'], function(name) {
       var method = ArrayProto[name];
-      wrapper.prototype[name] = function() {
-         return result(method.apply(this._wrapped, arguments), this._chain);
+      _.prototype[name] = function() {
+         return result.call(this, method.apply(this._wrapped, arguments));
       };
    });
 
-   // Start chaining a wrapped Underscore object.
-   wrapper.prototype.chain = function() {
-      this._chain = true;
-      return this;
-   };
+   _.extend(_.prototype, {
 
-   // Extracts the result from a wrapped and chained object.
-   wrapper.prototype.value = function() {
-      return this._wrapped;
-   };
+      // Start chaining a wrapped Underscore object.
+      chain: function() {
+         this._chain = true;
+         return this;
+      },
+
+      // Extracts the result from a wrapped and chained object.
+      value: function() {
+         return this._wrapped;
+      }
+
+   });
 
 }).call(this);
 
@@ -1285,8 +1403,13 @@
 (function(ko) {
    "use strict";
 
-   ko.extenders.crud = function(target, model) {
-      model.sync(target);
+   /**
+    * @param {Object|ko.observable|ko.observableArray} target
+    * @param {ko.sync.Model} model
+    * @param {Object|String} [criteria]
+    */
+   ko.extenders.crud = function(target, model, criteria) {
+      model.sync(target, criteria);
    };
 
    //todo-feature: ko.sync.remote to perform operations remotely without having to download records first? example: ko.sync.remote.delete( model, 'recordXYZ' );
@@ -1294,6 +1417,10 @@
    ko.sync || (ko.sync = {});
    ko.sync.stores || (ko.sync.stores = []);
    ko.sync.validators || (ko.sync.validators = []);
+
+   ko.sync.isObservableArray = function(o) {
+      return o && ko.isObservable(o) && o.push;
+   };
 
    ko.sync.instanceId = moment().unix()+':'+(((1+Math.random())*1000)|0);
 
@@ -1311,8 +1438,7 @@
       this.parent = target;
       this.def = $.Deferred().resolve().promise();
       this.record = model.newRecord(target);
-      this.controller = new ko.sync.SyncController(model, this.record);
-      _updateTarget(this.record, model);
+      this.controller = new ko.sync.SyncController(model, target, this.record);
    };
 
    var Crud = ko.sync.Crud;
@@ -1403,12 +1529,6 @@
       return this.def.promise();
    };
 
-   function _updateTarget(model, target, record) {
-      _.each(model.fields, function(field, key) {
-         target[key] = record.data[key];
-      });
-   }
-
 })(ko);
 
 
@@ -1425,7 +1545,7 @@
       this.list = model.newList(target());
       this.parent = target;
       this.def = $.Deferred().resolve().promise();
-      this.controller = new ko.sync.SyncController(model, this.list, criteria);
+      this.controller = new ko.sync.SyncController(model, target, this.list, criteria);
    };
 
    var CrudArray = ko.sync.CrudArray;
@@ -1435,7 +1555,7 @@
     * @return {boolean}
     */
    CrudArray.prototype.isDirty = function(b) {
-      return this.list.isDirty(b);
+      return this.list.isDirty(b); //todo this boolean does nothing for RecordList
    };
 
    /**
@@ -1494,7 +1614,7 @@
 
    /**
     * Delete a record from the local list and also from the data layer (if auto-update is false, the remote delete
-    * is triggered during the next `update()` operation.
+    * is triggered during the next `update()` operation)
     *
     * @param {ko.sync.RecordId|ko.sync.Record|string} hashKey
     * @return {ko.sync.CrudArray} this
@@ -1529,7 +1649,7 @@
     */
    CrudArray.prototype.promise = function() {
       return this.def.promise();
-   }
+   };
 
 })(jQuery);
 
@@ -1567,11 +1687,15 @@
        * @return {ko.sync.Model} this
        */
       sync: function(target, criteria) {
-         if( ko.isObservable(target) && target.push && _.isArray(target()) ) {
+         var isObservable = ko.isObservable(target);
+         if( ko.sync.isObservableArray(target) ) {
             target.crud = new ko.sync.CrudArray(target, this, criteria);
          }
          else {
-            target.crud = new ko.sync.Crud(target, this);
+            var data;
+            if( !isObservable ) { target.data = data = target.data||{}; }
+            else { data = target; }
+            target.crud = new ko.sync.Crud(data, this);
          }
          return this;
       },
@@ -1648,28 +1772,29 @@
       this.model = model;
    }
    RecordFactory.prototype.create = function(data) {
+      data = ko.utils.unwrapObservable(data);
       data instanceof ko.sync.Record && (data = data.getData());
       return new ko.sync.Record(this.model, data);
    };
 
 
-   function _makeList(model, dataOrList) {
-      if( dataOrList instanceof ko.sync.RecordList ) {
-         return dataOrList;
-      }
-      else {
-         return model.newList(dataOrList);
-      }
-   }
-
-   function _makeRecord(model, dataOrRecord) {
-      if( dataOrRecord instanceof ko.sync.Record ) {
-         return dataOrRecord;
-      }
-      else {
-         return model.newRecord(dataOrRecord);
-      }
-   }
+//   function _makeList(model, dataOrList) {
+//      if( dataOrList instanceof ko.sync.RecordList ) {
+//         return dataOrList;
+//      }
+//      else {
+//         return model.newList(dataOrList);
+//      }
+//   }
+//
+//   function _makeRecord(model, dataOrRecord) {
+//      if( dataOrRecord instanceof ko.sync.Record ) {
+//         return dataOrRecord;
+//      }
+//      else {
+//         return model.newRecord(dataOrRecord);
+//      }
+//   }
 
 })(ko);
 /*******************************************
@@ -1720,6 +1845,7 @@
       },
       setKey: function( newKey ) {
          this.id = newKey;
+         newKey.isSet() && this.updateAll(_.object(newKey.getCompositeFields(), newKey.hashKey().split(newKey.separator)));
       },
       getData:         function() {
          return _unwrapAll(this.observed, this.data);
@@ -1735,14 +1861,10 @@
       set:             function(field, val) {
          //todo-sort what should happen if fields affecting the sort priority are changed?
          if( !(field in this.data) ) { return false; }
-         var obs = (field in this.observed), currVal = this.data[field];
-         if( obs ) {
-            currVal = currVal();
-         }
-         if( currVal !== val ) {
+         if( this.get(field) !== val ) {
             this.changed = true;
             //todo-validate !
-            if( obs ) {
+            if( field in this.observed ) {
                this.data[field](val);
                // set the key if it doesn't exist and we now have all the fields to do so
                //todo what should happen if fields affecting the id are changed? maybe this? maybe too slow?
@@ -1775,23 +1897,24 @@
        * @param {ko.sync.Record|object} newVals
        */
       updateAll: function(newVals) {
-         var k, observed = this.observed, changed = [];
+         var self = this, observed = self.observed, changed = [];
          var data = (newVals instanceof ko.sync.Record)? newVals.getData() : newVals;
-         for(k in data) {
+         console.log('updateAll', newVals);//debug
+         _.each(self.data, function(v,k) {
             if( data.hasOwnProperty(k) ) {
-               var v = data[k];
+               var newVal = data[k];
                // this little magic trick prevents change events from being sent for each field
-               if( k in observed ) { observed[k].last = v; }
-               if( this.set(k, v) ) {
+               if( k in observed ) { observed[k].last = newVal; }
+               if( self.set(k, newVal) ) {
                   changed.push(k);
                }
             }
-         }
+         });
          if( changed.length ) {
             // send a single notification for all the field changes
-            _updateListeners(this.listeners,  this, changed);
+            _updateListeners(self.listeners,  self, changed);
          }
-         return this.changed;
+         return self.changed;
       },
       /**
        * Invokes `callback` with this record object whenever a change occurs to the data
@@ -1809,7 +1932,7 @@
    });
 
    function _setFields(fields, data) {
-      //todo validate the data before applying it somehow
+      //todo validate the data before applying it
       var k, out = {}, keys = _.keys(fields), i = keys.length;
       while(i--) {
          k = keys[i];
@@ -2023,7 +2146,7 @@
 
    /**
     * @param {ko.sync.Model} model
-    * @param {Array} [records] ko.sync.Record or key/value objects to initialize the list
+    * @param {Array} [records] ko.sync.RecordList or key/value objects to initialize the list
     * @constuctor
     */
    ko.sync.RecordList = function(model, records) {
@@ -2033,6 +2156,7 @@
       this.listeners = [];   // a list of subscribers to events in this list
       this.subs      = [];   // a list of records to which this list has subscribed
       this.delayed   = {};
+      this.records   = {};   // where we store the Record objects
       this.obsSub    = null; // a subscription to the observableArray (added by _sync, used by ko.sync.RecordList::dispose)
       this.checkpoint();     // refresh our changelists (added/changed/moved/deleted records)
       if( records && ko.isObservable(records) ) {
@@ -2063,7 +2187,7 @@
       this.added   = {};
       this.deleted = {};
       this.moved   = {};
-      this.dirty   = false;
+      this.numChanges = 0;
       if( purge ) {
          this.dispose();
          this.byKey = {};
@@ -2086,7 +2210,7 @@
     * @return {boolean}
     */
    ko.sync.RecordList.prototype.isDirty = function() {
-      return this.dirty;
+      return this.numChanges > 0;
    };
 
    /**
@@ -2121,7 +2245,7 @@
          if( !(key in this.byKey) ) {
             record.isDirty(true);
             this.added[key] = record;
-            this.dirty = true;
+            this.numChanges++;
             this.load(record, afterRecordId, true);
          }
       }
@@ -2158,6 +2282,7 @@
 
             // store in changelist
             this.moved[key] = record;
+            this.numChanges++;
 
             var underlyingArray = this.obs();
 
@@ -2292,8 +2417,8 @@
             if( !(hashKey in this.added) ) {
                // if the record is already marked as newly added, don't mark it as updated and lose that status
                this.changed[hashKey] = record;
+               this.numChanges++;
             }
-            this.dirty = true;
             _updateListeners(this.listeners, 'updated', record, field);
          }
          else {
@@ -2346,11 +2471,11 @@
       var key = record.hashKey();
 
       // mark dirty
-      recList.dirty = true;
       record.isDirty(true);
 
       // mark it deleted
       recList.deleted[key] = record;
+      recList.numChanges++;
 
       // if rec is removed, that supersedes added/updated/moved status
       delete recList.added[key];
@@ -2394,6 +2519,8 @@
    function _checkAndCacheAll(list, model) {
       var vals = ko.utils.unwrapObservable(list.obs), i = vals.length, r;
       while(i--) {
+         //todo-fix-data change this so the Record is stored locally and not in list.obs()
+         //todo-fix-data sync Record to list.obs()[i]
          r = vals[i];
          if( !(r instanceof ko.sync.Record) ) {
             vals[i] = r = model.newRecord(r);
@@ -2591,6 +2718,7 @@
             if( !_.has(existingKeys, key) ) {
                // it's in the new values but not in the old values
                recList.added[key] = v;
+               recList.numChanges++;
                putIn(recList, v, prevId, true);
             }
             else if(_.has(recList.delayed, key)) {
@@ -2774,7 +2902,9 @@
       hasTwoWaySync: function() { throw new Error('Interface not implemented'); },
 
       /**
-       * Given a particular data model, notify `callback` any time any record is added, updated, deleted, or moved.
+       * Given a particular data model, notify `callback` any time any record is added, updated, deleted, or moved
+       * ON THE SERVER. Calling the create/update/read/delete methods locally will not trigger any notifications.
+       *
        * The signature of the callback is as follows:
        *     added:    callback( 'added',   record_id, record_data, prevRecordId )
        *     updated:  callback( 'updated', record_id, record_data  )
@@ -2794,8 +2924,8 @@
       watch: function(model, callback, filterCriteria) { throw new Error('Interface not implemented'); },
 
       /**
-       * Given a particular record, invoke `callback` any time the data changes. This does not get invoked for
-       * add/delete/moved events. We must monitor the entire model for that.
+       * Given a particular record, invoke `callback` any time the data record changes ON THE SERVER. This does not
+       * get invoked for local create/read/update/delete events.
        *
        * The signature of the callback is as follows: callback( record_id, data_object, sort_priority )
        *
@@ -2838,58 +2968,19 @@
        * is true.
        *
        * @param {ko.sync.Model} model
+       * @param {Object|ko.observable|ko.observableArray} target
        * @param {ko.sync.RecordList|ko.sync.Record} listOrRecord
        * @param {object} [criteria] used with lists to specify the filter parameters used by server and to load initial data
        * @constructor
        */
-      init: function(model, listOrRecord, criteria) {
-         var isList = listOrRecord instanceof ko.sync.RecordList, store = model.store;
-         this.store = store;
+      init: function(model, target, listOrRecord, criteria) {
+         var isList = listOrRecord instanceof ko.sync.RecordList;
          this.model = model;
-         this.subs = [];
-
+         var subs = [];
          var next = $.Deferred(function(def) { def.resolve(); });
-
-         if( model.auto ) {
-            // sync client to server (push) updates
-            if( isList ) {
-               this.subs.push(syncListPush(model, listOrRecord));
-            }
-            else {
-               //todo this is not enough; existence of a key doesn't ensure record exists on the server
-               if( !listOrRecord.hasKey() ) {
-                  next.pipe(function() {
-                     // record is new, must be created on server
-                     return store.create(model, listOrRecord).then(function(id) {
-                        listOrRecord.setHashKey(id);
-                     }.bind(this)).then(thenClearDirty(listOrRecord));
-                  }.bind(this));
-               }
-               next.then(function() {
-                  this.subs.push(syncRecordPush(model, listOrRecord));
-               }.bind(this));
-            }
-         }
-
-         if( store.hasTwoWaySync(model) ) {
-            // sync server to client (pull) updates
-            // monitor the client (using the libs)
-            if( isList ) {
-               this.subs.push(syncListPull(model, listOrRecord, criteria));
-            }
-            else {
-               //todo this is not enough, existence of a key doesn't ensure the record exists on the server
-               if( listOrRecord.hasKey() ) {
-                  this.subs.push(syncRecordPull(model, listOrRecord));
-               }
-               else {
-                  next.then(function() {
-                     // if the record must be created, wait before trying to sync for updates
-                     this.subs.push(syncRecordPush(model, listOrRecord));
-                  }.bind(this));
-               }
-            }
-         }
+         syncTarget(model, target, listOrRecord, subs, next);
+         syncPush(model, target, listOrRecord, subs, next);
+         syncPull(model, listOrRecord, subs, next, criteria);
       },
 
       /**
@@ -2915,6 +3006,7 @@
          //todo make this work if a RecordList is passed in
          //todo this method signature is wrong; we should be checking the list/record we received in init rather
          //todo than operating on any list we see come through
+         //todo if this is an observableArray, then call checkpoint()!
          if(_.isArray(listOrRecord) ) {
             var promises = [];
             _.each(listOrRecord, function(v) {
@@ -2923,7 +3015,7 @@
             return $.when(promises);
          }
          else if( listOrRecord.isDirty() ) {
-            return pushUpdate(_updateAction(listOrRecord, action), this.store, this.model, listOrRecord);
+            return pushUpdate(_updateAction(listOrRecord, action), this.model, listOrRecord);
          }
          else {
             return $.Deferred().resolve(false);
@@ -2931,10 +3023,56 @@
       }
    });
 
+   function syncPush(model, target, listOrRecord, subs, next) {
+      if (model.auto) {
+         // sync client to server (push) updates
+         if (listOrRecord instanceof ko.sync.RecordList) {
+            subs.push(syncListPush(model, listOrRecord));
+         }
+         else {
+            //todo this is not enough; existence of a key doesn't ensure record exists on the server
+            if (!listOrRecord.hasKey()) {
+               next.pipe(function () {
+                  // record is new, must be created on server
+                  return model.store.create(model, listOrRecord).then(function (id) {
+                     listOrRecord.setHashKey(id);
+                     //todo target
+                  }).then(thenClearDirty(listOrRecord));
+               });
+            }
+            next.then(function () {
+               subs.push(syncRecordPush(model, listOrRecord));
+            });
+         }
+      }
+   }
+
+   function syncPull(model, listOrRecord, subs, next, criteria) {
+      if( model.store.hasTwoWaySync(model) ) {
+         // sync server to client (pull) updates
+         // monitor the client (using the libs)
+         if( listOrRecord instanceof ko.sync.RecordList ) {
+            subs.push(syncListPull(model, listOrRecord, criteria));
+         }
+         else {
+            //todo this is not enough, existence of a key doesn't ensure the record exists on the server
+            if( listOrRecord.hasKey() ) {
+               subs.push(syncRecordPull(model, listOrRecord));
+            }
+            else {
+               next.then(function() {
+                  // if the record must be created, wait before trying to sync for updates
+                  subs.push(syncRecordPush(model, listOrRecord));
+               });
+            }
+         }
+      }
+   }
+
    function syncListPush(model, list) {
       var store = model.store;
       list.subscribe(function(action, record, field) {
-         return pushUpdate(action, store, list.model, record);
+         return pushUpdate(action, list.model, record);
       });
    }
 
@@ -2970,8 +3108,8 @@
       });
    }
 
-   function pushUpdate(action, store, model, rec) {
-      var def;
+   function pushUpdate(action, model, rec) {
+      var def, store = model.store;
       switch(action) {
          case 'added':
             def = store.create(model, rec).then(function(id) {
@@ -3017,6 +3155,22 @@
       }
       else {
          return 'created';
+      }
+   }
+
+   function syncTarget(model, target, listOrRecord, subs, next) {
+      if( ko.sync.isObservableArray(target) ) {
+         //todo target
+         //todo target
+         //todo target
+         //todo target
+      }
+      else {
+         var isObservable = ko.isObservable(target);
+         //todo target
+         //todo target
+         //todo target
+         //todo target
       }
    }
 

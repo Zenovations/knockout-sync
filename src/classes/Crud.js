@@ -11,8 +11,7 @@
       this.parent = target;
       this.def = $.Deferred().resolve().promise();
       this.record = model.newRecord(target);
-      this.controller = new ko.sync.SyncController(model, this.record);
-      _updateTarget(this.record, model);
+      this.controller = new ko.sync.SyncController(model, target, this.record);
    };
 
    var Crud = ko.sync.Crud;
@@ -102,12 +101,6 @@
    Crud.prototype.promise = function() {
       return this.def.promise();
    };
-
-   function _updateTarget(model, target, record) {
-      _.each(model.fields, function(field, key) {
-         target[key] = record.data[key];
-      });
-   }
 
 })(ko);
 

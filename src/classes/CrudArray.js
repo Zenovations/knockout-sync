@@ -11,7 +11,7 @@
       this.list = model.newList(target());
       this.parent = target;
       this.def = $.Deferred().resolve().promise();
-      this.controller = new ko.sync.SyncController(model, this.list, criteria);
+      this.controller = new ko.sync.SyncController(model, target, this.list, criteria);
    };
 
    var CrudArray = ko.sync.CrudArray;
@@ -21,7 +21,7 @@
     * @return {boolean}
     */
    CrudArray.prototype.isDirty = function(b) {
-      return this.list.isDirty(b);
+      return this.list.isDirty(b); //todo this boolean does nothing for RecordList
    };
 
    /**
@@ -80,7 +80,7 @@
 
    /**
     * Delete a record from the local list and also from the data layer (if auto-update is false, the remote delete
-    * is triggered during the next `update()` operation.
+    * is triggered during the next `update()` operation)
     *
     * @param {ko.sync.RecordId|ko.sync.Record|string} hashKey
     * @return {ko.sync.CrudArray} this
@@ -115,7 +115,7 @@
     */
    CrudArray.prototype.promise = function() {
       return this.def.promise();
-   }
+   };
 
 })(jQuery);
 

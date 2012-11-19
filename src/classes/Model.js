@@ -31,11 +31,15 @@
        * @return {ko.sync.Model} this
        */
       sync: function(target, criteria) {
-         if( ko.isObservable(target) && target.push && _.isArray(target()) ) {
+         var isObservable = ko.isObservable(target);
+         if( ko.sync.isObservableArray(target) ) {
             target.crud = new ko.sync.CrudArray(target, this, criteria);
          }
          else {
-            target.crud = new ko.sync.Crud(target, this);
+            var data;
+            if( !isObservable ) { target.data = data = target.data||{}; }
+            else { data = target; }
+            target.crud = new ko.sync.Crud(data, this);
          }
          return this;
       },
@@ -112,27 +116,28 @@
       this.model = model;
    }
    RecordFactory.prototype.create = function(data) {
+      data = ko.utils.unwrapObservable(data);
       data instanceof ko.sync.Record && (data = data.getData());
       return new ko.sync.Record(this.model, data);
    };
 
 
-   function _makeList(model, dataOrList) {
-      if( dataOrList instanceof ko.sync.RecordList ) {
-         return dataOrList;
-      }
-      else {
-         return model.newList(dataOrList);
-      }
-   }
-
-   function _makeRecord(model, dataOrRecord) {
-      if( dataOrRecord instanceof ko.sync.Record ) {
-         return dataOrRecord;
-      }
-      else {
-         return model.newRecord(dataOrRecord);
-      }
-   }
+//   function _makeList(model, dataOrList) {
+//      if( dataOrList instanceof ko.sync.RecordList ) {
+//         return dataOrList;
+//      }
+//      else {
+//         return model.newList(dataOrList);
+//      }
+//   }
+//
+//   function _makeRecord(model, dataOrRecord) {
+//      if( dataOrRecord instanceof ko.sync.Record ) {
+//         return dataOrRecord;
+//      }
+//      else {
+//         return model.newRecord(dataOrRecord);
+//      }
+//   }
 
 })(ko);

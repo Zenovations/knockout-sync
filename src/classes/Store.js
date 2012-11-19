@@ -137,7 +137,9 @@
       hasTwoWaySync: function() { throw new Error('Interface not implemented'); },
 
       /**
-       * Given a particular data model, notify `callback` any time any record is added, updated, deleted, or moved.
+       * Given a particular data model, notify `callback` any time any record is added, updated, deleted, or moved
+       * ON THE SERVER. Calling the create/update/read/delete methods locally will not trigger any notifications.
+       *
        * The signature of the callback is as follows:
        *     added:    callback( 'added',   record_id, record_data, prevRecordId )
        *     updated:  callback( 'updated', record_id, record_data  )
@@ -157,8 +159,8 @@
       watch: function(model, callback, filterCriteria) { throw new Error('Interface not implemented'); },
 
       /**
-       * Given a particular record, invoke `callback` any time the data changes. This does not get invoked for
-       * add/delete/moved events. We must monitor the entire model for that.
+       * Given a particular record, invoke `callback` any time the data record changes ON THE SERVER. This does not
+       * get invoked for local create/read/update/delete events.
        *
        * The signature of the callback is as follows: callback( record_id, data_object, sort_priority )
        *

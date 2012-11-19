@@ -24,58 +24,19 @@
        * is true.
        *
        * @param {ko.sync.Model} model
+       * @param {Object|ko.observable|ko.observableArray} target
        * @param {ko.sync.RecordList|ko.sync.Record} listOrRecord
        * @param {object} [criteria] used with lists to specify the filter parameters used by server and to load initial data
        * @constructor
        */
-      init: function(model, listOrRecord, criteria) {
-         var isList = listOrRecord instanceof ko.sync.RecordList, store = model.store;
-         this.store = store;
+      init: function(model, target, listOrRecord, criteria) {
+         var isList = listOrRecord instanceof ko.sync.RecordList;
          this.model = model;
-         this.subs = [];
-
+         var subs = [];
          var next = $.Deferred(function(def) { def.resolve(); });
-
-         if( model.auto ) {
-            // sync client to server (push) updates
-            if( isList ) {
-               this.subs.push(syncListPush(model, listOrRecord));
-            }
-            else {
-               //todo this is not enough; existence of a key doesn't ensure record exists on the server
-               if( !listOrRecord.hasKey() ) {
-                  next.pipe(function() {
-                     // record is new, must be created on server
-                     return store.create(model, listOrRecord).then(function(id) {
-                        listOrRecord.setHashKey(id);
-                     }.bind(this)).then(thenClearDirty(listOrRecord));
-                  }.bind(this));
-               }
-               next.then(function() {
-                  this.subs.push(syncRecordPush(model, listOrRecord));
-               }.bind(this));
-            }
-         }
-
-         if( store.hasTwoWaySync(model) ) {
-            // sync server to client (pull) updates
-            // monitor the client (using the libs)
-            if( isList ) {
-               this.subs.push(syncListPull(model, listOrRecord, criteria));
-            }
-            else {
-               //todo this is not enough, existence of a key doesn't ensure the record exists on the server
-               if( listOrRecord.hasKey() ) {
-                  this.subs.push(syncRecordPull(model, listOrRecord));
-               }
-               else {
-                  next.then(function() {
-                     // if the record must be created, wait before trying to sync for updates
-                     this.subs.push(syncRecordPush(model, listOrRecord));
-                  }.bind(this));
-               }
-            }
-         }
+         syncTarget(model, target, listOrRecord, subs, next);
+         syncPush(model, target, listOrRecord, subs, next);
+         syncPull(model, listOrRecord, subs, next, criteria);
       },
 
       /**
@@ -101,6 +62,7 @@
          //todo make this work if a RecordList is passed in
          //todo this method signature is wrong; we should be checking the list/record we received in init rather
          //todo than operating on any list we see come through
+         //todo if this is an observableArray, then call checkpoint()!
          if(_.isArray(listOrRecord) ) {
             var promises = [];
             _.each(listOrRecord, function(v) {
@@ -109,7 +71,7 @@
             return $.when(promises);
          }
          else if( listOrRecord.isDirty() ) {
-            return pushUpdate(_updateAction(listOrRecord, action), this.store, this.model, listOrRecord);
+            return pushUpdate(_updateAction(listOrRecord, action), this.model, listOrRecord);
          }
          else {
             return $.Deferred().resolve(false);
@@ -117,10 +79,56 @@
       }
    });
 
+   function syncPush(model, target, listOrRecord, subs, next) {
+      if (model.auto) {
+         // sync client to server (push) updates
+         if (listOrRecord instanceof ko.sync.RecordList) {
+            subs.push(syncListPush(model, listOrRecord));
+         }
+         else {
+            //todo this is not enough; existence of a key doesn't ensure record exists on the server
+            if (!listOrRecord.hasKey()) {
+               next.pipe(function () {
+                  // record is new, must be created on server
+                  return model.store.create(model, listOrRecord).then(function (id) {
+                     listOrRecord.setHashKey(id);
+                     //todo target
+                  }).then(thenClearDirty(listOrRecord));
+               });
+            }
+            next.then(function () {
+               subs.push(syncRecordPush(model, listOrRecord));
+            });
+         }
+      }
+   }
+
+   function syncPull(model, listOrRecord, subs, next, criteria) {
+      if( model.store.hasTwoWaySync(model) ) {
+         // sync server to client (pull) updates
+         // monitor the client (using the libs)
+         if( listOrRecord instanceof ko.sync.RecordList ) {
+            subs.push(syncListPull(model, listOrRecord, criteria));
+         }
+         else {
+            //todo this is not enough, existence of a key doesn't ensure the record exists on the server
+            if( listOrRecord.hasKey() ) {
+               subs.push(syncRecordPull(model, listOrRecord));
+            }
+            else {
+               next.then(function() {
+                  // if the record must be created, wait before trying to sync for updates
+                  subs.push(syncRecordPush(model, listOrRecord));
+               });
+            }
+         }
+      }
+   }
+
    function syncListPush(model, list) {
       var store = model.store;
       list.subscribe(function(action, record, field) {
-         return pushUpdate(action, store, list.model, record);
+         return pushUpdate(action, list.model, record);
       });
    }
 
@@ -156,8 +164,8 @@
       });
    }
 
-   function pushUpdate(action, store, model, rec) {
-      var def;
+   function pushUpdate(action, model, rec) {
+      var def, store = model.store;
       switch(action) {
          case 'added':
             def = store.create(model, rec).then(function(id) {
@@ -203,6 +211,22 @@
       }
       else {
          return 'created';
+      }
+   }
+
+   function syncTarget(model, target, listOrRecord, subs, next) {
+      if( ko.sync.isObservableArray(target) ) {
+         //todo target
+         //todo target
+         //todo target
+         //todo target
+      }
+      else {
+         var isObservable = ko.isObservable(target);
+         //todo target
+         //todo target
+         //todo target
+         //todo target
       }
    }
 

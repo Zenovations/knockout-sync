@@ -15,41 +15,72 @@ This library does not use the [mapping plugin][mplug]; it's superfluous to the f
 Right now, Firebase is the only data layer supported, but the design should allow any data layer by simply creating
 a data store for the appropriate storage type and using that instead.
 
-Simple example:
+## Simple examples
+
+### First let's define a model
 
 ```javascript
-    // define a View object to use with Knockout
-    function View( recordId ) {
-       this.id = recordId;
-    }
-
-    //define a data model (e.g. a Firebase path or data table)
+    // define the schema for a record
     var model = new ko.sync.Model({
-        store:  new ko.sync.FirebaseStore(MY_URL),
-        table:  'user',
-        key: 'login',
-        auto:   true,    // automagically sync changes
+        store:  store,              // explained under Usage
+        table:  'user',             // the database table
+        key: 'userId',              // the primary key, this can be multiple fields
+        auto:   true,               // makes record sync automatically in real time, defaults to false
         fields: {
-           login:    'string',
-           email:    'email',
-           pass:     'password',
-           joinDate: 'date'
+            userId:       'string', // see Usage for more options
+            name:         'string',
+            email:        'email',
+            created:      'date',
         }
     });
+```
 
-    // create a view and load a record into it
-    var view = new View();
-    model.sync(view);
-    view.crud.load('record123');
+### Syncing an observable to a record
 
-    // or let the model automagically create a view, loaded with a record from the database
+```javascript
+    // loads record123 and creates two-way sync
+    var obs = ko.observable().extend('sync', model, 'record123');
+
+    // now all the fields exist on our record
+    obs.email('my@email.tld');
+```
+
+### Syncing an observable array to a list of records
+
+```javascript
+    // loads ten records into list and starts two-way sync
+    var list = ko.observableArray().extend('sync', model, {start: 'record123', limit: 10});
+
+    // create a record, ID will be assigned by the database
+    list.push({ name: 'Mary', email: 'mary@domain.tld' });
+
+    // delete a record from the database
+    list.splice(2, 1);
+```
+
+### Syncing a view (any object) to a database record
+
+You can let the model create the view:
+
+```javascript
+    // let the model automagically create a view, loaded with a record from the database
     var view = model.newView( 'record123' );
 
-    // in either case, the fields this.login, this.email, this.pass, and this.joinDate will now exist as
-    // observables in `view` and from here on, the database and the local record are synchronized
+    // view.data now contains login, email, pass, and joinDate (specified in model)
+    // and from here on, the database and the local record are synchronized
 
     // let's change something!
-    view.email('new@address.tld'); // automatically synced to database!
+    view.data.email('new@address.tld'); // automatically synced to database!
+```
+
+Or you can sync to an existing view
+
+```javascript
+    // create a view and load a record into it
+    var view = new View();
+    model.sync(view).crud.load('record123');
+
+    // view now contains a `data` object with all the fields, as well as the `crud` object explained under Usage
 ```
 
 ## Installation
@@ -58,7 +89,7 @@ Download the [production version][min] or the [development version][max].
 [min]: https://raw.github.com/zenovations/knockout-sync/master/dist/knockout-sync.min.js
 [max]: https://raw.github.com/zenovations/knockout-sync/master/dist/knockout-sync.js
 
-In your web page, you need to have [jQuery][2], [Knockout.js][3], and Knockout-sync!
+In your web page, you need to have [jQuery][2], [Knockout.js][3], and Knockout-sync.
 
 ```html
    <script type="text/javascript" src="jquery.js"></script>
@@ -66,160 +97,136 @@ In your web page, you need to have [jQuery][2], [Knockout.js][3], and Knockout-s
    <script type="text/javascript" src="knockout-sync.js"></script>
 ```
 
-Alternately, if you want to squeeze every byte of bandwidth you can go the manual route:
-
-```html
-    <!-- required libs -->
-    <script type="text/javascript" src="jquery.js"></script>
-    <script type="text/javascript" src="knockout.js"></script>
-    <!-- just the base code -->
-    <script type="text/javascript" src="knockout-sync.base.js"></script>
-    <!-- my validator -->
-    <script type="text/javascript" src="assets/js/MyValidator.js"></script>
-    <!-- my data store -->
-    <script type="text/javascript" src="stores/{PICKONE}Store.js"></script>
-```
-
 ## Usage
 
-### Create a connection to your data layer (a store):
+### Create a Store (a connection to your database):
 
 ```javascript
-    // create a store
+    // create a Store
     var store = new ko.sync.stores.FirebaseStore('http://YOUR_ACCOUNT.firebaseio.com/path/to/store');
 ```
 
-### Create a data model
+### Create a Model (a table schema)
 
-A data model represents a table/bucket/data type kept in the store and explains it's fields and storage behaviours. It
+A data model represents a table or schema and explains it's fields and storage behaviours. It
 also provides validation if a validator is configured.
 
 ```javascript
     // create a data model
     var model = new ko.sync.Model({
-        store:  store,
-        table:  'user',
-        key: 'userId',
-        auto:   true,     // default is false, this makes record sync whenever a change occurs
-        validator:  ko.sync.Validator,
+        store:  store,                 // store created above
+        table:  'user',                // name of database table
+        key: 'userId',                 // primary key (can be a composite array of fields)
+        auto:   true,                  // default is false, this makes record sync whenever a change occurs
+        validator:  ko.sync.Validator, // optional, used by crud.validate and run before any sync operation
         fields: {
-            // primary key for this record, not a ko.observable()
-            userId:       { observe: false },
-            // required string
+            // primary key for this record, not a ko.observable() since it won't change
+            userId:       { type: 'string', observe: false },
+
+            // a required string
             name:         'string',
-            // required email
+
+            // a required email
             email:        'email',
-            // required data
-            created:      'date',
-            // optional string, not stored in database (but is observed by ko)
-            status:       { persist: false, required: false },
-            // required counter, not observed by ko
-            counter:      { type: 'int', observe: false },
-            // required 5 digit number
-            fiveDigitNum: { type: 'int', minLen: 5, maxLen: 5 },
+
+            // an optional date
+            created:      { type: 'date', required: false },
+
             // custom field with custom formatting and validation
             customFormat: { format: formatFxn, valid: validateFxn }
         }
     });
 ```
 
-### Create a view from the model
+### Sync the database with something in knockout
 
 ```javascript
-   // creates a view representing a single Record
+   // creates a view representing a single Record (the fields are stored in view.data)
    var view = model.newView();
    ko.applyBindings(view);
-```
 
-### Create an observableArray from the model
+   // syncs a database table to an observableArray
+   var view = {
+      list: ko.observableArray().extend('sync', model);
+   }
 
-The array is created using ko.observableArray().
+   // syncs a record to an observable (generally you'd just use a view or object for this)
+   var rec = ko.observable().extend('sync', model);
 
-```javascript
-   // creates an array of Records (a RecordList) //todo-readme
-   var users = model.newList();
-```
-
-### Apply model data to an existing view
-
-```javascript
-   // or initialize a more complex view using the data model
-   function View(model) {
-      // add all the fields from the data model
-      // this view now represents a single Record
-      model.sync(this);
-
-      // the fields from model are now ko.observable() instances
-   };
-   ko.applyBindings(new View(model));
+   // you can also sync them after the fact
+   model.sync(observableArray);
+   model.sync(view);
+   model.sync(observable);
 ```
 
 ### Perform CRUD operations on a view
 
-Once `model.sync()` is called on a view/object, it gets a `rec` with CRUD methods:
+Once an object is synced, it has a `crud` member which can be used outside knockout bindings
 
 ```javascript
-    // apply a model to a view
-    model.sync(view /*, recordId*/ );
+    // apply a database record to any object or observable
+    model.sync( view /*, recordId */ );
 
-    // create record in the database using local data
-    // we are now synced to that database record
+    // create a new record in the database, we are now synced with that record
+    ko.utils.extend(view.data, { name: 'Smith', email: 'smith@domain.tld' });
     view.crud.create();
 
     // replace local data with an existing database record
-    // we are now synced to the new record instead
+    // we are now synced to the existing record instead
     view.crud.read( 'recordXYZ' );
 
-    // modify the record
-    view.counter( 25 );
-
-    // save the record manually (only necessary if auto-update is off)
+    // push updated data to the database (when model.auto is true, this is done automatically)
+    view.data.counter( 25 );
     view.crud.update();
 
     // we can also modify and save at the same time
     view.crud.update( {counter: 25} );
 
-    // delete the record
+    // delete the record from database
     view.crud.delete();
 
     // see if the record has changed
-    view.crud.isDirty(); // true if auto-update is off, otherwise it has already synced
+    view.crud.isDirty(); // true any time the record has unsaved changes, when auto-update is on, this is true until the save completes
 
     // see if the record is valid
     view.crud.validate();
 
-    // operations can be chained for great joy
-    // no worries, asynchronous operations like read and update automagically queue and run in sequence!
-    view.crud.read( 'recordXYZ' ).update({name: 'John Smith'})
-        .promise().then(function(crud) { /* read and update both completed in order */ });
+    // chain them all for great joy!
+    // async actions like read and update automagically queue and run in sequence!
+    view.crud.read( 'recordXYZ' ).update({name: 'John Smith'}).delete()
+        .promise().then(function(crud) { /* no race conditions here */ });
 ```
 
-### Perform crud operations on observable arrays
+### Perform CRUD operations on observable arrays
 
-Arrays also get special `crud` member with complete CRUD operations. Note that there is no need to wrestle
+Arrays also get a `crud` member with complete CRUD operations. Note that there is no need to wrestle
 with `destroy()` and `_destroy` as deleted items are automagically tracked and handled internally!
 
 ```javascript
     // sync an array with the server
-    model.sync( users [, preloadedData...] );
+    model.sync( observableArray );
 
     // load some users from the database (users created in the last hour, up to 100 records)
     // we are now synchronized to this filtered list of records
     users.crud.read( {created: {greaterThan: new Date().valueOf() - 3600}, limit: 100} );
 
     // add a new user to the list; also adds to the database
-    users.mappedCreate({name: 'John Smith', ...});
-    users.crud.create({name: 'John Smith', ...}); // same thing
+    users.crud.create({name: 'John Smith', ...});
+    users.push({name: 'John Smith', ...}); // works too
+
+    // modify and save updates when model.auto is false
+    users()[5].name('Alf');
+    users.crud.update();
+
+    // or both at the same time
+    users.crud.update('recordXYZ', {name: 'Alf'});
 
     // delete a user from the list; also deletes from database
-    users.mappedRemove( {id: userId} );
-    users.crud.delete( userId ); // same thing
+    users.crud.delete( userId );
+    users.splice(2, 1); // works too
 
-    // apply changes and save them at the same time
-    users.update();
-
-    // these can be chained too, and also queue in order (i.e. the read() event will complete before update/delete/update are applied)
-    users.crud.read( {limit: 100} ).update('record123', {name: 'John Smith'}).delete( 'recordXYZ' ).create( {name: 'Jim Campbell'} ).update()
+    // just like crud ops on records, these can be chained too
+    users.crud.read( {limit: 100} ).update('record123', {name: 'John Smith'}).delete( 'recordXYZ' ).create( {name: 'Jim Campbell'} )
         .promise().then(function(crud) { /* all operations completed and saved */ });
 ```
 
@@ -297,9 +304,9 @@ for every field)
 
 ##### fields.observe
 
-{Boolean=true} When false, the field is not wrapped in a Knockout.js observable. They are still be stored when a save occurs.
-
-//todo CrudArray behaves differently than Crud; account for this? fix it so they behave the same?
+{Boolean=true} When false, the field is not wrapped in a Knockout.js observable. They cannot trigger an auto-update,
+since we aren't monitoring the values. They are, however, still be stored when a save occurs and running crud.update
+on a list or a single record will recognize that the fields changed.
 
 ##### fields.type
 
@@ -884,6 +891,10 @@ An alias back to the parent list to which we attached this Crud instance. Used f
 
     list.crud.parent.crud.parent.crud.parent; // recursive fun
  ```
+
+## ko.validate.Validator
+
+//todo-docs
 
 ## ko.sync
 
