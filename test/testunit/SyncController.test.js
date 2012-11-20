@@ -52,16 +52,12 @@
          list.remove('16');
          list.remove('17');
          list.move(recs[18], '3');
-         var promises = [];
-         promises.push(sync.pushUpdates(_.values(list.added),   'added'));
-         promises.push(sync.pushUpdates(_.values(list.changed), 'updated'));
-         promises.push(sync.pushUpdates(_.values(list.deleted), 'deleted'));
-         promises.push(sync.pushUpdates(_.values(list.moved),   'moved'));
-         return $.when(promises);
+         return sync.pushUpdates();
       }, function(results) {
          deepEqual(results, [
             ['create', '22'],
             ['create', '23'],
+            ['update', '19'],
             ['update', '14'],
             ['update', '15'],
 //            ['update', '16'],
@@ -199,13 +195,24 @@
       }, {rec: recs[1], model: {auto: false}});
    });
 
-   asyncTest('hasTwoWay off: pull does not get monitored', function() {
+   asyncTest('hasTwoWay off: pull on list not get monitored', function() {
       var recs = BigData.recs(2);
       syncActivity(recs, function(sync, list, model) {
          model.store.fakeNotify('updated', '1', {aString: 'oh joy!'});
       }, function(storeEvents, listEvents) {
+         console.log(listEvents);
          strictEqual(listEvents.length, 0);
-      }, {hasTwoWaySync: false});
+      }, {twoWaySync: false});
+   });
+
+   asyncTest('hasTwoWay off: pull on rec not get monitored', function() {
+      var recs = BigData.recs(2);
+      syncActivity(recs, function(sync, list, model) {
+         model.store.fakeNotify('updated', '1', {aString: 'oh joy!'});
+      }, function(storeEvents, listEvents) {
+         console.log(storeEvents, listEvents);
+         strictEqual(listEvents.length, 0);
+      }, {twoWaySync: false, rec: recs[0]});
    });
 
    asyncTest('hasTwoWay: record does not exist at sync time', function() {
@@ -213,7 +220,6 @@
       syncActivity([], function(sync, list, model) {
          //recs[0].set('aString', 'It looks, not good.')
       }, function(storeEvents, listEvents) {
-         console.log(listEvents);
          deepEqual(storeEvents, [
             ['create', oldKey]
          ])
@@ -241,7 +247,7 @@
    });
 
    function syncActivity(recs, fx, analyzeFx, conf) {
-      conf = _.extend({}, conf);
+      conf = _.extend({twoWaySync: true}, conf);
       return $.Deferred(function(def) {
          var storeEvents = [], listEvents = [], to = TestData.startTimeout(def);
 
@@ -261,7 +267,7 @@
          }
 
          // set up the sync controller
-         var model      = BigData.model($.extend({store: new TestData.TestStore(conf.twoWaySync, monitorStore, recs), auto: true}, conf.model)),
+         var model      = BigData.model($.extend({store: new TestData.TestStore(conf.twoWaySync, BigData.model(), monitorStore, recs), auto: true}, conf.model)),
              list       = new RecordList(model, recs),
              target     = conf.target? conf.target : (conf.rec? ko.observable() : ko.observableArray()),
              sync       = new ko.sync.SyncController(model, target, conf.rec? conf.rec: list);
@@ -282,6 +288,17 @@
             analyzeFx(storeEvents, listEvents, target);
             def.resolve(storeEvents, listEvents);
          }
+
+         //todo  use SyncController.promise()
+         //todo
+         //todo
+         //todo
+         //todo
+         //todo
+         //todo
+         //todo
+         //todo
+         //todo
 
          if( res && res.then ) {
             // the test returned a deferred so wait for it to finish up

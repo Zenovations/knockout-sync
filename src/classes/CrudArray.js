@@ -63,18 +63,13 @@
     *
     * @return {ko.sync.CrudArray} this
     */
-   CrudArray.prototype.update = function() {
-      this.def = this.def.pipe(_.bind(function() {
-         var list = this.list, c = this.controller, promises = [];
-         if( list.isDirty() ) {
-            list.added.length && promises.push(c.pushUpdates(list.added, 'added'));
-            list.updated.length && promises.push(c.pushUpdates(list.updated, 'updated'));
-            list.deleted.length && promises.push(c.pushUpdates(list.deleted, 'deleted'));
-            list.moved.length && promises.push(c.pushUpdates(list.moved, 'moved'));
-            return $.when(promises);
-         }
-         return this;
-      }, this));
+   CrudArray.prototype.update = function(changes) {
+      applyChanges(this, changes);
+
+      this.def.pipe(function() {
+         return this.controller.pushUpdates();
+      }.bind(this));
+
       return this;
    };
 
@@ -116,6 +111,50 @@
    CrudArray.prototype.promise = function() {
       return this.def.promise();
    };
+
+   function applyChanges(crud, changes) {
+      //todo apply changes
+      //todo
+      //todo
+      //todo
+      //todo
+      //todo
+      //todo
+
+//      var list = this.list;
+//      var RecordId = ko.sync.RecordId;
+//      _.each(changes, function(action, listOfDataObjects) {
+//         switch(action) {
+//            case 'create':
+//               list.add(_.map(listOfDataObjects, function(data) {
+//                  return model.newRecord(data);
+//               }));
+//               break;
+//            case 'move':
+//               _.each(listOfDataObjects, function(v) {
+//                  var afterKey;
+//                  if(_.isArray(v)) {
+//                     afterKey = v[1];
+//                     v = v[0];
+//                  }
+//                  list.move(RecordId.for(model, v), afterKey);
+//               });
+//               break;
+//            case 'update':
+//               _.each(listOfDataObjects, function(v) {
+//                  var rec = list.find(RecordId.for(v));
+//                  rec && rec.updateAll(v);
+//               });
+//               break;
+//            case 'delete':
+//
+//               break;
+//            default:
+//               throw new Error('invalid update action: '+action);
+//         }
+//         list[action](listOfDataObjects);
+//      });
+   }
 
 })(jQuery);
 

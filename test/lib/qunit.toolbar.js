@@ -5,8 +5,8 @@
 (function($) {
 
    //todo make this work with headless browsers (node exports, et al)
-   var m = decodeURIComponent((window.location.href.match(/\?filter=(.+)(?:%3A|:)/) || [])[1]);
-   var _origModule = window.module, $select = $('<select accesskey="r"><option value="">All Test Modules</option></select>');
+   var m = decodeURIComponent((window.location.href.match(/\?filter=(.+?)(?:%3A|:)/) || [])[1]);
+   var _origModule = window.module, $select = $('<select><option value="">All Test Modules</option></select>');
    window.module = function() {
       var $opt = $('<option value="'+arguments[0]+'">'+arguments[0]+'</option>'), v = $select.val();
       $select.append($opt);
@@ -29,10 +29,19 @@
          window.location = window.location.href.replace(/\?.*/, '')+opt;
       });
 
-      $button = $('<button><u>r</u>un</button>').on('click', function() {
+      var $button = $('<button accesskey="a"><u>a</u>gain</button>').on('click', function() {
          $select.change();
       });
-      $('#qunit-testrunner-toolbar').prepend('&nbsp;&nbsp;').prepend($button).prepend($select).prepend('&nbsp;&nbsp;');
+
+      var $next = $('<button accesskey="n"><u>n</u>ext</button>').on('click', function() {
+         var $n = $select.find('option:selected').next('option'), v = $select.find('option').eq(0).attr('value');
+         if( $n.length ) {
+            v = $n.attr('value');
+         }
+         $select.val(v).change();
+      });
+
+      $('#qunit-testrunner-toolbar').prepend('&nbsp;&nbsp;').prepend($next).prepend($button).prepend($select).prepend('&nbsp;&nbsp;');
    });
 
 })(jQuery);

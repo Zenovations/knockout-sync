@@ -124,19 +124,21 @@
     * If afterRecordId is a negative integer, it is relative to the end position. Thus, -1 means just before
     * the last record, -2 means insert it before the last 2 records, etc.
     *
-    * @param {ko.sync.Record} record
+    * @param {ko.sync.Record|ko.sync.RecordId|String} recordOrId
     * @param {RecordId|ko.sync.Record|String|int} [afterRecordIdOrIndex] see description
     * @return {ko.sync.RecordList} this
     */
-   ko.sync.RecordList.prototype.move = function(record, afterRecordIdOrIndex) {
-      var key = record.hashKey();
-      var newLoc = _findInsertPosition(this, record, afterRecordIdOrIndex); // the exact index this element should be placed at
-      var currentLoc = _recordIndex(this, record);
-
+   ko.sync.RecordList.prototype.move = function(recordOrId, afterRecordIdOrIndex) {
+      var key = getHashKey(recordOrId);
+      var record = _findRecord(this, key, true);
       if( key in this.byKey && !(key in this.deleted) ) {
+         var newLoc = _findInsertPosition(this, record, afterRecordIdOrIndex); // the exact index this element should be placed at
+         var currentLoc = _recordIndex(this, record);
          if( currentLoc !== newLoc ) { // if these are equal, we've already recorded the move or it's superfluous
             // store in changelist
-            this.moved[key] = record;
+            if( !(key in this.added) && !(key in this.changed) ) {
+               this.moved[key] = record;
+            }
             this.numChanges++;
 
             var sortedVals = this.sorted;
@@ -211,7 +213,6 @@
       }
       else if( !(record.hashKey() in this.byKey) ) {
          var loc = putIn(this, record, afterRecordId, sendNotification);
-         //this.obs.splice(loc, 0, record);
          //todo-sort
       }
       return this;
@@ -239,11 +240,11 @@
                takeOut(this, record);
             }
             else {
-               console.debug('tried to delete the same record twice', key);
+               console.debug('record already deleted', key);
             }
          }
          else {
-            console.debug('attempted to delete a record which doesn\'t exist in this list', recordOrIdOrHash);
+            console.debug('record not in this list', recordOrIdOrHash);
          }
       }
       return this;
@@ -260,6 +261,7 @@
             if( !(hashKey in this.added) ) {
                // if the record is already marked as newly added, don't mark it as updated and lose that status
                this.changed[hashKey] = record;
+               delete this.moved[hashKey];
                this.numChanges++;
             }
             //todo differentiate between moves and updates?
@@ -268,6 +270,14 @@
          else {
             console.warn("Record "+hashKey+' not found (concurrent changes perhaps? otherwise it\'s probably a bad ID)');
          }
+      }
+      return this;
+   };
+
+   ko.sync.RecordList.prototype.clearEvent = function(action, hashKey) {
+      if( action in {added: 1, deleted: 1, moved: 1, changed: 1} && hashKey in this[action] ) {
+         delete this[action][hashKey];
+         this.numChanges--;
       }
       return this;
    };
@@ -293,6 +303,17 @@
       this.subs = [];
       this.obsSub = null;
       return this;
+   };
+
+   ko.sync.RecordList.prototype.changeList = function() {
+      var out = [];
+      _.each(['added', 'moved', 'updated', 'deleted'], function(action) {
+         var key = action === 'updated'? 'changed' : action;
+         _.each(this[key], function(rec) {
+            out.push([action, rec]);
+         });
+      }.bind(this));
+      return out;
    };
 
    /**
@@ -487,10 +508,10 @@
     * @param callbacks
     * @param action
     * @param record
-    * @param [field]
+    * @param [meta] either a {string} field or {array} fields or {string} recordId
     * @private
     */
-   function _updateListeners(callbacks, action, record, field) {
+   function _updateListeners(callbacks, action, record, meta) {
       var i = -1, len = callbacks.length, args = $.makeArray(arguments).slice(1);
 //      console.info(action, record.hashKey(), field, callbacks);
       while(++i < len) {

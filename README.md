@@ -219,7 +219,7 @@ with `destroy()` and `_destroy` as deleted items are automagically tracked and h
     users.crud.update();
 
     // or both at the same time
-    users.crud.update('recordXYZ', {name: 'Alf'});
+    users.crud.update({id: 'recordXYZ', name: 'Alf'});
 
     // delete a user from the list; also deletes from database
     users.crud.delete( userId );
@@ -569,7 +569,7 @@ values will be synchronized. This will overwrite any existing values in the loca
 
 ### Crud.update( [data] )
 
-@param {object} [data]
+@param {object} [data] see below for details
 @returns {Crud}
 
 Update (save) the record to the database. The save only occurs if isDirty() === true, so it's safe to call this
@@ -667,6 +667,19 @@ The `create` and `remove` functions are superfluous, since one can simply call `
 
 Crud.Array commands can be chained and operate exactly like [Crud](#crud) chained events in respect to throttling and handling
 asynchronous calls.
+
+#### Crud.Array.get( recordId )
+
+@returns {Crud} returns CRUD object for a single element of the observableArray
+
+Fetches the data for one element from the observableArray, by its id and returns a CRUD object that can be used
+to manipulate that one record in the list. Changes are synced to the server and applied back to the observableArray.
+
+```javascript
+   // update the counter on a record after fetching it by its ID
+   list.crud.get('record123').update({counter: 25});
+   list.crud.isDirty(); // true if auto-updates are off (otherwise, it's been saved already)
+```
 
 ### Crud.Array.isDirty()
 
@@ -850,9 +863,33 @@ Save all changes to the database and return the number of records updated. If no
 is on, this will simply return 0 immediately without a call to the server.
 
 ```javascript
-   // update the counter on a record
-   list.crud.get('record123').counter(25);
-   list.crud.isDirty(); // true if auto-updates are off (otherwise, it's been saved already)
+   list.crud.update();
+   list.crud.isDirty(); // true (runs before update completes)
+   list.crud.promise().then(function(crud) { crud.isDirty(); }; // false
+```
+
+It is also possible to change the data and push a save at the same time.
+
+ - The key/value hash needs to include all fields that are part of the ID.
+ - For deletes, a string containing the ID can be passed if it matches to exactly one field (no composite ids)
+ - For updates, only changed fields need to be present but including all fields has no adverse side effects
+
+```javascript
+   list.crud.update('create', {id: 'record789', favoriteColor: 'red'});
+   list.crud.update('update', {id: 'record789', favoriteColor: 'green'});
+   list.crud.update('delete', 'record789');
+   list.crud.update('delete', {id: 'record789'});
+```
+
+It is also possible to perform several CRUD operations at once:
+
+```javascript
+   var record = model.newView( 'record123' );
+   view.crud.update( {
+        create: [{id: 'record789', name: 'Mark', favoriteColor: 'red'}, ...],
+        update: [{id: 'record123', favoriteColor: 'no blue!'}, ...],
+        delete: [{id: 'record456'}, ...]
+   );
 ```
 
 #### Crud.Array.delete(id)

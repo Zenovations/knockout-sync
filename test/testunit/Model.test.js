@@ -44,13 +44,13 @@
       var model         = TestData.model(),
             list        = model.newList();
       ok(list instanceof ko.sync.RecordList, 'is a RecordList object');
-      strictEqual(list.obs().length, 0, 'list has no data');
+      strictEqual(ko.sync.RecordList.ids(list).length, 0, 'list has no data');
    });
 
    test("#sync, observable (empty)", function() {
       expect(2);
       var obs = ko.observable();
-      var model = TestData.model({store: new TestData.TestStore(true, function() {}, {})});
+      var model = TestData.model({store: new TestData.TestStore(true, TestData.model(), function() {}, {})});
       var defaults = TestData.defaults(model);
       model.sync(obs);
       var crud = obs.crud;
@@ -62,7 +62,7 @@
       expect(2);
       var genericData = TestData.genericData();
       var obs = ko.observable(genericData);
-      var model = TestData.model({store: new TestData.TestStore(true, function() {}, {})});
+      var model = TestData.model({store: new TestData.TestStore(true, TestData.model(), function() {}, {})});
       model.sync(obs);
       var crud = obs.crud;
       ok(crud instanceof ko.sync.Crud, 'is a Crud instance');
@@ -72,26 +72,25 @@
    test("#sync, observableArray (empty)", function() {
       expect(2);
       var obs = ko.observableArray();
-      var model = TestData.model({store: new TestData.TestStore(true, function() {}, {})});
+      var model = TestData.model({store: new TestData.TestStore(true, TestData.model(), function() {}, {})});
       model.sync(obs);
       var crud = obs.crud;
       ok(crud instanceof ko.sync.CrudArray, 'is CrudArray instance');
-      strictEqual(crud.list.obs().length, 0, 'contains no records');
+      strictEqual(ko.sync.RecordList.ids(crud.list).length, 0, 'contains no records');
    });
 
    test("#sync, observableArray (with data)", function() {
-      expect(3);
+      expect(2);
       // create observable array and put some pre-populated data into it
       var obs = ko.observableArray();
       $.each(TestData.makeRecords(5), function(i,v) {
          obs.push(v.getData());
       });
-      var model = TestData.model({store: new TestData.TestStore(true, function() {}, {})});
+      var model = TestData.model({store: new TestData.TestStore(true, TestData.model(), function() {}, {})});
       model.sync(obs);
-      var crud = obs.crud;
+      var crud = obs.crud, ids = ko.sync.RecordList.ids(crud.list);
       ok(crud instanceof ko.sync.CrudArray, 'is CrudArray instance');
-      ok(crud.list.obs()[0] instanceof ko.sync.Record, 'Elements are records');
-      strictEqual(crud.list.obs().length, 5, 'contains correct number of records');
+      strictEqual(ids.length, 5, 'contains correct number of records');
    });
 
    //todo-test data sorting

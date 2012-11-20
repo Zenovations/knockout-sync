@@ -99,7 +99,7 @@
                      .pipe(_pipedSync(hashKey));
                }
                else {
-                  return $.Deferred(function(def) { def.reject('record does not exist'); }).promise();
+                  return $.Deferred(function(def) { def.resolve(hashKey, false); }).promise();
                }
             });
       }

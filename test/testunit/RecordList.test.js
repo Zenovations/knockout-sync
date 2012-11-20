@@ -525,6 +525,10 @@
       }
    });
 
+   test('#changeList', function() {
+      //todo-test
+   });
+
    function _newIt(len) {
       var list = new RecordList(TestData.model(), TestData.makeRecords(len));
       return new RecordList.Iterator(list);

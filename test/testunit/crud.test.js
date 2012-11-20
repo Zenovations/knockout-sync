@@ -50,7 +50,7 @@
 
 
    function _model() {
-      return TestData.model({store: new TestData.TestStore(true, function() {}, {})});
+      return TestData.model({store: new TestData.TestStore(true, TestData.model(), function() {}, {})});
    }
 
 })(jQuery);

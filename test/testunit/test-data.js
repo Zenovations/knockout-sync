@@ -251,10 +251,10 @@
        * However, the watch() methods filterCriteria parameter is ignored and does not come into play here.
        */
       exports.TestStore = ko.sync.Store.extend({
-         init: function(hasTwoWaySync, testCallback, records) {
+         init: function(hasTwoWaySync, model, testCallback, records) {
             this.hasSync = hasTwoWaySync;
             this.testCallback = testCallback;
-            this.records = records || [];
+            this.records = _copyRecords(model, records);
             this.callbacks = [];
          },
 
@@ -301,8 +301,8 @@
             this.testCallback('update', rec.hashKey());
             return $.Deferred(function(def) {
                var oldRec = this.find(rec);
-               oldRec.updateAll(rec.getData());
-               _.delay(resolve(def, oldRec.hashKey(), oldRec.isDirty()), 10);
+               oldRec && oldRec.updateAll(rec.getData());
+               _.delay(resolve(def, rec.hashKey(), !!oldRec), 10);
 //               this.notify('updated', oldRec.hashKey(), oldRec.getData()).then(resolve(def, oldRec.hashKey(), oldRec.isDirty()));
             }.bind(this));
          },
@@ -512,6 +512,14 @@
       else {
          return def.resolve;
       }
+   }
+
+   function _copyRecords(model, recs) {
+      var out = [];
+      recs && _.each(recs, function(rec) {
+         out.push(model.newRecord(rec.getData()));
+      });
+      return out;
    }
 
    //todo make these work with exports/et al
