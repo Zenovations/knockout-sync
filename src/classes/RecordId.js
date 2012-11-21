@@ -120,5 +120,16 @@
       return v !== null && v !== undefined;
    }
 
+   function KeyFactory(model, tmpField) {
+      this.model = model;
+      this.tmpField = tmpField === true? ko.sync.Record.TEMPID_FIELD : tmpField;
+   }
+   KeyFactory.prototype.make = function(data) {
+      var id = ko.sync.RecordId.for(this.model, data);
+      return id.isSet()? id.hashKey() : (this.tmpField? data[this.tmpField] : null);
+   };
+
+   ko.sync.KeyFactory = KeyFactory;
+
 })(ko);
 

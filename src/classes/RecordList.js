@@ -17,12 +17,8 @@
    ko.sync.RecordList = function(model, records) {
       this.model     = model;
       this.byKey     = {};   // a list of all keys in this list for quick reference, deleted records are included here until checkpoint() is called
-      this.cache     = {};   // a partial list of keys to indices to speed up retrieval
       this.listeners = [];   // a list of subscribers to events in this list
       this.subs      = [];   // a list of records to which this list has subscribed
-      this.delayed   = {};
-      this.records   = {};   // where we store the Record objects
-      this.obsSub    = null; // a subscription to the observableArray (added by _sync, used by ko.sync.RecordList::dispose)
       this.sorted    = [];
       this.checkpoint();     // refresh our changelists (added/changed/moved/deleted records)
       // create an observableArray and load our records into it
@@ -37,17 +33,11 @@
 
    /**
     * Clear any current change lists (added/updated/moved/deleted records) and begin tracking fresh from this point.
-    * @param {boolean} [purge] when set to true, the observed list is emptied of all values (no updates are sent and no events generated)
     * @return {ko.sync.RecordList} this
     */
-   ko.sync.RecordList.prototype.checkpoint = function(purge) {
+   ko.sync.RecordList.prototype.checkpoint = function() {
       this.changes = { added: {}, updated: {}, moved: {}, deleted: {} };
       this.numChanges = 0;
-      if( purge ) {
-         this.dispose();
-         this.byKey = {};
-         //_sync(this);
-      }
       return this;
    };
 
@@ -232,7 +222,7 @@
          if( record ) {
             var key = record.hashKey();
 
-            if( !(key in this.changes.deleted) && !(key in this.delayed) ) {
+            if( !(key in this.changes.deleted) ) {
                // remove the record locally and mark it in our changelists
                takeOut(this, record);
             }
@@ -275,7 +265,6 @@
       if( action in {added: 1, deleted: 1, moved: 1, updated: 1} && hashKey in this.changes[action] ) {
          delete this.changes[action][hashKey];
          this.numChanges--;
-         console.log('clearEvent', action, hashKey, this.numChanges);
       }
       return this;
    };
@@ -293,13 +282,12 @@
    };
 
    ko.sync.RecordList.prototype.dispose = function() {
-      var i = this.subs.length;
-      while(i--) {
-         this.subs[i].dispose();
-      }
-      this.obsSub && this.obsSub.dispose();
+      this.checkpoint();
+      _.each(this.subs, function(s) { s.dispose(); });
+      this.model = null;
+      this.byKey = {};
+      this.listeners = [];
       this.subs = [];
-      this.obsSub = null;
       return this;
    };
 
@@ -326,6 +314,9 @@
       return list.find(list.sorted[i]);
    };
 
+   ko.sync.RecordList.getPos = function(list, key) {
+      return _.indexOf(list.sorted, key);
+   };
 
    ko.sync.RecordList.Iterator = function(list) {
       this.curr = -1;

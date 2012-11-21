@@ -166,7 +166,7 @@
       var recs = TestData.recs(5);
       syncActivity({
          recs: recs,
-         fx: function(sync, list, model) {
+         fx: function(sync, list) {
             list.remove('record-2');
             return TestData.deferWait(); // wait for server replies
          },
@@ -199,7 +199,7 @@
       var recs = TestData.recs(5);
       syncActivity({
          recs: recs,
-         fx: function(sync, list, model) {
+         fx: function(sync, list) {
             list.move(recs[2], 0);
             return TestData.deferWait(); // wait for server replies
          },
@@ -216,7 +216,7 @@
       var rec = TestData.rec(5);
       syncActivity({
          recs: [rec],
-         fx: function(sync, list, model) {
+         fx: function(sync, list) {
             rec.set('boolOptional', true);
             return TestData.deferWait(); // wait for server replies
          },
@@ -251,7 +251,7 @@
       var recs = TestData.recs(2);
       syncActivity({
          recs: recs,
-         fx: function(sync, list, model) {
+         fx: function(sync, list) {
             list.remove(recs[0]);
             return TestData.deferWait(); // wait for server replies
          },
@@ -267,7 +267,7 @@
       var recs = TestData.recs(2);
       syncActivity({
          recs: recs,
-         fx: function (sync, list, model) {
+         fx: function (sync, list) {
             recs[1].set('stringOptional', 'oh joy!');
             return TestData.deferWait(); // wait for server replies
          },
@@ -367,7 +367,7 @@
       syncActivity({
          rec: rec,
          model: {auto: false},
-         fx: function(sync, list) {
+         fx: function(sync) {
             rec.set('stringOptional', 'memememe');
             strictEqual(rec.isDirty(), true, 'Record dirty after changes');
             return sync.pushUpdates();
@@ -396,18 +396,83 @@
    });
 
    asyncTest('observable: modifying it propagates changes', function() {
-      start(); //todo-test
-   });
-
-   asyncTest('observableArray: modifying it propagates changes', function() {
-      start(); //todo-test
+      expect(3);
+      var recs = TestData.recs(5), obs = ko.observable();
+      syncActivity({
+         recs: recs,
+         rec: recs[0],
+         target: obs,
+         fx: function(sync, list, model, target) {
+            strictEqual(target, obs, 'using correct observable');
+            obs(_.extend(recs[0].getData(), {stringOptional: 'propagate already'}));
+         },
+         results: function(storeEvents, listEvents) {
+            deepEqual(listEvents, [
+               [ 'record-1', ['stringOptional'] ]
+            ], 'event reached list');
+            deepEqual(storeEvents, [
+               [ 'update', 'record-1' ]
+            ], 'event reached store');
+         }
+      })
    });
 
    asyncTest('observable: change on server propagates down', function() {
-      start(); //todo-test
+      expect(2);
+      var recs = TestData.recs(5), obs = ko.observable(), rec = recs[0];
+      syncActivity({
+         recs: recs,
+         rec: rec,
+         target: obs,
+         fx: function(sync) {
+            return sync.model.store.fakeNotify('updated', rec.hashKey(), {stringOptional: 'propagate now'});
+         },
+         results: function(storeEvents, listEvents) {
+            deepEqual(listEvents, [
+               [ 'record-1', ['stringOptional'] ]
+            ], 'event reached list');
+            deepEqual(obs(), rec.getData(), 'observable has correct data');
+         }
+      })
+   });
+
+   asyncTest('observable: change on Record propagates down', function() {
+      expect(1);
+      var recs = TestData.recs(5), obs = ko.observable(), rec = recs[0];
+      syncActivity({
+         recs: recs,
+         rec: rec,
+         target: obs,
+         fx: function() {
+            rec.set('stringOptional', 'it rolls downhill');
+         },
+         results: function(storeEvents, listEvents) {
+            console.log('testing');
+            deepEqual(obs(), rec.getData(), 'observable has correct data');
+         }
+      });
+   });
+
+   asyncTest('observableArray: modifying it propagates changes', function() {
+      expect(1);
+      var recs = TestData.recs(20), obs = ko.observable();
+      syncActivity({
+         recs: recs,
+         target: obs,
+         fx: function(sync, list, model, target) {
+
+         },
+         results: function(storeEvents, listEvents) {
+
+         }
+      })
    });
 
    asyncTest('observableArray: change on server propagates down', function() {
+      start(); //todo-test
+   });
+
+   asyncTest('observableArray: change on RecList propagates down', function() {
       start(); //todo-test
    });
 
@@ -436,8 +501,6 @@
           list        = new RecordList(model, conf.recs),
           target      = conf.target? conf.target : (conf.rec? ko.observable() : ko.observableArray()),
           sync        = new ko.sync.SyncController(model, target, conf.rec? conf.rec: list);
-
-      console.log('model.auto', model.auto, conf);//debug
 
       if( conf.rec ) {
          conf.rec.subscribe(_monitorList);

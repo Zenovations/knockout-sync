@@ -1,4 +1,4 @@
-/*! Knockout Sync - v0.1.0 - 2012-11-20
+/*! Knockout Sync - v0.1.0 - 2012-11-21
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL */
 
@@ -1412,6 +1412,63 @@
       model.sync(target, criteria);
    };
 
+   /**
+    *
+    * @param {ko.sync.KeyFactory} keyFactory (see SyncController)
+    * @param callbacks
+    */
+   ko.observableArray.fn.subscribeRecChanges = function(keyFactory, callbacks) {
+      var previousValue = undefined, delayed = {}, deleteFx =  _.bind(callbacks.delete, callbacks);
+      this.subscribe(function(_previousValue) {
+         previousValue = _previousValue.slice(0);
+      }, undefined, 'beforeChange');
+      this.subscribe(function(latestValue) {
+         var diff = ko.utils.compareArrays(previousValue, latestValue);
+         var prevDelayed = delayed;
+         _.invoke(prevDelayed, 'clearTimeout');
+         delayed = {};
+         for (var i = 0, j = diff.length; i < j; i++) {
+            var data = diff[i].value, key = keyFactory.make(data);
+            switch (diff[i].status) {
+               case "retained":
+                  break; //todo check for moves and/or data changes?
+               case "deleted":
+                  if( key ) { delayed[key] = deferDelete(key, delayed, deleteFx); }
+                  break;
+               case "added":
+                  if( key && key in prevDelayed ) {
+                     delete prevDelayed[data];
+                     callbacks.move(key, data, prevVal(keyFactory, data, latestValue));
+                  }
+                  else {
+                     callbacks.add(key, data, prevVal(keyFactory, data, latestValue));
+                  }
+                  break;
+            }
+         }
+         _.each(prevDelayed, function(v, k) { callbacks.delete(k); });
+         previousValue = undefined;
+      });
+   };
+
+   function prevVal(keyBuilder, val, list) {
+      var i = _.indexOf(val);
+      if( i === -1 || i === list.length-1 ) { return null; }
+      else if( i === 0 ) { return 0; }
+      else {
+         return keyBuilder.make(list[i-1]);
+      }
+   }
+
+   function deferDelete(key, delayed, deleteCallback) {
+      return setTimeout(function() {
+         if(key in delayed) {
+            delete delayed[key];
+            deleteCallback(key);
+         }
+      }, 25);
+   }
+
    //todo-feature: ko.sync.remote to perform operations remotely without having to download records first? example: ko.sync.remote.delete( model, 'recordXYZ' );
 
    ko.sync || (ko.sync = {});
@@ -1419,7 +1476,6 @@
    ko.sync.validators || (ko.sync.validators = []);
 
    ko.sync.isObservableArray = function(o) {
-      console.log(ko.isObservable);
       return typeof(o) === 'function' && ko.isObservable(o) && _.isArray(o());
    };
 
@@ -1864,6 +1920,7 @@
          this.type      = model.table;
          this.validator = model.validator;
          this.listeners = [];
+         this.keyCallbacks = [];
          _watchObservables(this);
       },
       getRecordId:     function() {
@@ -1892,6 +1949,7 @@
          if( !this.hasKey() ) {
             this.id.update(hashKey);
             applyUpdates(this, this.id.parse(hashKey));
+            if( this.id.isSet() ) { applyKeyCallbacks(this); }
          }
          return this;
       },
@@ -1902,10 +1960,16 @@
        */
       setKey: function( newKey ) {
          this.id = newKey;
-         newKey.isSet() && this.updateAll(newKey.parse());
+         if( newKey.isSet() ) {
+            this.updateAll(newKey.parse());
+            applyKeyCallbacks(this);
+         }
+
       },
-      getData:         function() {
-         return _unwrapAll(this.observed, this.data);
+      getData:         function(withTempId) {
+         var data = _unwrapAll(this.observed, this.data);
+         withTempId && !this.hasKey() && (data[ko.sync.Record.TMPID_FIELD] = this.hashKey());
+         return data;
       },
       get:             function(field) {
          if(_.isArray(field)) {
@@ -1962,8 +2026,23 @@
                if( idx > -1 ) { listeners.splice(idx, 1); }
             }
          };
+      },
+      /**
+       * Waits for record to receive a permanent ID from the server and calls callback(hashKey, idFields, idData).
+       * If this record already has an ID, this will be invoked immediately.
+       * @param callback
+       */
+      onKey: function(callback) {
+         if( this.hasKey() ) {
+            dataKeyCallback(callback, this);
+         }
+         else {
+            this.keyCallbacks.push(callback);
+         }
       }
    });
+
+   ko.sync.Record.TEMPID_FIELD = '_tmpId';
 
    function _setFields(fields, data) {
       //todo validate the data before applying it
@@ -2131,6 +2210,19 @@
       return res;
    }
 
+   function applyKeyCallbacks(rec) {
+      _.each(rec.keyCallbacks, function(fx) {
+         dataKeyCallback(fx, rec);
+      });
+      rec.keyCallbacks = [];
+   }
+
+   function dataKeyCallback(callback, rec) {
+      var fields = rec.id.fields;
+      var data = _unwrapAll(rec.observed, _.pick(rec.data, fields));
+      callback(rec.hashKey(), fields, data);
+   }
+
 })(ko);
 
 /*******************************************
@@ -2255,6 +2347,17 @@
       return v !== null && v !== undefined;
    }
 
+   function KeyFactory(model, tmpField) {
+      this.model = model;
+      this.tmpField = tmpField === true? ko.sync.Record.TEMPID_FIELD : tmpField;
+   }
+   KeyFactory.prototype.make = function(data) {
+      var id = ko.sync.RecordId.for(this.model, data);
+      return id.isSet()? id.hashKey() : (this.tmpField? data[this.tmpField] : null);
+   };
+
+   ko.sync.KeyFactory = KeyFactory;
+
 })(ko);
 
 
@@ -2277,12 +2380,8 @@
    ko.sync.RecordList = function(model, records) {
       this.model     = model;
       this.byKey     = {};   // a list of all keys in this list for quick reference, deleted records are included here until checkpoint() is called
-      this.cache     = {};   // a partial list of keys to indices to speed up retrieval
       this.listeners = [];   // a list of subscribers to events in this list
       this.subs      = [];   // a list of records to which this list has subscribed
-      this.delayed   = {};
-      this.records   = {};   // where we store the Record objects
-      this.obsSub    = null; // a subscription to the observableArray (added by _sync, used by ko.sync.RecordList::dispose)
       this.sorted    = [];
       this.checkpoint();     // refresh our changelists (added/changed/moved/deleted records)
       // create an observableArray and load our records into it
@@ -2297,20 +2396,11 @@
 
    /**
     * Clear any current change lists (added/updated/moved/deleted records) and begin tracking fresh from this point.
-    * @param {boolean} [purge] when set to true, the observed list is emptied of all values (no updates are sent and no events generated)
     * @return {ko.sync.RecordList} this
     */
-   ko.sync.RecordList.prototype.checkpoint = function(purge) {
-      this.changed = {};
-      this.added   = {};
-      this.deleted = {};
-      this.moved   = {};
+   ko.sync.RecordList.prototype.checkpoint = function() {
+      this.changes = { added: {}, updated: {}, moved: {}, deleted: {} };
       this.numChanges = 0;
-      if( purge ) {
-         this.dispose();
-         this.byKey = {};
-         //_sync(this);
-      }
       return this;
    };
 
@@ -2361,7 +2451,7 @@
          var key = record.hashKey();
          if( !(key in this.byKey) ) {
             record.isDirty(true);
-            this.added[key] = record;
+            this.changes.added[key] = record;
             this.numChanges++;
             this.load(record, afterRecordId, true);
          }
@@ -2391,13 +2481,13 @@
    ko.sync.RecordList.prototype.move = function(recordOrId, afterRecordIdOrIndex) {
       var key = getHashKey(recordOrId);
       var record = _findRecord(this, key, true);
-      if( key in this.byKey && !(key in this.deleted) ) {
+      if( key in this.byKey && !(key in this.changes.deleted) ) {
          var newLoc = _findInsertPosition(this, record, afterRecordIdOrIndex); // the exact index this element should be placed at
          var currentLoc = _recordIndex(this, record);
          if( currentLoc !== newLoc ) { // if these are equal, we've already recorded the move or it's superfluous
             // store in changelist
-            if( !(key in this.added) && !(key in this.changed) ) {
-               this.moved[key] = record;
+            if( !(key in this.changes.added) && !(key in this.changes.updated) ) {
+               this.changes.moved[key] = record;
             }
             this.numChanges++;
 
@@ -2495,7 +2585,7 @@
          if( record ) {
             var key = record.hashKey();
 
-            if( !(key in this.deleted) && !(key in this.delayed) ) {
+            if( !(key in this.changes.deleted) ) {
                // remove the record locally and mark it in our changelists
                takeOut(this, record);
             }
@@ -2518,10 +2608,10 @@
       if( record.isDirty() ) {
          var hashKey = record.hashKey();
          if( _recordIndex(this, hashKey) >= 0 ) { //todo-perf we could skip this check and just assume; do the checking at save time
-            if( !(hashKey in this.added) ) {
+            if( !(hashKey in this.changes.added) ) {
                // if the record is already marked as newly added, don't mark it as updated and lose that status
-               this.changed[hashKey] = record;
-               delete this.moved[hashKey];
+               this.changes.updated[hashKey] = record;
+               delete this.changes.moved[hashKey];
                this.numChanges++;
             }
             //todo differentiate between moves and updates?
@@ -2535,8 +2625,8 @@
    };
 
    ko.sync.RecordList.prototype.clearEvent = function(action, hashKey) {
-      if( action in {added: 1, deleted: 1, moved: 1, changed: 1} && hashKey in this[action] ) {
-         delete this[action][hashKey];
+      if( action in {added: 1, deleted: 1, moved: 1, updated: 1} && hashKey in this.changes[action] ) {
+         delete this.changes[action][hashKey];
          this.numChanges--;
       }
       return this;
@@ -2555,21 +2645,19 @@
    };
 
    ko.sync.RecordList.prototype.dispose = function() {
-      var i = this.subs.length;
-      while(i--) {
-         this.subs[i].dispose();
-      }
-      this.obsSub && this.obsSub.dispose();
+      this.checkpoint();
+      _.each(this.subs, function(s) { s.dispose(); });
+      this.model = null;
+      this.byKey = {};
+      this.listeners = [];
       this.subs = [];
-      this.obsSub = null;
       return this;
    };
 
    ko.sync.RecordList.prototype.changeList = function() {
       var out = [];
       _.each(['added', 'moved', 'updated', 'deleted'], function(action) {
-         var key = action === 'updated'? 'changed' : action;
-         _.each(this[key], function(rec) {
+         _.each(this.changes[action], function(rec) {
             out.push([action, rec]);
          });
       }.bind(this));
@@ -2589,6 +2677,9 @@
       return list.find(list.sorted[i]);
    };
 
+   ko.sync.RecordList.getPos = function(list, key) {
+      return _.indexOf(list.sorted, key);
+   };
 
    ko.sync.RecordList.Iterator = function(list) {
       this.curr = -1;
@@ -2613,13 +2704,13 @@
       record.isDirty(true);
 
       // mark it deleted
-      recList.deleted[key] = record;
+      recList.changes.deleted[key] = record;
       recList.numChanges++;
 
       // if rec is removed, that supersedes added/updated/moved status
-      delete recList.added[key];
-      delete recList.changed[key];
-      delete recList.moved[key];
+      delete recList.changes.added[key];
+      delete recList.changes.updated[key];
+      delete recList.changes.moved[key];
 
       //delete recList.byKey[key]; (deleted after checkpoint is called)
 
@@ -2760,7 +2851,7 @@
 
    function _findRecord(list, recOrIdOrHash, withholdDeleted) {
       var hashKey = getHashKey(recOrIdOrHash);
-      if( hashKey in list.byKey && (!withholdDeleted || !(hashKey in list.deleted)) ) { return list.byKey[hashKey]; }
+      if( hashKey in list.byKey && (!withholdDeleted || !(hashKey in list.changes.deleted)) ) { return list.byKey[hashKey]; }
       return null;
    }
 
@@ -2797,6 +2888,8 @@
     */
    ko.sync.Store = Class.extend({
       init: function(properties) { throw new Error('Interface not implemented'); },
+
+      //todo change all the promise callbacks to reject on failure? at the very least have them return success first and id second
 
       /**
        * Create a record in the database.
@@ -2844,7 +2937,7 @@
        *
        * @param {ko.sync.Model}           model
        * @param {ko.sync.Record|ko.sync.RecordId} recOrId
-       * @return {Promise} resolves with record's {string}id
+       * @return {Promise} resolves to callback({string}id, {boolean)success, rejected if record does not exist
        */
       delete: function(model, recOrId) { throw new Error('Interface not implemented'); },
 
@@ -2981,381 +3074,6 @@
     * if the model.store property is changed this will not be updated and a new SyncController is needed; if the
     * model.auto property is toggled then a new SyncController will be needed.
     */
-   ko.sync.SyncControllerOld = Class.extend({
-
-      /**
-       * Establish and handle client-to-server and server-to-client updates. If the model/store only supports
-       * one-way updates, then we use those. This will also trigger automatic pushes to the server when auto-sync
-       * is true.
-       *
-       * @param {ko.sync.Model} model
-       * @param {Object|ko.observable|ko.observableArray} target if listOrRecord is a RecordList this must be an observableArray
-       * @param {ko.sync.RecordList|ko.sync.Record} listOrRecord
-       * @param {object} [criteria] used with lists to specify the filter parameters used by server and to load initial data
-       * @constructor
-       */
-      init: function(model, target, listOrRecord, criteria) {
-         this.model = model;
-         this.subs = [];
-         var next = $.Deferred(function(def) { def.resolve(); });
-         syncData(model, target, listOrRecord, this.subs);
-         syncPush(model, listOrRecord, this.subs, next);
-         syncPull(model, listOrRecord, this.subs, next, criteria);
-      },
-
-      /**
-       * @return {ko.sync.SyncController} this
-       */
-      dispose: function() {
-         var i = this.subs.length;
-         while (i--) {
-            this.subs[i].dispose();
-         }
-         this.subs = [];
-         return this;
-      },
-
-      /**
-       * Force updates (for use when auto-sync is off). It is safe to call this on unchanged records or empty lists
-       *
-       * @param {Array|ko.sync.Record} listOrRecord
-       * @param {string} [action]  added, updated, moved, or deleted
-       * @return {Promise} fulfilled when all updates are marked completed by the server
-       */
-      pushUpdates: function(listOrRecord, action) {
-         //todo make this work if a RecordList is passed in
-         //todo this method signature is wrong; we should be checking the list/record we received in init rather
-         //todo than operating on any list we see come through
-         //todo if this is an observableArray, then call checkpoint()!
-         if(_.isArray(listOrRecord) ) {
-            var promises = [];
-            _.each(listOrRecord, function(v) {
-               promises.push(this.pushUpdates(v, action));
-            }, this);
-            return $.when(promises);
-         }
-         else if( listOrRecord.isDirty() ) {
-            return pushUpdate(_updateAction(listOrRecord, action), this.model, listOrRecord);
-         }
-         else {
-            return $.Deferred().resolve(false);
-         }
-      }
-   });
-
-   function syncPush(model, listOrRecord, subs, next) {
-      if (model.auto) {
-         // sync client to server (push) updates
-         if (listOrRecord instanceof ko.sync.RecordList) {
-            subs.push(syncListPush(model, listOrRecord));
-         }
-         else {
-            //todo this is not enough; existence of a key doesn't ensure record exists on the server
-            if (!listOrRecord.hasKey()) {
-               next.pipe(function () {
-                  // record is new, must be created on server
-                  return model.store.create(model, listOrRecord).then(function (id) {
-                     listOrRecord.updateHashKey(id);
-                     //todo target
-                  }).then(thenClearDirty(listOrRecord));
-               });
-            }
-            next.then(function () {
-               subs.push(syncRecordPush(model, listOrRecord));
-            });
-         }
-      }
-   }
-
-   function syncPull(model, listOrRecord, subs, next, criteria) {
-      if( model.store.hasTwoWaySync(model) ) {
-         // sync server to client (pull) updates
-         // monitor the client (using the libs)
-         if( listOrRecord instanceof ko.sync.RecordList ) {
-            subs.push(syncListPull(model, listOrRecord, criteria));
-         }
-         else {
-            //todo this is not enough, existence of a key doesn't ensure the record exists on the server
-            if( listOrRecord.hasKey() ) {
-               subs.push(syncRecordPull(model, listOrRecord));
-            }
-            else {
-               next.then(function() {
-                  // if the record must be created, wait before trying to sync for updates
-                  subs.push(syncRecordPush(model, listOrRecord));
-               });
-            }
-         }
-      }
-   }
-
-   function syncListPush(model, list) {
-      list.subscribe(function(action, record, field) {
-         return pushUpdate(action, list.model, record);
-      });
-   }
-
-   function syncListPull(model, list, criteria) {
-      model.store.watch(model, function(action, name, value, prevSibling) {
-         var rec = list.find(name) || model.newRecord(value);
-         switch(action) {
-            case 'added':
-               list.add(rec, prevSibling || 0);
-               break;
-            case 'deleted':
-               var key = rec.hasKey() && rec.hashKey();
-               key && !(key in list.deleted) && !(key in list.delayed) && list.remove(rec);
-               break;
-            case 'updated':
-               //todo this doesn't deal with conflicts (update on server and client at same time)
-               rec.updateAll(value);
-               break;
-            case 'moved':
-               list.move(rec, prevSibling || 0);
-               break;
-            default:
-               typeof(console) === 'object' && console.error && console.error('invalid action', _.toArray(arguments));
-         }
-         rec.isDirty(false); // record now matches server
-      }, criteria);
-   }
-
-   function syncRecordPush(model, rec) {
-      var store = model.store;
-      return rec.subscribe(function(record, fieldChanged) {
-         store.update(model, record).then(thenClearDirty(record));
-      });
-   }
-
-   function pushUpdate(action, model, rec) {
-      var def, store = model.store;
-      //todo pull updates from the observable before taking an action? make sure our data is synced?
-      switch(action) {
-         case 'added':
-            def = store.create(model, rec).then(function(id) {
-               rec.updateHashKey(id);
-            });
-            break;
-         case 'updated':
-            def = store.update(model, rec);
-            break;
-         case 'deleted':
-            def = store.delete(model, rec);
-            break;
-         case 'moved':
-            //todo-sort does this work? how do we get "moved" notifications?
-            def = store.update(model, rec);
-            break;
-         default:
-            def = $.Deferred().reject('invalid action: '+action);
-            typeof(console) === 'object' && console.error && console.error('invalid action', _.toArray(arguments));
-      }
-      return def.then(thenClearDirty(rec));
-   }
-
-   function syncRecordPull(model, rec) {
-      return model.store.watchRecord(model, rec, function(id, val, sortPriority) {
-         //todo this doesn't deal with conflicts (update on server and client at same time)
-         //todo-sort this ignores sortPriority, which is presably in the data, but should we rely on that?
-         rec.updateAll(val);
-         rec.isDirty(false); // record now matches server
-      });
-   }
-
-   function thenClearDirty(rec) {
-      return function(success) {
-         success !== false && rec.isDirty(false);
-      }
-   }
-
-   function _updateAction(rec, action) {
-      if( action ) { return action; }
-      else if( rec.hasKey() ) {
-         return 'updated';
-      }
-      else {
-         return 'created';
-      }
-   }
-
-   function syncData(model, target, listOrRecord, subs, next) {
-      if( listOrRecord instanceof ko.sync.RecordList && !ko.sync.isObservableArray(target) ) {
-         throw new Error('RecordList only works with ko.observableArray instances '+target+', '+listOrRecord);
-      }
-      else {
-         subs.push(new DataSync(target, listOrRecord));
-      }
-   }
-
-   function DataSync(target, listOrRec) {
-      this.isList        = listOrRec instanceof ko.sync.RecordList;
-      this.observed      = ko.isObservable(target);
-      this.target        = target;
-      this.subs          = [];
-      this.sharedContext = { delayed: {}, pushing: {}, pulling: {} };
-
-      //todo we need a way to detect changes in observable[Array] element's fields which are not themselves observable
-      //todo some way to check for updates to make sure everything is synced before we send data to server
-      //todo or do we? maybe that's the implementation's job; if they don't bother to make them observable then it's
-      //todo their job to let us know when they change?
-
-      if( this.isList ) {
-         target.removeAll();
-         var it = listOrRec.iterator();
-         while(it.hasNext()) {
-            var rec = it.next();
-            target.push(rec.getData());
-         }
-         this.subs.push(_watchObsArray(listOrRec, target, this.sharedContext));
-         this.subs.push(_watchRecList(listOrRec, target, this.sharedContext));
-      }
-      else if( this.observed ) {
-         //todo
-         //todo
-         //todo
-      }
-      else {
-         target.data = target.data || {};
-         //todo
-         //todo
-         //todo
-      }
-   }
-
-   DataSync.prototype.dispose = function() {
-      _.each(this.subs, function(sub) { sub.dispose(); });
-      this.subs   = [];
-      this.target = null;
-   };
-
-   function _watchRecList(recList, obsArray, sharedContext) {
-      return recList.subscribe(function(action, record, meta) {
-         switch(action) {
-            case 'added':
-               //todo
-               //todo
-               //todo
-               break;
-            case 'updated':
-               //todo
-               //todo
-               //todo
-               break;
-            case 'moved':
-               //todo
-               //todo
-               //todo
-               break;
-            case 'deleted':
-               //todo
-               //todo
-               //todo
-               break;
-            default:
-               throw new Error('unrecognized notification type: '+action);
-         }
-      });
-   }
-
-   function _watchObsArray(recList, obsArray, sharedContext) {
-      return obsArray.subscribe(function(obsValue) {
-         // diff the last version with this one and see what changed; we only have to look for deletions and additions
-         // since all of our local changes will change byKey before modifying the observable array, feedback loops
-         // are prevented here because anything already marked as added/deleted can be considered a prior change
-         var existingRecords = recList.byKey;
-         var alreadyDeleted  = recList.deleted;
-         var currentData     = buildKeysForDataList(obsValue);
-
-         // look for added keys
-         _.each(currentData, function(key, i) {
-            var v, prevId = _findPrevId(existingRecords, alreadyDeleted, currentData.keys, i);
-            if( !_.has(existingRecords, key) ) {
-               //todo create in recList
-               //todo
-               //todo
-               //todo
-            }
-            else if(_.has(recList.delayed, key)) {
-               //todo move in recList
-               //todo clear delays
-               //todo should this just be an add and let recList take care of the move/timeout etc?
-               //todo should recList.delayed be moved here? probably
-            }
-         });
-
-         // look for deleted keys by seeing what our existing keys are are not already deleted and
-         // do not appear in the new keyedValues list
-         _.chain(existingRecords).keys().difference(_.keys(alreadyDeleted)).difference(currentData.keys).each(function(key) {
-            recList.delayed[key] = setTimeout(function() {
-               // it's in the old values and not marked as deleted, and not in the new values
-               //todo remove from recList
-               //todo
-               //todo
-               //todo
-            }, 0);
-         });
-      });
-   }
-
-   /**
-    * Only intended for use in _sync()
-    * @private
-    */
-   function _findPrevId(existingRecords, deletedKeys, newKeys, idx) {
-      if( idx === 0 ) { return 0; }
-      else if( idx < newKeys.length - 1 ) {
-         var i = idx, key;
-         while(i--) {
-            key = newKeys[i];
-            if( key in existingRecords && !key in deletedKeys ) {
-               return key;
-            }
-         }
-         return undef;
-      }
-      else {
-         return undef;
-      }
-   }
-
-   /**
-    * Only intended for use in _sync
-    */
-   function buildKeysForDataList(model, obsValues) {
-      var keys = [], data = {};
-      _.each(obsValues, function(data) {
-         var key = ko.sync.RecordId.for(model, data).hashKey();
-         keys.push(key);
-         data[key] = data;
-      });
-      return { keys: keys, data: data };
-   }
-
-})(jQuery);
-
-
-
-
-/***********************************************
- * SyncController connects RecordList to a Store
- **********************************************/
-(function($) {
-   "use strict";
-   var undef;
-
-   /**
-    * Establish and handle updates between a Store and a RecordList. If the model/store only supports
-    * one-way updates, then we use those. This will also trigger automatic pushes to the server when auto-sync
-    * is true. When auto-sync is false, then updates are pushed by calling pushUpdates().
-    *
-    * It is expected that by the time this class is called, that the data has been loaded and the object is ready
-    * to be placed into a two-way sync state. Any time a record is reloaded or a list is reloaded with new data or
-    * criteria, this object should probably be disposed and replaced.
-    *
-    * Additionally, changes to the story are not detected and a new SyncController must be established. For example:
-    * if the model.store property is changed this will not be updated and a new SyncController is needed; if the
-    * model.auto property is toggled then a new SyncController will be needed.
-    */
    ko.sync.SyncController = Class.extend({
 
       /**
@@ -3371,29 +3089,32 @@
        */
       init: function(model, target, listOrRecord, criteria) {
          reset(this);
-         this.model     = model;
-         this.isList    = listOrRecord instanceof ko.sync.RecordList;
-         this.observed  = ko.isObservable(target);
-         this.twoway    = model.store.hasTwoWaySync();
+         this.model      = model;
+         this.isList     = listOrRecord instanceof ko.sync.RecordList;
+         this.observed   = ko.isObservable(target);
+         this.twoway     = model.store.hasTwoWaySync();
+         this.running    = null; //used by pushUpdates
+         this.queued     = null; //used by pushUpdates
+
+         this.sharedContext.keyFactory = new ko.sync.KeyFactory(model, true);
 
          if( this.isList && !ko.sync.isObservableArray(target) ) {
             throw new Error('When syncing a RecordList, the target must be a ko.observableArray');
          }
 
-         !this.observed && !target.data && (target.data = {});
-
          if( this.isList ) {
+            syncObsArray(target, listOrRecord);
             this.list = listOrRecord;
             this.twoway && this.subs.push(_watchStoreList(this, listOrRecord, target, criteria));
             this.subs.push(_watchRecordList(this, listOrRecord, target));
             this.subs.push(_watchObsArray(this, target, listOrRecord));
          }
          else {
-            console.log('with rec', listOrRecord);//debug
             this.rec = listOrRecord;
+            syncData(target, this.rec);
             this.twoway && this.subs.push(_watchStoreRecord(this, listOrRecord, target));
             this.subs.push(_watchRecord(this, listOrRecord, target));
-            this.subs.push(_watchObs(this, target, listOrRecord));
+            this.observed && this.subs.push(_watchObs(this, target, listOrRecord));
          }
       },
 
@@ -3407,16 +3128,34 @@
 
       /**
        * Force updates (for use when auto-sync is off). It is safe to call this on unchanged records or empty lists
-       * @return {Promise} fulfilled when all updates are marked completed by the server
+       *
+       * This works off a queue. At most, there is one update running and one queued to run in the near future. Multiple
+       * requests will simple receive the promise for the already queued run. The reason for this approach is that
+       * you can't depend on one that is already running to handle anything that it received after starting, but
+       * everything received before the queued update runs can go as a batch, so any number of calls to pushUpdates
+       * may be lumped together in this way.
+       *
+       * @return {jQuery.Deferred} fulfilled when all updates are marked completed by the server
        */
       pushUpdates: function() {
-         if( this.isList ) {
-            var list = this.list;
-            return pushAll(list, this.model, this.sharedContext).then(function() { list.checkpoint(); });
+         var def;
+         if( this.running ) {
+            // since our running copy might have missed updates before this was invoked, we'll queue another
+            // (which hurts nothing if there are no changes; nothing gets sent)
+            if( !this.queued ) { // but we never need to queue multiples, the next run will get everything outstanding
+               this.queued = queueUpdateAll(this, this.running).progress(function(def) {
+//                  console.log('starting queued instance');
+               })
+            }
+            def = this.queued;
          }
          else {
-            this.rec.isDirty() && pushNextUpdate(this.model, this.sharedContext, this.rec);
+            def = this.running = runUpdateAll(this.model, this.sharedContext, this.list, this.rec).always(function() {
+               this.running = this.queued? this.queued : null;
+               this.queued = null;
+            }.bind(this));
          }
+         return def.promise();
       }
    });
 
@@ -3431,7 +3170,7 @@
                   break;
                case 'deleted':
                   var key = rec.hasKey() && rec.hashKey();
-                  key && !(key in list.deleted) && !(key in list.delayed) && list.remove(rec);
+                  key && !(key in list.changes.deleted) && list.remove(rec);
                   break;
                case 'updated':
                   rec.updateAll(value);
@@ -3440,7 +3179,7 @@
                   list.move(rec, prevSibling || 0);
                   break;
                default:
-                  typeof(console) === 'object' && console.error && console.error('invalid action', _.toArray(arguments));
+                  console.error('invalid action', _.toArray(arguments));
             }
             rec.isDirty(false); // record now matches server
          }), criteria);
@@ -3448,7 +3187,13 @@
 
    function _watchStoreRecord(c, rec, target) {
       var model = c.model, ctx = c.sharedContext;
-      return model.store.watchRecord(model, rec, nextEventHandler(ctx, 'push', idCallback(0), function(id, val, sortPriority) {
+
+      if( !rec.hasKey() ) {
+         // create the record if we are using auto-sync and it doesn't exist
+         pushNextUpdate(model, ctx, rec, 'added');
+      }
+
+      return model.store.watchRecord(model, rec, nextEventHandler(ctx, 'pull', idCallback(0), function(id, val, sortPriority) {
          //todo this doesn't deal with conflicts (update on server and client at same time)
          //todo-sort this ignores sortPriority, which is presumably in the data, but should we rely on that?
          rec.updateAll(val);
@@ -3456,70 +3201,88 @@
       }));
    }
 
-   function _watchRecordList(c, list, target) {
+   function _watchRecordList(sync, list, target) {
       return list.subscribe(function(action, rec, meta) {
-         var ctx = c.sharedContext;
+         var ctx = sync.sharedContext;
          var id = rec.hashKey();
+         var dataSyncOpts = {sync: sync, target: target, list: list, action: action, rec: rec, prevId: meta, data: meta};
          switch(ctx.status[id]) {
             case 'push':
                // a push is in progress, send to server
-               if( c.model.auto ) { c.pushUpdates().always(thenClearStatus(ctx, id)); }
+               if( sync.model.auto ) { sync.pushUpdates().always(thenClearStatus(ctx, id)); }
                break;
             case 'pull':
                // a pull is in progress, send to data
-               syncToData(c, target, action, rec, meta);
+               syncToData(dataSyncOpts);
                break;
             default:
                // rec/list modified externally (goes both ways)
                nextEvent(ctx, 'pull', id, function() { // apply it to the data
-                  syncToData(c, target, action, rec, meta);
+                  syncToData(dataSyncOpts);
                });
-               c.model.auto && nextEvent(ctx, 'push', id, function() { // apply it to the server
-                  return c.pushUpdates();
+               sync.model.auto && nextEvent(ctx, 'push', id, function() { // apply it to the server
+                  return sync.pushUpdates();
                });
          }
       });
    }
 
-   function _watchRecord(c, rec, target) {
+   function _watchRecord(sync, rec, target) {
       return rec.subscribe(function(record, fieldsChanged) {
-         var model = c.model;
+         var model = sync.model;
          var id = record.hashKey();
-         var ctx = c.sharedContext;
-
-         !_.isArray(fieldsChanged) && (fieldsChanged = [fieldsChanged]);
-
+         var ctx = sync.sharedContext;
+         var dataSyncOpts = {sync: sync, target: target, action: 'updated', rec: record, fields: fieldsChanged};
          switch(ctx.status[id]) {
             case 'push':
                model.auto && pushUpdate(model, 'updated', record);
                break;
             case 'pull':
-               syncToData(ctx, target, 'updated', record, fieldsChanged);
+               syncToData(dataSyncOpts);
                break;
             default:
+               nextEvent(ctx, 'pull', id, function() {
+                  syncToData(dataSyncOpts)
+               });
                model.auto && pushNextUpdate(model, ctx, record);
-               nextEvent(ctx, 'pull', id, function() { syncToData(ctx, target, 'updated', record, fieldsChanged) });
                break;
          }
       });
    }
 
-   function _watchObsArray(c, obs, list) {
-      //todo use ko.utils.compareArrays
-      //todo http://stackoverflow.com/questions/12166982/determine-which-element-was-added-or-removed-with-a-knockoutjs-observablearray
-      //todo http://jsfiddle.net/mbest/Jq3ru/
-      //todo
-      //todo
-      //todo
-      //todo update c.sharedContext.cachedKeys
+   function _watchObsArray(sync, obs, list) {
+      var ctx = sync.sharedContext;
+      //credits: http://stackoverflow.com/questions/12166982/determine-which-element-was-added-or-removed-with-a-knockoutjs-observablearray
+      obs.subscribeRecChanges(ctx.keyFactory, {  // defined in knockout-sync.js!
+         add: function(key, data, prevKey) {
+            nextEventIf(ctx, 'push', key, function() {
+               list.add(sync.model.newRecord(data), prevKey);
+            });
+         },
+         delete: function(key) {
+            nextEventIf(ctx, 'push', key, function() {
+               list.remove(key);
+            });
+         },
+         move: function(key, data, prevKey) {
+            nextEventIf(ctx, 'push', key, function() {
+               var rec = list.get(key);
+               if( rec ) {
+                  //rec.updateAll(data); //todo-sort ???
+                  list.move(key, prevKey);
+               }
+            });
+         }
+      })
    }
 
    function _watchObs(c, obs, rec) {
-      //todo
-      //todo
-      //todo
-      //todo
-      //todo
+      var ctx = c.sharedContext;
+      obs.subscribe(function(newValue) {
+         nextEvent(ctx, 'push', rec.hashKey(), function() {
+            rec.updateAll(newValue);
+         });
+      });
    }
 
    function pushUpdate(model, action, rec) {
@@ -3542,32 +3305,54 @@
             break;
          default:
             def = $.Deferred().reject('invalid action: '+action);
-            typeof(console) === 'object' && console.error && console.error('invalid action', _.toArray(arguments));
+            console.error('invalid action', _.toArray(arguments));
       }
       return def.then(thenClearDirty(rec));
    }
 
-   function syncToData(c, target, action, rec, meta) {
-      var model = c.model;
+   function syncToData(opts) {
+      var pos, len;
+
+      /** @type {ko.sync.SyncController} */
+      var sync  = opts.sync;
+      /** @type {ko.sync.Model} */
+      var model = sync.model;
+      /** @type {ko.sync.Record} */
+      var rec   = opts.rec;
+      /** @type {String} */
       var id    = rec.hashKey();
-      switch(action) {
+      var ctx = sync.sharedContext;
+      var target = opts.target;
+
+      switch(opts.action) {
          case 'added':
-            //todo
-            //todo
-            //todo
-            //todo
+            pos = positionForRecord(ctx, target, rec, opts.prevId);
+            if( pos < 0 ) {
+               target.push(rec.getData(true));
+            }
+            else {
+               target.splice(pos, 0, rec.getData(true));
+            }
+            if( !rec.hasKey() ) {
+               rec.onKey(function(newKey, fields, data) {
+                  nextEvent(ctx, 'pull', newKey, function() {
+                     syncData(opts.target, opts.rec, fields)
+                  })
+               });
+            }
             break;
          case 'updated':
-            var fields = _.isArray(meta)? meta : (meta? [meta] : []);
-            var data = getDataFromObsArray(c.sharedContext, target, model, id);
-            data && fields.length && _.each(_.pick(rec.getData(), fields), function(v, k) {
-               ko.isObservable(data[k])? data[k]( rec.get(k) ) : data[k] = rec.get(k);
-            });
+            var fields = _.isArray(opts.fields)? opts.fields : (opts.fields? [opts.fields] : []);
+            if( fields.length ) {
+               syncData(_findSourceData(sync, target, id), rec, fields);
+               //todo? this only affects unobserved fields which technically shouldn't change?
+               //todo-sort
+               //if(sync.isList) { opts.target.notifySubscribers(opts.target()); }
+            }
             break;
          case 'deleted':
-            //todo
-            //todo
-            //todo
+            pos = ko.sync.RecordList.getPos(opts.list, id);
+
             break;
          case 'moved':
             //todo-sort does this work? how do we get "moved" notifications?
@@ -3576,12 +3361,56 @@
             //todo
             break;
          default:
-            throw new Error('invalid action: '+action);
+            throw new Error('invalid action: '+opts.action);
+      }
+   }
+
+   function placeRecord(ctx, obsArray, rec, prevId) {
+
+   }
+
+   function positionForRecord(ctx, obsArray, rec, prevId) {
+      //todo this is probably duplicated in RecordList somewhere, should think about abstracting
+      var len = obsArray().length;
+      var newLoc = -1;
+      var oldLoc = findRecordPosition(rec.hashKey());
+
+      prevId instanceof ko.sync.RecordId && (prevId = prevId.hashKey());
+      if( typeof(prevId) === 'string' ) {
+         newLoc = findRecordPosition(ctx, obsArray, prevId);
+         if( newLoc > -1 && oldLoc > -1 && newLoc < oldLoc ) {
+            newLoc++;
+         }
+      }
+      else if( typeof(prevId) === 'number' ) {
+         newLoc = prevId < 0? len - prevId : prevId;
+      }
+
+      return newLoc;
+   }
+
+   function findRecordPosition(ctx, obsArray, key) {
+      if( !ctx.cachedKeys || !ctx.cachedKeys[key] ) {
+         cacheKeysForObsArray(ctx.keyFactory, ctx, obsArray);
+      }
+      return key in ctx.cachedKeys? ctx.cachedKeys[key] : -1;
+   }
+
+   function _findSourceData(sync, target, id) {
+      if( sync.isList ) {
+         return target()[ findRecordPosition(sync.sharedContext, target, id) ];
+      }
+      else if( sync.observed ) {
+         return target;
+      }
+      else {
+         return target.data;
       }
    }
 
    function pushNextUpdate(model, ctx, rec, action) {
       return nextEvent(ctx, 'push', rec.hashKey(), function() {
+         action || (action = rec.hasKey()? 'updated' : 'added');
          return pushUpdate(model, action||'updated', rec);
       }.bind(this));
    }
@@ -3589,13 +3418,17 @@
    function nextEventHandler(ctx, pushOrPull, idAccessor, fx) {
       return function() {
          var args = _.toArray(arguments);
-         console.log('nextEventHandler', args);//debug
          var id   = unwrapId(idAccessor, args);
 
          if( !(id in ctx.status) ) { // avoid feedback loops by making sure an event isn't in progress
             return nextEvent.apply(null, [ctx, pushOrPull, id, fx].concat(args));
          }
-         else { console.debug('_watchStoreList', 'ignored '+ args.join(',')); } //debug
+      }
+   }
+
+   function nextEventIf(ctx, status, id, fx) {
+      if( !ctx.status[id] || ctx.status[id] === 'status' ) {
+         nextEvent(ctx, status, id, fx);
       }
    }
 
@@ -3606,7 +3439,7 @@
          return $.when(fx.apply(null, args)).always(thenClearStatus(ctx, id));
       };
       if( id in ctx.defer ) {
-         ctx.defer[id].pipe(wrappedFx);
+         ctx.defer[id] = ctx.defer[id].pipe(wrappedFx);
       }
       else {
          ctx.defer[id] = wrappedFx();
@@ -3634,8 +3467,8 @@
    }
 
    function thenClearDirty(rec) {
-      return function(success) {
-         success !== false && rec.isDirty(false);
+      return function(hashKey, success) {
+         success !== false && rec.clearDirty();
       }
    }
 
@@ -3654,48 +3487,80 @@
       };
    }
 
-   function getDataFromObsArray(ctx, obsArray, model, id) {
-      if( !ctx.cachedKeys[id] ) {
-         cacheKeysForObsArray(ctx, obsArray, model);
-      }
-      return obsArray()[ctx.cachedKeys[id]];
-   }
-
-   function cacheKeysForObsArray(ctx, obsArray, model) {
-      var RecordId = ko.sync.RecordId, cache = ctx.cachedKeys = {};
+   function cacheKeysForObsArray(ctx, obsArray) {
+      var cache = ctx.cachedKeys = {}, f = ctx.keyFactory;
       _.each(ko.utils.unwrapObservable(obsArray), function(v, i) {
-         cache[ RecordId.for(model, v) ] = i;
+         cache[ f.make(v) ] = i;
       });
    }
 
-   function makeKeysForData(model, listOfData) {
-      var RecordId = ko.sync.RecordId;
-      return _.map(listOfData, function(v) {
-         return RecordId.for(model, v);
-      })
+   function queueUpdateAll(sc, runningDeferred) {
+      return $.Deferred(function(def) {
+         runningDeferred.always(function() { // whether it succeeds or not, we run the next!
+            def.notify(def);
+            _.defer(function() { sc.pushUpdates().then(def.resolve, def.reject); }); // prevent recursion stacks
+         });
+      });
    }
 
-   var pushAll = _.throttle(function(recList, model, ctx) {
+   function runUpdateAll(model, ctx, list, rec) {
+      return $.Deferred(function(def) {
+         if( list && list.isDirty() ) {
+            pushAll(list, model, ctx).then(function() {
+               !list.isDirty() && list.checkpoint();
+               def.resolve();
+            }, def.reject);
+         }
+         else if( rec && rec.isDirty() ) {
+            pushNextUpdate(model, ctx, rec).then(def.resolve, def.reject);
+         }
+         else {
+            def.resolve();
+         }
+      });
+   }
+
+   function pushAll(recList, model, ctx) {
       //todo create a way to mass update with several records at once!
       var promises = [];
-      console.log(recList.changeList());
       _.each(recList.changeList(), function(v) {
          var action = v[0];
          var rec    = v[1];
-         var def = nextEvent(ctx, 'push', rec.hashKey(), function() {
-            return pushUpdate(model, action, rec).then(function() {
+         var def = pushNextUpdate(model, ctx, rec, action).then(function() {
                recList.clearEvent(action, rec.hashKey());
             });
-         });
          promises.push(def);
       });
-      return $.when(promises);
-   }, 50);
+      return $.when.apply($, promises);
+   }
+
+   function syncObsArray(target, list) {
+      var it = list.iterator(), data = [];
+      while(it.hasNext()) {
+         data.push(it.next().getData());
+      }
+      target(data);
+   }
+
+   function syncData(target, rec, fields) {
+      fields || (fields = rec.fields);
+      var data = _.pick(rec.getData(true), fields);
+      if( ko.isObservable(target) ) {
+         target(_.extend({}, target(), data));
+      }
+      else {
+         target.data = _.extend({}, target.data, data);
+      }
+   }
 
    function thenClearStatus(ctx, id) {
       return function() {
          delete ctx.status[id];
       }
+   }
+
+   function pipeWhen(def) {
+      return function() { return $.when(def); };
    }
 
 })(jQuery);
@@ -3811,13 +3676,13 @@
                      .pipe(_pipedSync(hashKey));
                }
                else {
-                  return $.Deferred(function(def) { def.reject('record does not exist'); }).promise();
+                  return $.Deferred(function(def) { def.resolve(hashKey, false, 'does not exist'); }).promise();
                }
             });
       }
       else {
          // no update occurred
-         return $.Deferred().resolve(hashKey, false).promise();
+         return $.Deferred().resolve(hashKey, false, 'no change').promise();
       }
    };
 
@@ -4147,15 +4012,15 @@
    }
 
    function _updateRecord(table, hashKey, data, sortPriority) {
-      var def = $.Deferred(),
-         ref = table.child(hashKey);
-      if( sortPriority ) {
-         ref.setWithPriority(data, sortPriority, def.resolve);
-      }
-      else {
-         ref.set(data, def.resolve);
-      }
-      return def.promise();
+       return $.Deferred(function(def) {
+          var ref = table.child(hashKey);
+          if( sortPriority ) {
+             ref.setWithPriority(data, sortPriority, def.resolve);
+          }
+          else {
+             ref.set(data, def.resolve);
+          }
+       });
    }
 
    function exists(data, key) {

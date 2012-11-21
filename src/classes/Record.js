@@ -22,6 +22,7 @@
          this.type      = model.table;
          this.validator = model.validator;
          this.listeners = [];
+         this.keyCallbacks = [];
          _watchObservables(this);
       },
       getRecordId:     function() {
@@ -50,6 +51,7 @@
          if( !this.hasKey() ) {
             this.id.update(hashKey);
             applyUpdates(this, this.id.parse(hashKey));
+            if( this.id.isSet() ) { applyKeyCallbacks(this); }
          }
          return this;
       },
@@ -60,10 +62,16 @@
        */
       setKey: function( newKey ) {
          this.id = newKey;
-         newKey.isSet() && this.updateAll(newKey.parse());
+         if( newKey.isSet() ) {
+            this.updateAll(newKey.parse());
+            applyKeyCallbacks(this);
+         }
+
       },
-      getData:         function() {
-         return _unwrapAll(this.observed, this.data);
+      getData:         function(withTempId) {
+         var data = _unwrapAll(this.observed, this.data);
+         withTempId && !this.hasKey() && (data[ko.sync.Record.TMPID_FIELD] = this.hashKey());
+         return data;
       },
       get:             function(field) {
          if(_.isArray(field)) {
@@ -120,8 +128,23 @@
                if( idx > -1 ) { listeners.splice(idx, 1); }
             }
          };
+      },
+      /**
+       * Waits for record to receive a permanent ID from the server and calls callback(hashKey, idFields, idData).
+       * If this record already has an ID, this will be invoked immediately.
+       * @param callback
+       */
+      onKey: function(callback) {
+         if( this.hasKey() ) {
+            dataKeyCallback(callback, this);
+         }
+         else {
+            this.keyCallbacks.push(callback);
+         }
       }
    });
+
+   ko.sync.Record.TEMPID_FIELD = '_tmpId';
 
    function _setFields(fields, data) {
       //todo validate the data before applying it
@@ -287,6 +310,19 @@
          console.warn('field '+field+' does not exist for record type '+rec.type);
       }
       return res;
+   }
+
+   function applyKeyCallbacks(rec) {
+      _.each(rec.keyCallbacks, function(fx) {
+         dataKeyCallback(fx, rec);
+      });
+      rec.keyCallbacks = [];
+   }
+
+   function dataKeyCallback(callback, rec) {
+      var fields = rec.id.fields;
+      var data = _unwrapAll(rec.observed, _.pick(rec.data, fields));
+      callback(rec.hashKey(), fields, data);
    }
 
 })(ko);
