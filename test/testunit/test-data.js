@@ -249,7 +249,6 @@
    exports.expires = function(def, timeout) {
       var to = setTimeout(function() {
          to = null;
-         console.log(def.isRejected(), def.isResolved(), def);
          def.reject('timeout expired');
       }, timeout||TIMEOUT);
       def.always(function() {
@@ -345,7 +344,7 @@
                return $.Deferred(function(def) {
                   this.fakeNotify('deleted', key)
                         .then(thenResolve(def, key));
-               });
+               }.bind(this));
             }
             else {
                return $.Deferred(function(def) { def.reject('could not find '+key); });
@@ -450,7 +449,7 @@
             return $.Deferred(function(def) {
                if( this.hasTwoWaySync() ) {
                   _.delay(function() { // simulate event returning from server
-                     console.log('fakeNotify', action, id, changedData, prevId); //debug
+//                     console.log('fakeNotify', action, id, changedData, prevId); //debug
                      _.each(this.callbacks, function(fx) {
                         fx(action, id, data, prevId);
                      });
