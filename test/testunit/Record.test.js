@@ -31,12 +31,12 @@
    });
 
    test("#getSortPriority", function() {
-      var data  = $.extend({}, TestData.genericData(true), {intRequired: 50}),
-         model = TestData.model(true),
-         rec   = new ko.sync.Record(model, data);
+      var data  = TestData.genericData(true, {intRequired: 50}),
+          model = TestData.model(),
+          rec   = new ko.sync.Record(model, data);
       strictEqual(rec.getSortPriority(), 50, 'sortPriority set correctly');
 
-      model = new ko.sync.Model(TestData.model());
+      model = new ko.sync.Model(TestData.model({sort: null}));
       rec   = new ko.sync.Record(model, data);
       strictEqual(rec.getSortPriority(), false, 'sort priority not set');
    });

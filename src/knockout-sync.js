@@ -22,7 +22,6 @@
    ko.sync.validators || (ko.sync.validators = []);
 
    ko.sync.isObservableArray = function(o) {
-      console.log(ko.isObservable);
       return typeof(o) === 'function' && ko.isObservable(o) && _.isArray(o());
    };
 

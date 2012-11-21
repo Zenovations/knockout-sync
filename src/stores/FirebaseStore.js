@@ -99,13 +99,13 @@
                      .pipe(_pipedSync(hashKey));
                }
                else {
-                  return $.Deferred(function(def) { def.resolve(hashKey, false); }).promise();
+                  return $.Deferred(function(def) { def.resolve(hashKey, false, 'does not exist'); }).promise();
                }
             });
       }
       else {
          // no update occurred
-         return $.Deferred().resolve(hashKey, false).promise();
+         return $.Deferred().resolve(hashKey, false, 'no change').promise();
       }
    };
 
@@ -435,15 +435,15 @@
    }
 
    function _updateRecord(table, hashKey, data, sortPriority) {
-      var def = $.Deferred(),
-         ref = table.child(hashKey);
-      if( sortPriority ) {
-         ref.setWithPriority(data, sortPriority, def.resolve);
-      }
-      else {
-         ref.set(data, def.resolve);
-      }
-      return def.promise();
+       return $.Deferred(function(def) {
+          var ref = table.child(hashKey);
+          if( sortPriority ) {
+             ref.setWithPriority(data, sortPriority, def.resolve);
+          }
+          else {
+             ref.set(data, def.resolve);
+          }
+       });
    }
 
    function exists(data, key) {

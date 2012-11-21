@@ -211,28 +211,30 @@
    });
 
    asyncTest('#update non-existing', function() {
-      expect(1);
+      expect(2);
       var store = resetStore(),
          model = TestData.model(),
          data = {
-         id: 'I am not a valid record id',
-         stringRequired: '2-stringRequired',
-         dateRequired:   moment().add('days', 7).toDate(),
-         intRequired:    -2,
-         boolRequired:   false,
-         floatRequired:  1.2,
-         emailRequired:  'me2@me2.com'
-      };
+            id: 'I am not a valid record id',
+            stringRequired: '2-stringRequired',
+            dateRequired:   moment().add('days', 7).toDate(),
+            intRequired:    -2,
+            boolRequired:   false,
+            floatRequired:  1.2,
+            emailRequired:  'me2@me2.com'
+         };
 
       startSequence()
          .create(store, model, TestData.genericData())
          .update(store, model, data)
+         .then(function(key, success) {
+            strictEqual(key, data.id, 'resolved with correct key');
+            strictEqual(success, false, 'did not succeed');
+         })
          .end()
-            .done(function() {
-               ok(false, 'should not succeed (record does not exist)');
-            })
          .fail(function(e) {
-            equal(e.toString(), 'record does not exist', 'should fail because record does not exist');
+            console.error(e);
+            ok(false, e.toString());
          })
          .always(start);
    });
@@ -255,20 +257,24 @@
    });
 
    asyncTest("#delete followed by #update", function() {
-      expect(1);
+      expect(3);
       var store = resetStore(),
          newData = $.extend(TestData.genericData(), {intRequired: 99}),
          model = TestData.model();
       startSequence()
          .create(store, model, TestData.genericData())
          .delete(store, model, $.Sequence.PREV)
-         .update(store, model, newData)
-         .end()
-         .done(function() {
-            equal(false, 'should fail but did not');
+         .then(function() {
+            ok(true, 'delete successful');
          })
+         .update(store, model, newData)
+         .then(function(key, success) {
+            strictEqual(key, newData.id, 'resolved with correct key');
+            strictEqual(success, false, 'did not succeed');
+         })
+         .end()
          .fail(function(e) {
-            equal(e.toString(), 'record does not exist', 'should fail because record does not exist');
+            ok(false, e.toString());
          })
          .always(start);
    });
@@ -831,7 +837,9 @@
    }
 
    function clearAllRecords() {
-      syncRoot.set({});
+      return $.Deferred(function(def) {
+         syncRoot.set({}, function() { def.resolve(); });
+      });
    }
 
    function getDefaultValue(type) {

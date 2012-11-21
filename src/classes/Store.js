@@ -14,6 +14,8 @@
    ko.sync.Store = Class.extend({
       init: function(properties) { throw new Error('Interface not implemented'); },
 
+      //todo change all the promise callbacks to reject on failure? at the very least have them return success first and id second
+
       /**
        * Create a record in the database.
        *
@@ -60,7 +62,7 @@
        *
        * @param {ko.sync.Model}           model
        * @param {ko.sync.Record|ko.sync.RecordId} recOrId
-       * @return {Promise} resolves with record's {string}id
+       * @return {Promise} resolves to callback({string}id, {boolean)success, rejected if record does not exist
        */
       delete: function(model, recOrId) { throw new Error('Interface not implemented'); },
 

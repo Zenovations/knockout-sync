@@ -41,10 +41,7 @@
     * @return {ko.sync.RecordList} this
     */
    ko.sync.RecordList.prototype.checkpoint = function(purge) {
-      this.changed = {};
-      this.added   = {};
-      this.deleted = {};
-      this.moved   = {};
+      this.changes = { added: {}, updated: {}, moved: {}, deleted: {} };
       this.numChanges = 0;
       if( purge ) {
          this.dispose();
@@ -101,7 +98,7 @@
          var key = record.hashKey();
          if( !(key in this.byKey) ) {
             record.isDirty(true);
-            this.added[key] = record;
+            this.changes.added[key] = record;
             this.numChanges++;
             this.load(record, afterRecordId, true);
          }
@@ -131,13 +128,13 @@
    ko.sync.RecordList.prototype.move = function(recordOrId, afterRecordIdOrIndex) {
       var key = getHashKey(recordOrId);
       var record = _findRecord(this, key, true);
-      if( key in this.byKey && !(key in this.deleted) ) {
+      if( key in this.byKey && !(key in this.changes.deleted) ) {
          var newLoc = _findInsertPosition(this, record, afterRecordIdOrIndex); // the exact index this element should be placed at
          var currentLoc = _recordIndex(this, record);
          if( currentLoc !== newLoc ) { // if these are equal, we've already recorded the move or it's superfluous
             // store in changelist
-            if( !(key in this.added) && !(key in this.changed) ) {
-               this.moved[key] = record;
+            if( !(key in this.changes.added) && !(key in this.changes.updated) ) {
+               this.changes.moved[key] = record;
             }
             this.numChanges++;
 
@@ -235,7 +232,7 @@
          if( record ) {
             var key = record.hashKey();
 
-            if( !(key in this.deleted) && !(key in this.delayed) ) {
+            if( !(key in this.changes.deleted) && !(key in this.delayed) ) {
                // remove the record locally and mark it in our changelists
                takeOut(this, record);
             }
@@ -258,10 +255,10 @@
       if( record.isDirty() ) {
          var hashKey = record.hashKey();
          if( _recordIndex(this, hashKey) >= 0 ) { //todo-perf we could skip this check and just assume; do the checking at save time
-            if( !(hashKey in this.added) ) {
+            if( !(hashKey in this.changes.added) ) {
                // if the record is already marked as newly added, don't mark it as updated and lose that status
-               this.changed[hashKey] = record;
-               delete this.moved[hashKey];
+               this.changes.updated[hashKey] = record;
+               delete this.changes.moved[hashKey];
                this.numChanges++;
             }
             //todo differentiate between moves and updates?
@@ -275,9 +272,10 @@
    };
 
    ko.sync.RecordList.prototype.clearEvent = function(action, hashKey) {
-      if( action in {added: 1, deleted: 1, moved: 1, changed: 1} && hashKey in this[action] ) {
-         delete this[action][hashKey];
+      if( action in {added: 1, deleted: 1, moved: 1, updated: 1} && hashKey in this.changes[action] ) {
+         delete this.changes[action][hashKey];
          this.numChanges--;
+         console.log('clearEvent', action, hashKey, this.numChanges);
       }
       return this;
    };
@@ -308,8 +306,7 @@
    ko.sync.RecordList.prototype.changeList = function() {
       var out = [];
       _.each(['added', 'moved', 'updated', 'deleted'], function(action) {
-         var key = action === 'updated'? 'changed' : action;
-         _.each(this[key], function(rec) {
+         _.each(this.changes[action], function(rec) {
             out.push([action, rec]);
          });
       }.bind(this));
@@ -353,13 +350,13 @@
       record.isDirty(true);
 
       // mark it deleted
-      recList.deleted[key] = record;
+      recList.changes.deleted[key] = record;
       recList.numChanges++;
 
       // if rec is removed, that supersedes added/updated/moved status
-      delete recList.added[key];
-      delete recList.changed[key];
-      delete recList.moved[key];
+      delete recList.changes.added[key];
+      delete recList.changes.updated[key];
+      delete recList.changes.moved[key];
 
       //delete recList.byKey[key]; (deleted after checkpoint is called)
 
@@ -500,7 +497,7 @@
 
    function _findRecord(list, recOrIdOrHash, withholdDeleted) {
       var hashKey = getHashKey(recOrIdOrHash);
-      if( hashKey in list.byKey && (!withholdDeleted || !(hashKey in list.deleted)) ) { return list.byKey[hashKey]; }
+      if( hashKey in list.byKey && (!withholdDeleted || !(hashKey in list.changes.deleted)) ) { return list.byKey[hashKey]; }
       return null;
    }
 

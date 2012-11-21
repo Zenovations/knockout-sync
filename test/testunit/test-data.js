@@ -41,15 +41,11 @@
 
    /**
     * @param {object}  [moreOpts]
-    * @param {boolean} [withSort]
     * @return {ko.sync.Model}
     */
-   exports.model = function(moreOpts, withSort) {
-      if( arguments.length == 1 && _.isBoolean(moreOpts) ) {
-         withSort = moreOpts;
-         moreOpts = null;
-      }
-      var props = $.extend({}, (withSort? genericModelPropsWithSort : genericModelProps), moreOpts);
+   exports.model = function(moreOpts) {
+      var noSort = moreOpts && 'sort' in moreOpts && !moreOpts.sort;
+      var props = $.extend({}, (noSort? genericModelProps : genericModelPropsWithSort), moreOpts);
       return new Model(props);
    };
 
@@ -120,6 +116,19 @@
       }
       return recs;
    };
+
+   exports.rec = function(id, moreData, model) {
+      var i = ~~id;
+      var data = $.extend({}, genericDataWithId, {
+         id: typeof(id) === 'number'? 'record-'+id : id,
+         requiredInt: i,
+         requiredFloat: i + (i * .01),
+         requiredString: 'string-'+i
+      }, moreData);
+      return (model||exports.model()).newRecord(data);
+   };
+
+   exports.recs = exports.makeRecords;
 
    /**
     * @param {ko.sync.Model} model
@@ -232,10 +241,28 @@
       }
    };
 
-   exports.startTimeout = function(def) {
-      return setTimeout(function() {
+   /**
+    * @param {jQuery.Deferred} def
+    * @param {int} [timeout]
+    * @return {jQuery.Deferred}
+    */
+   exports.expires = function(def, timeout) {
+      var to = setTimeout(function() {
+         to = null;
+         console.log(def.isRejected(), def.isResolved(), def);
          def.reject('timeout expired');
-      }, TIMEOUT);
+      }, timeout||TIMEOUT);
+      def.always(function() {
+         to && clearTimeout(to);
+      });
+      return def;
+   };
+
+   exports.deferWait = function(timeout) {
+      timeout || (timeout = 100);
+      return $.Deferred(function(def) {
+         _.delay(def.resolve, timeout);
+      });
    };
 
 
@@ -270,12 +297,7 @@
                var newId = this.records.length+'';
                var prevId = this.records.length > 1? this.records[this.records.length-2].hashKey() : null;
                this.fakeNotify('added', newId, record.getData(), prevId)
-                  .then(function() {
-                     if( !record.hasKey() ) {
-                        record.updateHashKey(exports.makeRecordId( newId ));
-                     }
-                  }.bind(this))
-                  .then(resolve(def, newId));
+                  .then(thenResolve(def, newId));
             }.bind(this));
          },
 
@@ -288,7 +310,7 @@
             this.testCallback('read', recordId.hashKey());
             return $.Deferred(function(def) {
                var rec = this.find(recordId);
-               _.delay(resolve(def, rec), 10);
+               _.delay(thenResolve(def, rec), 10);
             }.bind(this));
          },
 
@@ -298,11 +320,14 @@
           * @return {jQuery.Deferred} resolves to callback({string}id, {boolean}changed) where changed is false if data was not dirty, rejected if record does not exist
           */
          update: function(model, rec) {
-            this.testCallback('update', rec.hashKey());
+            var hashKey = rec.hashKey();
+            this.testCallback('update', hashKey);
             return $.Deferred(function(def) {
                var oldRec = this.find(rec);
                oldRec && oldRec.updateAll(rec.getData());
-               _.delay(resolve(def, rec.hashKey(), !!oldRec), 10);
+               //_.delay(thenResolve(def, rec.hashKey(), !!oldRec), 10);
+               this.fakeNotify('updated', hashKey)
+                     .then(thenResolve(def, hashKey));
 //               this.notify('updated', oldRec.hashKey(), oldRec.getData()).then(resolve(def, oldRec.hashKey(), oldRec.isDirty()));
             }.bind(this));
          },
@@ -318,9 +343,9 @@
             var idx = _.indexOf(this.records, rec);
             if( idx >= 0 ) {
                return $.Deferred(function(def) {
-                  _.delay(resolve(def, key), 10);
+                  this.fakeNotify('deleted', key)
+                        .then(thenResolve(def, key));
                });
-//               return this.notify('deleted', key, rec.getData());
             }
             else {
                return $.Deferred(function(def) { def.reject('could not find '+key); });
@@ -417,7 +442,6 @@
           * @return {jQuery.Deferred} just so test cases know how long to wait before asserting
           */
          fakeNotify: function(action, id, changedData, prevId) {
-            console.log('fakeNotify', action, id, changedData, prevId);
             if( arguments.length === 3 && typeof(changedData) !== 'object' ){
                prevId = changedData;
                changedData = {};
@@ -426,6 +450,7 @@
             return $.Deferred(function(def) {
                if( this.hasTwoWaySync() ) {
                   _.delay(function() { // simulate event returning from server
+                     console.log('fakeNotify', action, id, changedData, prevId); //debug
                      _.each(this.callbacks, function(fx) {
                         fx(action, id, data, prevId);
                      });
@@ -501,8 +526,8 @@
 
    })();
 
-   function resolve(def) {
-      var args = $.makeArray(arguments);
+   function thenResolve(def) {
+      var args = _.toArray(arguments);
       args.shift();
       if( args.length ) {
          return function() {

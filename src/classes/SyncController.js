@@ -37,15 +37,16 @@
          this.isList    = listOrRecord instanceof ko.sync.RecordList;
          this.observed  = ko.isObservable(target);
          this.twoway    = model.store.hasTwoWaySync();
-         this.next      = $.Deferred().resolve();
+         this.running   = null; //used by pushUpdates
+         this.queued    = null; //used by pushUpdates
 
          if( this.isList && !ko.sync.isObservableArray(target) ) {
             throw new Error('When syncing a RecordList, the target must be a ko.observableArray');
          }
 
-         !this.observed && !target.data && (target.data = {});
-
          if( this.isList ) {
+            console.log('with list', listOrRecord);//debug
+            syncObsArray(target, listOrRecord);
             this.list = listOrRecord;
             this.twoway && this.subs.push(_watchStoreList(this, listOrRecord, target, criteria));
             this.subs.push(_watchRecordList(this, listOrRecord, target));
@@ -54,6 +55,7 @@
          else {
             console.log('with rec', listOrRecord);//debug
             this.rec = listOrRecord;
+            syncData(this.observed, target, this.rec);
             this.twoway && this.subs.push(_watchStoreRecord(this, listOrRecord, target));
             this.subs.push(_watchRecord(this, listOrRecord, target));
             this.subs.push(_watchObs(this, target, listOrRecord));
@@ -70,27 +72,32 @@
 
       /**
        * Force updates (for use when auto-sync is off). It is safe to call this on unchanged records or empty lists
-       * @return {Promise} fulfilled when all updates are marked completed by the server
+       *
+       * This works off a queue. At most, there is one update running and one queued to run in the near future. Multiple
+       * requests will simple receive the promise for the already queued run. The reason for this approach is that
+       * you can't depend on one that is already running to handle anything that it received after starting, but
+       * everything received before the queued update runs can go as a batch, so any number of calls to pushUpdates
+       * may be lumped together in this way.
+       *
+       * @return {jQuery.Deferred} fulfilled when all updates are marked completed by the server
        */
       pushUpdates: function() {
-         var list, def;
-         if( this.list && this.list.isDirty() ) {
-            list = this.list;
-            def = pushAll(list, this.model, this.sharedContext).then(function() { list.checkpoint(); });
-            this.next.pipe(pipeWhen(def));
-         }
-         else if( this.rec && this.rec.isDirty() ) {
-            def = pushNextUpdate(this.model, this.sharedContext, this.rec);
-            this.rec.isDirty() && this.next.pipe(pipeWhen(def));
+         var def;
+         if( this.running ) {
+            if( !this.queued ) {
+               this.queued = queueUpdateAll(this, this.running).progress(function(def) {
+                  console.log('starting queued instance'); //debug
+               }.bind(this))
+            }
+            def = this.queued;
          }
          else {
-            this.next.pipe(pipeWhen(true));
+            def = this.running = runUpdateAll(this.model, this.sharedContext, this.list, this.rec).always(function() {
+               this.running = this.queued? this.queued : null;
+               this.queued = null;
+            }.bind(this));
          }
-         return this.next;
-      },
-
-      promise: function() {
-         return this.when.promise().pipe($.when(this.sharedContext.defer));
+         return def.promise();
       }
    });
 
@@ -204,6 +211,7 @@
    }
 
    function pushUpdate(model, action, rec) {
+      console.log('pushUpdate', action, rec.hashKey());//debug
       var def, store = model.store;
       switch(action) {
          case 'added':
@@ -223,7 +231,7 @@
             break;
          default:
             def = $.Deferred().reject('invalid action: '+action);
-            typeof(console) === 'object' && console.error && console.error('invalid action', _.toArray(arguments));
+            console.error('invalid action', _.toArray(arguments));
       }
       return def.then(thenClearDirty(rec));
    }
@@ -288,7 +296,7 @@
          return $.when(fx.apply(null, args)).always(thenClearStatus(ctx, id));
       };
       if( id in ctx.defer ) {
-         ctx.defer[id].pipe(wrappedFx);
+         ctx.defer[id] = ctx.defer[id].pipe(wrappedFx);
       }
       else {
          ctx.defer[id] = wrappedFx();
@@ -316,8 +324,9 @@
    }
 
    function thenClearDirty(rec) {
-      return function(success) {
-         success !== false && rec.isDirty(false);
+      return function(hashKey, success) {
+         console.log('thenClearDirty', hashKey, success);
+         success !== false && rec.clearDirty();
       }
    }
 
@@ -358,22 +367,64 @@
       })
    }
 
-   var pushAll = _.throttle(function(recList, model, ctx) {
+   function queueUpdateAll(sc, runningDeferred) {
+      return $.Deferred(function(def) {
+         runningDeferred.always(function() { // whether it succeeds or not, we run the next!
+            def.notify(def);
+            _.defer(function() { sc.pushUpdates().then(def.resolve, def.reject); }); // prevent recursion stacks
+         });
+      });
+   }
+
+   function runUpdateAll(model, ctx, list, rec) {
+      return $.Deferred(function(def) {
+         if( list && list.isDirty() ) {
+            console.log('pushAll invoked', list.numChanges);//debug
+            pushAll(list, model, ctx).then(function() {
+               !list.isDirty() && list.checkpoint();
+               console.log('pushAll resolved', list.numChanges, list.changes); //debug
+               def.resolve();
+            }, def.reject);
+         }
+         else if( rec && rec.isDirty() ) {
+            pushNextUpdate(model, ctx, rec).then(def.resolve, def.reject);
+         }
+         else {
+            def.resolve();
+         }
+      });
+   }
+
+   function pushAll(recList, model, ctx) {
       //todo create a way to mass update with several records at once!
       var promises = [];
-      console.log(recList.changeList());
       _.each(recList.changeList(), function(v) {
          var action = v[0];
          var rec    = v[1];
-         var def = nextEvent(ctx, 'push', rec.hashKey(), function() {
-            return pushUpdate(model, action, rec).then(function() {
+         var def = pushNextUpdate(model, ctx, rec, action).then(function() {
                recList.clearEvent(action, rec.hashKey());
             });
-         });
          promises.push(def);
       });
       return $.when(promises);
-   }, 50);
+   }
+
+   function syncObsArray(target, list) {
+      var it = list.iterator(), data = [];
+      while(it.hasNext()) {
+         data.push(it.next().getData());
+      }
+      target(data);
+   }
+
+   function syncData(observed, target, rec) {
+      if( observed ) {
+         target(_.extend({}, target(), rec.getData()));
+      }
+      else {
+         target.data = _.extend({}, target.data, rec.getData());
+      }
+   }
 
    function thenClearStatus(ctx, id) {
       return function() {
