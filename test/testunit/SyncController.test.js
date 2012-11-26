@@ -366,6 +366,7 @@
       expect(2);
       var rec = TestData.rec(5);
       syncActivity({
+         recs: [rec],
          rec: rec,
          model: {auto: false},
          fx: function(sync) {

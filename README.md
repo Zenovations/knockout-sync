@@ -232,12 +232,12 @@ with `destroy()` and `_destroy` as deleted items are automagically tracked and h
 
 # Limitations
 
- - conflicts are not resolved intelligently (yet); updates are just applied blindly (the same as they would be if you did all the synchronizations yourself), but some day, some day
- - you can create() a record with invalid data (this lib doesn't stop you from setting the value on a field) but cannot save it if it fails validation
+ - conflicts are not resolved intelligently (yet); if client changes data and server changes same record, the later change wins
  - unless you perform a read() on a list, it is not hooked up for two-way sync, but changes can still be saved to the server (you can't just sync an arbitrary set of records to an existing table, how would they resolve differences?)
  - updating fields that are part of the records ids doesn't affect the ID
  - updating fields that are part of the sort order doesn't affect actual ordering on client until a save occurs (and server tells us the records moved)
  - composite keys currently don't work well with creates from client unless all data exists in the record when it is created (updating a composite field doesn't change the compiled ID)
+ - validation isn't implemented yet (soon, soon)
 
 # API
 

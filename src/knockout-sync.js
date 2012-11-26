@@ -5,6 +5,7 @@
  *******************************************/
 (function(ko) {
    "use strict";
+   var undefined;
 
    /**
     * @param {Object|ko.observable|ko.observableArray} target
@@ -21,39 +22,48 @@
     * @param callbacks
     */
    ko.observableArray.fn.subscribeRecChanges = function(keyFactory, callbacks) {
-      var previousValue = undefined, delayed = {}, deleteFx =  _.bind(callbacks.delete, callbacks);
+      var previousValue = undefined, delayed = {};
+      var ctx = { keyFactory: keyFactory, callbacks: callbacks, deferred: {}, latestValue: null };
       this.subscribe(function(_previousValue) {
          previousValue = _previousValue.slice(0);
       }, undefined, 'beforeChange');
       this.subscribe(function(latestValue) {
+         ctx.latestValue = latestValue;
          var diff = ko.utils.compareArrays(previousValue, latestValue);
-         var prevDelayed = delayed;
-         _.each(prevDelayed, clearTimeout);
-         delayed = {};
          for (var i = 0, j = diff.length; i < j; i++) {
-            var data = diff[i].value, key = keyFactory.make(data);
-            switch (diff[i].status) {
-               case "retained":
-                  break; //todo check for moves and/or data changes?
-               case "deleted":
-                  if( key ) { delayed[key] = deferDelete(key, delayed, deleteFx); }
-                  break;
-               case "added":
-                  if( key && key in prevDelayed ) {
-                     delete prevDelayed[data];
-                     callbacks.move(key, data, prevVal(keyFactory, data, latestValue));
-                  }
-                  else {
-                     callbacks.add(key, data, prevVal(keyFactory, data, latestValue));
-                  }
-                  break;
-            }
+            applyRecChange(ctx, diff[i].status, diff[i].value);
          }
-         // whatever still exists is a delete
-         _.each(prevDelayed, function(v, k) { callbacks.delete(k); });
-         previousValue = undefined;
       });
    };
+
+   function applyRecChange(ctx, status, data) {
+      if(_.isArray(data)) {
+         _.each(data, function(v) {
+            applyRecChange(ctx, status, v);
+         });
+      }
+      else {
+         //todo this key isn't applied to the data; we can't match them up later
+         var key = ctx.keyFactory.make(data);
+         switch (status) {
+            case "retained":
+               break; //todo check for data changes?
+            case "deleted":
+               ctx.deferred[key] = deferDelete(key, ctx.deferred, ctx.callbacks.delete.bind(ctx.callbacks));
+               break;
+            case "added":
+               if( key in ctx.deferred ) {
+                  clearTimeout(ctx.deferred);
+                  delete ctx.deferred[key];
+                  ctx.callbacks.move(key, data, prevVal(ctx.keyFactory, data, ctx.latestValue));
+               }
+               else {
+                  ctx.callbacks.add(key, data, prevVal(ctx.keyFactory, data, ctx.latestValue));
+               }
+               break;
+         }
+      }
+   }
 
    function prevVal(keyBuilder, val, list) {
       var i = _.indexOf(val);
@@ -67,6 +77,7 @@
    function deferDelete(key, delayed, deleteCallback) {
       return setTimeout(function() {
          if(key in delayed) {
+            console.warn('deferDelete completed', key);
             delete delayed[key];
             deleteCallback(key);
          }

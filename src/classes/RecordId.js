@@ -19,7 +19,7 @@
          this.multi = fields.length > 1;
          this.fields = fields;
          this.hash = _createHash(this.separator, fields, data);
-         this.tmpId = _isTempId(this.hash);
+         this.tmpId = RecordId.isTempId(this.hash);
       },
       isSet:              function() { return !this.tmpId; },
       isComposite:        function() { return this.multi; },
@@ -32,7 +32,7 @@
        */
       update: function(hashOrData) {
          var h = typeof(hashOrData)==='string'? hashOrData : _createHash(this.separator, this.fields, hashOrData);
-         if( !_isTempId(h) ) {
+         if( !RecordId.isTempId(h) ) {
             this.hash = h;
             this.tmpId = false;
          }
@@ -72,7 +72,7 @@
    };
    RecordId.parse = function(hashKey, fields, separator) {
       var out = {}, vals;
-      if( !_isTempId(hashKey) ) {
+      if( !RecordId.isTempId(hashKey) ) {
          if( fields.length > 1 ) {
             separator || (separator = RecordId.DEFAULT_SEPARATOR);
             vals = hashKey.split(separator);
@@ -86,16 +86,15 @@
       }
       return out;
    };
-
-   function _isTempId(hash) {
+   RecordId.isTempId = function(hashKey) {
       // the parts of a temporary id are "tmp" followed by the ko.sync.instanceId (a timestamp, a colon,
       // and a random number), and a uuid all joined by "."
-      return (hash && hash.match(/^tmp[.][0-9]+:[0-9]+[.]/))? true : false;
-   }
+      return (hashKey && hashKey.match(/^tmp[.][0-9]+:[0-9]+[.]/))? true : false;
+   };
 
-   function _createTempHash() {
+   RecordId.createTempHashKey = function() {
       return _.uniqueId('tmp.'+ko.sync.instanceId+'.');
-   }
+   };
 
    function _createHash(separator, fields, data) {
       if( typeof(data) === 'object' && !_.isEmpty(data) ) {
@@ -104,7 +103,7 @@
             f = fields[i];
             // if any of the composite key fields are missing, there is no key value
             if( !exists(data[f]) ) {
-               return _createTempHash();
+               return RecordId.createTempHashKey();
             }
             if( i > 0 ) { s += separator; }
             s += data[f];
@@ -112,7 +111,7 @@
          return s;
       }
       else {
-         return _createTempHash();
+         return RecordId.createTempHashKey();
       }
    }
 
@@ -120,15 +119,19 @@
       return v !== null && v !== undefined;
    }
 
-   function KeyFactory(model, tmpField) {
+   function KeyFactory(model, hashKeyField) {
       this.model = model;
-      this.tmpField = tmpField === true? ko.sync.Record.TEMPID_FIELD : tmpField;
+      this.hashKeyField = hashKeyField === true? KeyFactory.HASHKEY_FIELD : hashKeyField;
    }
    KeyFactory.prototype.make = function(data) {
-      var id = ko.sync.RecordId.for(this.model, data);
-      id.isSet() || console.log('KeyFactory.make', id.hashKey(), this.tmpField, data[this.tmpField], this.model.key, data); //debug
-      return id.isSet()? id.hashKey() : (this.tmpField? data[this.tmpField] : null);
+      if( this.hashKeyField && _.has(data, this.hashKeyField) && data[this.hashKeyField] ) {
+         return data[this.hashKeyField];
+      }
+      else {
+         return ko.sync.RecordId.for(this.model, data).hashKey();
+      }
    };
+   KeyFactory.HASHKEY_FIELD = '_hashKey';
 
    ko.sync.KeyFactory = KeyFactory;
 

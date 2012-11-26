@@ -55,7 +55,7 @@
          }
          else {
             this.rec = listOrRecord;
-            syncData(target, this.rec);
+            syncData(findTargetDataSource(this, target), this.rec);
             this.twoway && this.subs.push(_watchStoreRecord(this, listOrRecord, target));
             this.subs.push(_watchRecord(this, listOrRecord, target));
             this.observed && this.subs.push(_watchObs(this, target, listOrRecord));
@@ -125,7 +125,8 @@
                default:
                   console.error('invalid action', _.toArray(arguments));
             }
-            rec.isDirty(false); // record now matches server
+            //todo-diff this assumes no changes were made on client in the interim, how to we reconcile local edits and server updates?
+            rec && rec.isDirty(false); // record now matches server
          }), criteria);
    }
 
@@ -138,7 +139,7 @@
       }
 
       return model.store.watchRecord(model, rec, nextEventHandler(ctx, 'pull', idCallback(0), function(id, val, sortPriority) {
-         //todo this doesn't deal with conflicts (update on server and client at same time)
+         //todo-diff this doesn't deal with conflicts (update on server and client at same time)
          //todo-sort this ignores sortPriority, which is presumably in the data, but should we rely on that?
          rec.updateAll(val);
          rec.isDirty(false); // record now matches server
@@ -157,10 +158,11 @@
                break;
             case 'pull':
                // a pull is in progress, send to data
-               syncToData(dataSyncOpts);
+               nextEvent(ctx, 'pull', id, function() { // apply it to the data
+                  syncToData(dataSyncOpts);
+               });
                break;
             default:
-                  console.log('initiated here (should not happen when pushing from obsArray)', id, rec.getData());//debug
                // rec/list modified externally (goes both ways)
                nextEvent(ctx, 'pull', id, function() { // apply it to the data
                   syncToData(dataSyncOpts);
@@ -183,7 +185,9 @@
                model.auto && pushUpdate(model, 'updated', record);
                break;
             case 'pull':
-               syncToData(dataSyncOpts);
+               nextEvent(ctx, 'pull', id, function() {
+                  return syncToData(dataSyncOpts);
+               });
                break;
             default:
                nextEvent(ctx, 'pull', id, function() {
@@ -202,6 +206,11 @@
       obs.subscribeRecChanges(ctx.keyFactory, {
          add: function(key, data, prevKey) {
             nextEventIf(ctx, 'push', key, function() {
+               //todo needs to get the id apply it when returned
+               //todo
+               //todo
+               //todo
+               //todo
                list.add(sync.model.newRecord(data), prevKey);
             });
          },
@@ -272,8 +281,6 @@
       var target = opts.target;
       var sourceData;
 
-//      console.log('syncToData', ctx.status[id]);//debug
-
       switch(opts.action) {
          case 'added':
             pos = newPositionForRecord(ctx, target, rec, opts.prevId, true);
@@ -285,9 +292,15 @@
                target.splice(pos, 0, sourceData);
             }
             if( !rec.hasKey() ) {
+               var oldKey = rec.hashKey();
                rec.onKey(function(newKey, fields, data) {
                   nextEvent(ctx, 'pull', newKey, function() {
-                     syncData(sourceData, opts.rec, fields)
+                     //todo needs to apply the hashKey to the hidden field
+                     //todo
+                     //todo
+                     //todo
+                     //todo
+                     syncData(findTargetDataSource(sync, target, oldKey), opts.rec, fields)
                   })
                });
             }
@@ -296,7 +309,7 @@
             var fields = _.isArray(opts.fields)? opts.fields : (opts.fields? [opts.fields] : []);
             if( fields.length ) {
                //todo-sort
-               sourceData = _findSourceData(sync, target, id);
+               sourceData = findTargetDataSource(sync, target, id);
                syncData(sourceData, rec, fields);
                //todo? this only affects unobserved fields which technically shouldn't change?
                //if(sync.isList) { opts.target.notifySubscribers(opts.target()); }
@@ -347,7 +360,7 @@
       return key in ctx.cachedKeys? ctx.cachedKeys[key] : -1;
    }
 
-   function _findSourceData(sync, target, id) {
+   function findTargetDataSource(sync, target, id) {
       if( sync.isList ) {
          return target()[ currentPositionForRecord(sync.sharedContext, target, id) ];
       }
@@ -355,6 +368,7 @@
          return target;
       }
       else {
+         target.data || (target.data = {});
          return target.data;
       }
    }
@@ -392,6 +406,7 @@
       //todo for large data sets, particularly where recs are going to cycle in/out in a single page app, this is
       //todo going to slowly eat up memory
       if( id in ctx.defer ) {
+         //todo does not run if the previous operation failed (should it?)
          ctx.defer[id] = ctx.defer[id].pipe(wrappedFx);
       }
       else {
@@ -497,7 +512,7 @@
 
    function syncData(target, rec, fields) {
       fields || (fields = rec.fields);
-      var data = _.pick(rec.getData(true), fields);
+      var data = _.pick(rec.getData(true), Array.concat.apply([ko.sync.KeyFactory.HASHKEY_FIELD], fields));
       if( ko.isObservable(target) ) {
          target(_.extend(target()||{}, data));
       }

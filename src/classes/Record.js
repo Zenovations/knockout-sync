@@ -70,7 +70,7 @@
       },
       getData:         function(withTempId) {
          var data = _unwrapAll(this.observed, this.data);
-         withTempId && !this.hasKey() && (data[ko.sync.Record.TMPID_FIELD] = this.hashKey());
+         withTempId && (data[ko.sync.KeyFactory.HASHKEY_FIELD] = this.hashKey());
          return data;
       },
       get:             function(field) {
@@ -143,8 +143,6 @@
          }
       }
    });
-
-   ko.sync.Record.TEMPID_FIELD = '_tmpId';
 
    function _setFields(fields, data) {
       //todo validate the data before applying it
