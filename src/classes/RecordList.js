@@ -36,6 +36,11 @@
     * @return {ko.sync.RecordList} this
     */
    ko.sync.RecordList.prototype.checkpoint = function() {
+      // clear any existing changes
+      _.each(this.changeList(), function(action, rec) {
+         this.clearEvent(action, rec.hashKey());
+      }.bind(this));
+      // reset change list
       this.changes = { added: {}, updated: {}, moved: {}, deleted: {} };
       this.numChanges = 0;
       return this;
@@ -202,6 +207,9 @@
          var loc = putIn(this, record, afterRecordId, sendNotification);
          //todo-sort
       }
+      else {
+         console.warn('record already exists in this list', record.hashKey());
+      }
       return this;
    };
 
@@ -221,17 +229,16 @@
          var record = _findRecord(this, recordOrIdOrHash);
          if( record ) {
             var key = record.hashKey();
-
             if( !(key in this.changes.deleted) ) {
                // remove the record locally and mark it in our changelists
                takeOut(this, record);
             }
             else {
-               console.debug('record already deleted', key);
+               console.log('record already deleted', key);
             }
          }
          else {
-            console.debug('record not in this list', recordOrIdOrHash);
+            console.log('record not in this list', recordOrIdOrHash);
          }
       }
       return this;
@@ -264,6 +271,7 @@
    ko.sync.RecordList.prototype.clearEvent = function(action, hashKey) {
       if( action in {added: 1, deleted: 1, moved: 1, updated: 1} && hashKey in this.changes[action] ) {
          delete this.changes[action][hashKey];
+         if( action === 'deleted' ) { delete this.byKey[hashKey]; }
          this.numChanges--;
       }
       return this;
@@ -293,8 +301,8 @@
 
    ko.sync.RecordList.prototype.changeList = function() {
       var out = [];
-      _.each(['added', 'moved', 'updated', 'deleted'], function(action) {
-         _.each(this.changes[action], function(rec) {
+      this.changes && _.each(this.changes, function(recs, action) {
+         _.each(recs, function(rec) {
             out.push([action, rec]);
          });
       }.bind(this));
@@ -371,7 +379,8 @@
          recList.sorted.push(key);
       }
       recList.subs[key] = record.subscribe(function(record, fieldChanged) {
-         //todo differentiate between move events and actual updates
+         //todo differentiate between move events and updates
+         //todo-sort
          recList.updated(record, fieldChanged);
       });
       if( sendNotification ) {

@@ -162,7 +162,7 @@
    });
 
    asyncTest('push deleted (list)', function() {
-      expect(1);
+      expect(2);
       var recs = TestData.recs(5);
       syncActivity({
          recs: recs,
@@ -170,7 +170,8 @@
             list.remove('record-2');
             return TestData.deferWait(); // wait for server replies
          },
-         results: function(storeEvents, listEvents) {
+         results: function(storeEvents, listEvents, target, list) {
+            strictEqual(list.isDirty(), false, 'no outstanding changes in list');
             deepEqual(storeEvents, [
                ['delete', 'record-2']
             ]);
@@ -519,7 +520,8 @@
       return def
          .then(_resolve)
          .fail(function(e) {
-            ok(false, e||'syncActivity failed to resolve');
+            var msg = typeof(e) === 'object' && e.stack? e.stack : e||'promise rejected without error message';
+            ok(false, msg);
          })
          .always(start);
 

@@ -34,7 +34,7 @@
       intRequired:    -25,
       boolRequired:   true,
       floatRequired:  2.5,
-      emailRequired:  'two@five.com'
+      emailRequired:  'null@no.com'
    };
 
    var genericDataWithId = ko.utils.extend({id: 'record123'}, genericDataWithoutId);
@@ -121,9 +121,10 @@
       var i = ~~id;
       var data = $.extend({}, genericDataWithId, {
          id: typeof(id) === 'number'? 'record-'+id : id,
-         requiredInt: i,
-         requiredFloat: i + (i * .01),
-         requiredString: 'string-'+i
+         intRequired: i,
+         floatRequired: i + (i * .01),
+         stringRequired: 'string-'+i,
+         emailRequired: 'user'+i+'@no.com'
       }, moreData);
       return (model||exports.model()).newRecord(data);
    };
@@ -138,10 +139,11 @@
     */
    exports.makeRecord = function(model, base, i) {
       var data = $.extend({}, base);
-      data.id = 'record-'+i;
-      data.requiredInt = i;
-      data.requiredFloat = i + (i * .01);
+      data.id             = 'record-'+i;
+      data.requiredInt    = i;
+      data.requiredFloat  = i + (i * .01);
       data.requiredString = 'string-'+i;
+      data.emailRequired  = 'user'+i+'@no.com';
       return model.newRecord(data);
    };
 
@@ -323,11 +325,15 @@
             this.testCallback('update', hashKey);
             return $.Deferred(function(def) {
                var oldRec = this.find(rec);
-               oldRec && oldRec.updateAll(rec.getData());
-               //_.delay(thenResolve(def, rec.hashKey(), !!oldRec), 10);
-               this.fakeNotify('updated', hashKey)
-                     .then(thenResolve(def, hashKey));
-//               this.notify('updated', oldRec.hashKey(), oldRec.getData()).then(resolve(def, oldRec.hashKey(), oldRec.isDirty()));
+               if( oldRec ) {
+                  oldRec && oldRec.updateAll(rec.getData());
+                  //_.delay(thenResolve(def, rec.hashKey(), !!oldRec), 10);
+                  this.fakeNotify('updated', hashKey)
+                        .then(thenResolve(def, hashKey));
+               }
+               else {
+                  def.reject('record not found');
+               }
             }.bind(this));
          },
 

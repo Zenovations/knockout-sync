@@ -107,10 +107,10 @@
       var model = c.model, ctx = c.sharedContext;
       return model.store.watch(model, nextEventHandler(ctx, 'pull', idCallback(1),
          function(action, name, value, prevSibling) {
-            var rec = list.find(name) || model.newRecord(value);
+            var rec = list.find(name);
             switch(action) {
                case 'added':
-                  list.add(rec, prevSibling || 0);
+                  list.add(model.newRecord(value), prevSibling || 0);
                   break;
                case 'deleted':
                   var key = rec.hasKey() && rec.hashKey();
@@ -160,6 +160,7 @@
                syncToData(dataSyncOpts);
                break;
             default:
+                  console.log('initiated here (should not happen when pushing from obsArray)', id, rec.getData());//debug
                // rec/list modified externally (goes both ways)
                nextEvent(ctx, 'pull', id, function() { // apply it to the data
                   syncToData(dataSyncOpts);
@@ -197,7 +198,8 @@
    function _watchObsArray(sync, obs, list) {
       var ctx = sync.sharedContext;
       //credits: http://stackoverflow.com/questions/12166982/determine-which-element-was-added-or-removed-with-a-knockoutjs-observablearray
-      obs.subscribeRecChanges(ctx.keyFactory, {  // defined in knockout-sync.js!
+      // subscribeRecChanges is defined in knockout-sync.js!
+      obs.subscribeRecChanges(ctx.keyFactory, {
          add: function(key, data, prevKey) {
             nextEventIf(ctx, 'push', key, function() {
                list.add(sync.model.newRecord(data), prevKey);
@@ -268,20 +270,24 @@
       var id    = rec.hashKey();
       var ctx = sync.sharedContext;
       var target = opts.target;
+      var sourceData;
+
+//      console.log('syncToData', ctx.status[id]);//debug
 
       switch(opts.action) {
          case 'added':
-            pos = newPositionForRecord(ctx, target, rec, opts.prevId);
+            pos = newPositionForRecord(ctx, target, rec, opts.prevId, true);
+            sourceData = rec.getData(true);
             if( pos < 0 ) {
-               target.push(rec.getData(true));
+               target.push(sourceData);
             }
             else {
-               target.splice(pos, 0, rec.getData(true));
+               target.splice(pos, 0, sourceData);
             }
             if( !rec.hasKey() ) {
                rec.onKey(function(newKey, fields, data) {
                   nextEvent(ctx, 'pull', newKey, function() {
-                     syncData(opts.target, opts.rec, fields)
+                     syncData(sourceData, opts.rec, fields)
                   })
                });
             }
@@ -290,7 +296,8 @@
             var fields = _.isArray(opts.fields)? opts.fields : (opts.fields? [opts.fields] : []);
             if( fields.length ) {
                //todo-sort
-               syncData(_findSourceData(sync, target, id), rec, fields);
+               sourceData = _findSourceData(sync, target, id);
+               syncData(sourceData, rec, fields);
                //todo? this only affects unobserved fields which technically shouldn't change?
                //if(sync.isList) { opts.target.notifySubscribers(opts.target()); }
             }
@@ -313,11 +320,11 @@
       }
    }
 
-   function newPositionForRecord(ctx, obsArray, rec, prevId) {
+   function newPositionForRecord(ctx, obsArray, rec, prevId, isNew) {
       //todo this is probably duplicated in RecordList somewhere, should think about abstracting
       var len = obsArray().length;
       var newLoc = -1;
-      var oldLoc = currentPositionForRecord(rec.hashKey());
+      var oldLoc = isNew? -1 : currentPositionForRecord(ctx, obsArray, rec.hashKey());
 
       prevId instanceof ko.sync.RecordId && (prevId = prevId.hashKey());
       if( typeof(prevId) === 'string' ) {
@@ -335,7 +342,7 @@
 
    function currentPositionForRecord(ctx, obsArray, key) {
       if( !ctx.cachedKeys || !ctx.cachedKeys[key] ) {
-         cacheKeysForObsArray(ctx.keyFactory, ctx, obsArray);
+         cacheKeysForObsArray(ctx, obsArray);
       }
       return key in ctx.cachedKeys? ctx.cachedKeys[key] : -1;
    }
@@ -364,14 +371,14 @@
          var args = _.toArray(arguments);
          var id   = unwrapId(idAccessor, args);
 
-         if( !(id in ctx.status) ) { // avoid feedback loops by making sure an event isn't in progress
+         if( !ctx.status[id] ) { // avoid feedback loops by making sure an event isn't in progress
             return nextEvent.apply(null, [ctx, pushOrPull, id, fx].concat(args));
          }
       }
    }
 
    function nextEventIf(ctx, status, id, fx) {
-      if( !ctx.status[id] || ctx.status[id] === 'status' ) {
+      if( !ctx.status[id] ) {
          nextEvent(ctx, status, id, fx);
       }
    }
@@ -382,6 +389,8 @@
          ctx.status[id] = status;                                // mark this rec as actively pushing/pulling to prevent feedback loops
          return $.when(fx.apply(null, args)).always(thenClearStatus(ctx, id));
       };
+      //todo for large data sets, particularly where recs are going to cycle in/out in a single page app, this is
+      //todo going to slowly eat up memory
       if( id in ctx.defer ) {
          ctx.defer[id] = ctx.defer[id].pipe(wrappedFx);
       }
@@ -451,7 +460,7 @@
       return $.Deferred(function(def) {
          if( list && list.isDirty() ) {
             pushAll(list, model, ctx).then(function() {
-               !list.isDirty() && list.checkpoint();
+               //!list.isDirty() && list.checkpoint();
                def.resolve();
             }, def.reject);
          }
@@ -490,10 +499,10 @@
       fields || (fields = rec.fields);
       var data = _.pick(rec.getData(true), fields);
       if( ko.isObservable(target) ) {
-         target(_.extend({}, target(), data));
+         target(_.extend(target()||{}, data));
       }
       else {
-         target.data = _.extend({}, target.data, data);
+         _.extend(target, data);
       }
    }
 

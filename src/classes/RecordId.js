@@ -67,7 +67,7 @@
     * @return {RecordId}
     */
    RecordId.for = function(model, record) {
-      var data = record instanceof RecordId? record.getData() : record;
+      var data = record instanceof ko.sync.Record? record.getData() : record;
       return new RecordId(model.key, data);
    };
    RecordId.parse = function(hashKey, fields, separator) {
@@ -126,6 +126,7 @@
    }
    KeyFactory.prototype.make = function(data) {
       var id = ko.sync.RecordId.for(this.model, data);
+      id.isSet() || console.log('KeyFactory.make', id.hashKey(), this.tmpField, data[this.tmpField], this.model.key, data); //debug
       return id.isSet()? id.hashKey() : (this.tmpField? data[this.tmpField] : null);
    };
 

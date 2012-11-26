@@ -91,7 +91,7 @@
       else if( rec.isDirty() ) {
          var table = this.base.child(model.table);
          // does it exist?
-         return Util.has(table, hashKey)
+         return Util.has(table, hashKey) //todo-perf necessary?
             .pipe(function(exists) {
                if( exists ) {
                   // if so perform the update
@@ -99,7 +99,7 @@
                      .pipe(_pipedSync(hashKey));
                }
                else {
-                  return $.Deferred(function(def) { def.resolve(hashKey, false, 'does not exist'); }).promise();
+                  return $.Deferred(function(def) { def.reject(hashKey, false, 'does not exist'); }).promise();
                }
             });
       }
@@ -393,15 +393,20 @@
     * @param {Firebase}  table
     * @param {ko.sync.Record} rec
     * @param {Array} fields
+    * @param {ko.sync.KeyFactory} [keyFactory] - needed to generate composite keys (they can be set before hand instead)
     * @return {jQuery.Deferred}
     * @private
     */
-   function _createRecord(table, rec, fields) {
+   function _createRecord(table, rec, fields, keyFactory) {
       var def = $.Deferred(), ref,
           cleanedData = cleanData(fields, rec.getData()),
           key = rec.getKey(),
           sortPriority = rec.getSortPriority(),
           cb;
+      if( !key.isSet() && key.isComposite() && keyFactory ) {
+         rec.updateHashKey(keyFactory.make(rec));
+      }
+
       if( key.isSet() ) {
          ref = table.child(key.hashKey());
          cb = thenResolve(def, ref);
@@ -414,7 +419,7 @@
       }
       else if( key.isComposite() ) {
          // the key consists of more than one field value; it cannot be created on the fly
-         def.reject('composite keys cannot be created by the server');
+         def.reject('composite keys cannot be created by the server (must provide a KeyFactory or set them ahead of time)');
       }
       else if( sortPriority ) {
          ref = table.push(cleanedData);

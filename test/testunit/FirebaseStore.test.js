@@ -211,7 +211,7 @@
    });
 
    asyncTest('#update non-existing', function() {
-      expect(2);
+      expect(1);
       var store = resetStore(),
          model = TestData.model(),
          data = {
@@ -227,14 +227,12 @@
       startSequence()
          .create(store, model, TestData.genericData())
          .update(store, model, data)
-         .then(function(key, success) {
-            strictEqual(key, data.id, 'resolved with correct key');
-            strictEqual(success, false, 'did not succeed');
+         .then(function(key) {
+            ok(false, 'should not resolve');
          })
          .end()
          .fail(function(e) {
-            console.error(e);
-            ok(false, e.toString());
+            ok(e && _.isArray(e) && e[2].match('does not exist'), 'rejected because it does not exist');
          })
          .always(start);
    });
@@ -257,7 +255,7 @@
    });
 
    asyncTest("#delete followed by #update", function() {
-      expect(3);
+      expect(2);
       var store = resetStore(),
          newData = $.extend(TestData.genericData(), {intRequired: 99}),
          model = TestData.model();
@@ -269,12 +267,11 @@
          })
          .update(store, model, newData)
          .then(function(key, success) {
-            strictEqual(key, newData.id, 'resolved with correct key');
-            strictEqual(success, false, 'did not succeed');
+            ok(false, 'update should not succeed');
          })
          .end()
          .fail(function(e) {
-            ok(false, e.toString());
+            ok(e && _.isArray(e) && e[2].match('does not exist'), 'fails because record does not exist');
          })
          .always(start);
    });

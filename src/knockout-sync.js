@@ -28,7 +28,7 @@
       this.subscribe(function(latestValue) {
          var diff = ko.utils.compareArrays(previousValue, latestValue);
          var prevDelayed = delayed;
-         _.invoke(prevDelayed, 'clearTimeout');
+         _.each(prevDelayed, clearTimeout);
          delayed = {};
          for (var i = 0, j = diff.length; i < j; i++) {
             var data = diff[i].value, key = keyFactory.make(data);
@@ -49,6 +49,7 @@
                   break;
             }
          }
+         // whatever still exists is a delete
          _.each(prevDelayed, function(v, k) { callbacks.delete(k); });
          previousValue = undefined;
       });

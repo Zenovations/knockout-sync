@@ -454,17 +454,49 @@
       // delete a record that doesn't exist and make sure it doesn't trigger an update
       list.remove(data[RECS_TOTAL-1]);
 
-      // just leave enough time for deleted events to get processed
-      _.delay(function() {
-         // check the results
-         deepEqual(events, expected, 'all events recorded as expected');
-         start();
-      }, 100);
-
+      // check results
+      deepEqual(events, expected, 'all events recorded as expected');
    });
 
    test('#changeList', function() {
-      //todo-test
+      var recs = TestData.recs(25);
+      var origData = recs.slice(0,20);
+      var list = new RecordList(TestData.model(), origData);
+      var events = [], expected = [];
+
+      function callback() {
+         var args = _.toArray(arguments);
+         args[1] = args[1] && args[1].hashKey();
+         events.push(args);
+      }
+      list.subscribe(callback);
+
+      // add records
+      var addedRecs = recs.slice(22);
+      _.each(addedRecs, function(v, i) {
+         expected.push(['added', v.hashKey(), i===0? origData[origData.length-1].hashKey() : addedRecs[i-1].hashKey()]);
+      });
+      list.add(addedRecs);
+
+      console.log(list.byKey);
+
+      // remove records
+      expected.push(['deleted', recs[2].hashKey()]);
+      list.remove(recs[2]);
+      expected.push(['deleted', recs[9].hashKey()]);
+      list.remove(recs[9]);
+
+      // move records
+      expected.push(['moved', recs[5].hashKey(), recs[12].hashKey()]);
+      list.move(recs[5], recs[12]);
+
+      // change records
+      expected.push(['updated', recs[1].hashKey(), 'stringOptional']);
+      recs[1].set('stringOptional', 'changed it');
+      expected.push(['updated', recs[22].hashKey(), 'stringOptional']);
+      recs[22].set('stringOptional', 'changed it');
+
+      deepEqual(events, expected, 'all events recorded as expected');
    });
 
 })(jQuery);
