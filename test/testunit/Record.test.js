@@ -168,7 +168,7 @@
       });
 
       // change some values
-      rec.updateAll({'stringOptional': 'new value', 'floatOptional': 2.25});
+      rec.updateAll({'floatOptional': 2.25, 'stringOptional': 'new value'});
       rec.set('stringOptional', 'a nudder value');
       sub.dispose();
 

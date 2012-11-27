@@ -56,9 +56,7 @@
    })();
 
    $(function() { // on dom ready
-
       _.sortBy(moduleSet, function(v, k) { return k.toLowerCase(); });
-      console.log(selectedModule);
 
       // activate the select list
       if( selectedModule ) { $select.val(selectedModule); }
@@ -107,7 +105,7 @@
       });
 
       // wrap all of it in a tidy container
-      var $div = $('<div class="qunit-toolbar" />').append('&nbsp;&nbsp;').append($select).append($button).append('&nbsp;&nbsp;').append($next).append($nextTest).append('&nbsp;&nbsp;');
+      var $div = $('<div class="qunit-toolbar" style="float: left" />').append('&nbsp;&nbsp;').append($select).append($button).append('&nbsp;&nbsp;').append($next).append($nextTest).append('&nbsp;&nbsp;');
 
       $('#qunit-testrunner-toolbar').prepend($div);
    });

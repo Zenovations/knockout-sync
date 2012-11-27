@@ -55,7 +55,7 @@
          }
          else {
             this.rec = listOrRecord;
-            syncData(findTargetDataSource(this, target), this.rec);
+            ko.sync.Record.applyWithObservables(findTargetDataSource(this, target), this.rec);
             this.twoway && this.subs.push(_watchStoreRecord(this, listOrRecord, target));
             this.subs.push(_watchRecord(this, listOrRecord, target));
             this.observed && this.subs.push(_watchObs(this, target, listOrRecord));
@@ -107,13 +107,17 @@
       var model = c.model, ctx = c.sharedContext;
       return model.store.watch(model, nextEventHandler(ctx, 'pull', idCallback(1),
          function(action, name, value, prevSibling) {
-            var rec = list.find(name);
+            var rec = list.find(name), key;
+            if( !rec && action !== 'added' ) {
+               console.debug('action invalid (record does not exist in this list)', action, name);
+               return;
+            }
             switch(action) {
                case 'added':
                   list.add(model.newRecord(value), prevSibling || 0);
                   break;
                case 'deleted':
-                  var key = rec.hasKey() && rec.hashKey();
+                  key = rec.hasKey() && rec.hashKey();
                   key && !(key in list.changes.deleted) && list.remove(rec);
                   break;
                case 'updated':
@@ -130,8 +134,16 @@
          }), criteria);
    }
 
-   function _watchStoreRecord(c, rec, target) {
-      var model = c.model, ctx = c.sharedContext;
+   /**
+    * Sync record with store when auto-sync is true
+    * @param {SyncController} sync
+    * @param {ko.sync.Record} rec
+    * @param {Object} target
+    * @return {jQuery.Deferred}
+    * @private
+    */
+   function _watchStoreRecord(sync, rec, target) {
+      var model = sync.model, ctx = sync.sharedContext;
 
       if( !rec.hasKey() ) {
          // create the record if we are using auto-sync and it doesn't exist
@@ -206,22 +218,25 @@
       obs.subscribeRecChanges(ctx.keyFactory, {
          add: function(key, data, prevKey) {
             nextEventIf(ctx, 'push', key, function() {
+               var rec = sync.model.newRecord(data);
                //todo needs to get the id apply it when returned
                //todo
                //todo
                //todo
                //todo
-               list.add(sync.model.newRecord(data), prevKey);
+               list.add(rec, prevKey);
+               sync.subs.push(watchFields(sync, data, rec));
             });
          },
          delete: function(key) {
             nextEventIf(ctx, 'push', key, function() {
                list.remove(key);
+               //todo dose this need to invoke the dispose method and remove from subs?
             });
          },
          move: function(key, data, prevKey) {
             nextEventIf(ctx, 'push', key, function() {
-               var rec = list.get(key);
+               var rec = list.find(key);
                if( rec ) {
                   //rec.updateAll(data); //todo-sort ???
                   list.move(key, prevKey);
@@ -231,11 +246,34 @@
       })
    }
 
-   function _watchObs(c, obs, rec) {
-      var ctx = c.sharedContext;
+   function _watchObs(sync, obs, rec) {
+      var ctx = sync.sharedContext;
       obs.subscribe(function(newValue) {
          nextEvent(ctx, 'push', rec.hashKey(), function() {
             rec.updateAll(newValue);
+         });
+      });
+   }
+
+   function watchFields(sync, obs, rec) {
+      var data = ko.utils.unwrapObservable(obs), disposables = [], ctx = sync.sharedContext;
+      _.each(rec.observed, function(v, k) {
+         if(_.has(data, k) && ko.isObservable(data[k])) {
+            disposables.push(watchField(ctx, k, data[k], rec));
+         }
+      });
+
+      return {
+         dispose: function() {
+            _.each(disposables, function(d) {d.dispose();});
+         }
+      }
+   }
+
+   function watchField(ctx, field, obs, rec) {
+      return obs.subscribe(function(newValue) {
+         nextEventIf(ctx, 'push', rec.hashKey(), function() {
+            rec.set(field, newValue);
          });
       });
    }
@@ -295,12 +333,7 @@
                var oldKey = rec.hashKey();
                rec.onKey(function(newKey, fields, data) {
                   nextEvent(ctx, 'pull', newKey, function() {
-                     //todo needs to apply the hashKey to the hidden field
-                     //todo
-                     //todo
-                     //todo
-                     //todo
-                     syncData(findTargetDataSource(sync, target, oldKey), opts.rec, fields)
+                     ko.sync.Record.applyWithObservables(findTargetDataSource(sync, target, oldKey), opts.rec, fields)
                   })
                });
             }
@@ -310,7 +343,7 @@
             if( fields.length ) {
                //todo-sort
                sourceData = findTargetDataSource(sync, target, id);
-               syncData(sourceData, rec, fields);
+               ko.sync.Record.applyWithObservables(sourceData, rec, fields);
                //todo? this only affects unobserved fields which technically shouldn't change?
                //if(sync.isList) { opts.target.notifySubscribers(opts.target()); }
             }
@@ -386,14 +419,14 @@
          var id   = unwrapId(idAccessor, args);
 
          if( !ctx.status[id] ) { // avoid feedback loops by making sure an event isn't in progress
-            return nextEvent.apply(null, [ctx, pushOrPull, id, fx].concat(args));
+            return nextEventIf.apply(null, [ctx, pushOrPull, id, fx].concat(args));
          }
       }
    }
 
    function nextEventIf(ctx, status, id, fx) {
       if( !ctx.status[id] ) {
-         nextEvent(ctx, status, id, fx);
+         nextEvent.apply(null, _.toArray(arguments));
       }
    }
 
@@ -505,20 +538,9 @@
    function syncObsArray(target, list) {
       var it = list.iterator(), data = [];
       while(it.hasNext()) {
-         data.push(it.next().getData());
+         data.push(ko.sync.Record.applyWithObservables({}, it.next()));
       }
       target(data);
-   }
-
-   function syncData(target, rec, fields) {
-      fields || (fields = rec.fields);
-      var data = _.pick(rec.getData(true), Array.concat.apply([ko.sync.KeyFactory.HASHKEY_FIELD], fields));
-      if( ko.isObservable(target) ) {
-         target(_.extend(target()||{}, data));
-      }
-      else {
-         _.extend(target, data);
-      }
    }
 
    function thenClearStatus(ctx, id) {

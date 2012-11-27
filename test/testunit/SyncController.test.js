@@ -8,7 +8,8 @@
 
    var TestData       = ko.sync.TestData,
        RecordList     = ko.sync.RecordList,
-       SyncController = ko.sync.SyncController;
+       SyncController = ko.sync.SyncController,
+       Record         = ko.sync.Record;
 
    module('SyncController');
 
@@ -68,10 +69,10 @@
             deepEqual(results, [
                ['create', 'record-22'],
                ['create', 'record-23'],
-               ['update', 'record-19'],
                ['update', 'record-14'],
                ['update', 'record-15'],
 //            ['update', 'record-16'],
+               ['update', 'record-19'],
                ['delete', 'record-16'],
                ['delete', 'record-17']
             ], 'correct events invoked on Store object');
@@ -85,7 +86,7 @@
       syncActivity({
          recs: startRecs,
          fx: function(sync, list, model) {
-            return model.store.fakeNotify('added', rec.hashKey(), rec.getData(), recs[19].hashKey());
+            return model.store.fakeNotify('added', rec.hashKey(), rec.getData(true), recs[19].hashKey());
          },
          results: function(storeEvents, listEvents) {
             deepEqual(listEvents, [
@@ -327,11 +328,12 @@
 
    asyncTest('target: an observable gets set with correct data', function() {
       expect(2);
-      var rec = TestData.rec(1);
+      var rec = TestData.rec(1), obs = ko.observable();
       syncActivity({
+         target: obs,
          fx: function(sync, list, model, target) {
             ok(ko.isObservable(target) && !ko.sync.isObservableArray(target), 'is an observable object');
-            deepEqual(target(), rec.getData());
+            deepEqual(ko.sync.unwrapAll(obs), rec.getData(true));
          },
          rec: rec
       });
@@ -339,11 +341,12 @@
 
    asyncTest('target: an observableArray gets set with correct data', function() {
       expect(2);
-      var recs = TestData.recs(3);
+      var recs = TestData.recs(3), observedFields = _observables(TestData.model());
       syncActivity({
          fx: function(sync, list, model, target) {
             ok(ko.isObservable(target) && ko.sync.isObservableArray(target), 'is an observableArray');
-            deepEqual(target(), dataFromRecs(recs));
+            var unwrappedList = unwrapList(target, observedFields);
+            deepEqual(unwrappedList, dataFromRecs(recs));
          },
          recs: recs
       });
@@ -356,7 +359,7 @@
          target: target,
          fx: function(sync, list, model, target) {
             ok(!ko.isObservable(target), 'is not observable');
-            deepEqual(target.data, rec.getData());
+            deepEqual(ko.sync.unwrapAll(target.data), rec.getData(true));
          },
          rec: rec
       });
@@ -406,7 +409,7 @@
          target: obs,
          fx: function(sync, list, model, target) {
             strictEqual(target, obs, 'using correct observable');
-            obs(_.extend(recs[0].getData(), {stringOptional: 'propagate already'}));
+            obs(_.extend(recs[0].getData(true), {stringOptional: 'propagate already'}));
          },
          results: function(storeEvents, listEvents) {
             deepEqual(listEvents, [
@@ -433,7 +436,7 @@
             deepEqual(listEvents, [
                [ 'record-1', ['stringOptional'] ]
             ], 'event reached list');
-            deepEqual(obs(), rec.getData(), 'observable has correct data');
+            deepEqual(ko.sync.unwrapAll(obs), rec.getData(true), 'observable has correct data');
          }
       })
    });
@@ -449,33 +452,82 @@
             rec.set('stringOptional', 'it rolls downhill');
          },
          results: function(storeEvents, listEvents) {
-            console.log('testing');
-            deepEqual(obs(), rec.getData(), 'observable has correct data');
+            deepEqual(ko.sync.unwrapAll(obs), rec.getData(true), 'observable has correct data');
          }
       });
    });
 
    asyncTest('observableArray: modifying it propagates changes', function() {
-      expect(1);
-      var recs = TestData.recs(20), obs = ko.observable();
+      expect(2);
+      var recs = TestData.recs(11), obs = ko.observableArray(), recToAdd = recs[10];
       syncActivity({
-         recs: recs,
+         recs: recs.slice(0, 10),
          target: obs,
          fx: function(sync, list, model, target) {
-
+            return $.Deferred(function(def) {
+               TestData.expires(def);
+               obs.push(recToAdd);
+               // wait for something to come back from the store
+               var to = setInterval(function() {
+                  if( list.iterator().size() > 10 ) {
+                     clearTimeout(to);
+                     def.resolve();
+                  }
+               }, 10);
+            });
          },
          results: function(storeEvents, listEvents) {
+            deepEqual(storeEvents, [
+               [ 'create', recToAdd.hashKey() ]
+            ], 'store events match');
 
+            deepEqual(listEvents, [
+               [ 'added', recToAdd.hashKey(), recs[9].hashKey() ]
+            ], 'list events match');
          }
       })
    });
 
    asyncTest('observableArray: change on server propagates down', function() {
-      start(); //todo-test
+      expect(2);
+      var recs = TestData.recs(5), keyToRemove = recs[1].hashKey(), hashKeyField = ko.sync.KeyFactory.HASHKEY_FIELD;
+      syncActivity({
+         recs: recs,
+         fx: function(sync, list, model, target) {
+            var v = _.find(target(), function(v) {
+               return v[hashKeyField] == keyToRemove;
+            });
+            ok(v, 'has record before delete');
+            return sync.model.store.fakeNotify('deleted', keyToRemove);
+         },
+         results: function(storeEvents, listEvents, target) {
+            var v = _.find(target(), function(v) {
+               return v[hashKeyField] === keyToRemove;
+            });
+            ok(!v, 'does not have record after delete');
+         }
+      })
    });
 
    asyncTest('observableArray: change on RecList propagates down', function() {
-      start(); //todo-test
+      expect(2);
+      var recs = TestData.recs(5), keyToRemove = recs[1].hashKey(), hashKeyField = ko.sync.KeyFactory.HASHKEY_FIELD;
+      syncActivity({
+         recs: recs,
+         fx: function(sync, list, model, target) {
+            var v = _.find(target(), function(v) {
+               return v[hashKeyField] == keyToRemove;
+            });
+            ok(v, 'has record before delete');
+            return list.remove(keyToRemove);
+         },
+         results: function(storeEvents, listEvents, target) {
+            var v = _.find(target(), function(v) {
+               return v[hashKeyField] === keyToRemove;
+            });
+            ok(!v, 'does not have record after delete');
+         }
+      })
    });
 
    /**
@@ -550,8 +602,34 @@
 
    function dataFromRecs(recs) {
       return _.map(recs, function(rec) {
-         return rec.getData();
+         return rec.getData(true);
       });
+   }
+
+   /**
+    * @param {ko.observableArray} obsArray
+    * @param {Array} observedFields
+    * @return {Array}
+    */
+   function unwrapList(obsArray, observedFields) {
+      return _.map(obsArray() , function(v) {
+         var copy = _.extend({}, v);
+         _.each(observedFields, function(f) {
+            copy[f] = ko.utils.unwrapObservable(copy[f]);
+         });
+         return copy;
+      });
+   }
+
+   /**
+    * @param {ko.sync.Model} model
+    * @return {Array}
+    * @private
+    */
+   function _observables(model) {
+      return _.chain(model.fields).map(function(v, k) {
+         return v.observe? k : null;
+      }).compact().value();
    }
 
 })(jQuery);

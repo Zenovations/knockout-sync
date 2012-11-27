@@ -77,7 +77,6 @@
    function deferDelete(key, delayed, deleteCallback) {
       return setTimeout(function() {
          if(key in delayed) {
-            console.warn('deferDelete completed', key);
             delete delayed[key];
             deleteCallback(key);
          }
@@ -92,6 +91,22 @@
 
    ko.sync.isObservableArray = function(o) {
       return typeof(o) === 'function' && ko.isObservable(o) && _.isArray(o());
+   };
+
+   /**
+    * Creates a copy of the data with all observables unwrapped to their value
+    *
+    * @param {Object|Array} data
+    * @return {Object}
+    */
+   ko.sync.unwrapAll = function(data) {
+      var unwrap = ko.utils.unwrapObservable;
+      data = unwrap(data);
+      var out = _.isArray(data)? [] : {};
+      _.each(data, function(v, key) {
+         out[key] = unwrap(v);
+      });
+      return out;
    };
 
    // the fromat of this value is coupled with RecordId's privade _isTempId() method :(

@@ -7,10 +7,10 @@
 
    test('#isDirty', function() {
       expect(2);
-      var model = _model();
-      var view = TestData.genericData();
+      var model = _model({auto: false});
+      var view = {data: TestData.genericData()};
       model.sync(view);
-      view.intOptional(5);
+      view.data.intOptional(5);
       strictEqual(view.crud.isDirty(), true, 'is dirty after update');
       view.crud.record.isDirty(false);
       strictEqual(view.crud.isDirty(), false, 'not dirty after record cleared');
@@ -48,9 +48,19 @@
       //todo-test
    });
 
-
-   function _model() {
-      return TestData.model({store: new TestData.TestStore(true, TestData.model(), function() {}, {})});
+   /**
+    * @param {Function} [fx]
+    * @param {Object} [moreOpts]
+    * @return {ko.sync.Model}
+    * @private
+    */
+   function _model(moreOpts, fx) {
+      if(_.isFunction(moreOpts) ) {
+         fx = moreOpts;
+         moreOpts = {};
+      }
+      fx || (fx = function() {});
+      return TestData.model(_.extend({store: new TestData.TestStore(true, TestData.model(), fx, {})}, moreOpts||{}));
    }
 
 })(jQuery);

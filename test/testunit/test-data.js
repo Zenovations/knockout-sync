@@ -89,7 +89,7 @@
       if( 'dateRequired' in out && out.dateRequired ) {
          out.dateRequired = moment.utc(out.dateRequired).toDate();
       }
-      return out;
+      return ko.sync.unwrapAll(out);
    };
 
    exports.defaults = function(model) {
@@ -553,10 +553,9 @@
    }
 
    //todo make these work with exports/et al
-// override asyncTest for some logging
-   //todo why don't these work here??
-   var _asyncTest = asyncTest, currName;
-   asyncTest = function(name, fx) {
+   // override asyncTest for some logging
+   var _asyncTest = window.asyncTest, currName;
+   window.asyncTest = function(name, fx) {
       return _asyncTest(name, function() {
          console.log('starting', name);
          console.time(name);
@@ -565,10 +564,18 @@
       });
    };
 
-   var _start = start;
-   start = function() {
+   var _start = window.start;
+   window.start = function() {
       console.timeEnd(currName);
       _start();
+   };
+
+   var _test = window.test;
+   window.test = function(name, fx) {
+      return _test(name, function() {
+         console.info('invoking (synchronous): '+name);
+         fx();
+      });
    };
 
 })(ko);

@@ -66,7 +66,7 @@
       model.sync(obs);
       var crud = obs.crud;
       ok(crud instanceof ko.sync.Crud, 'is a Crud instance');
-      deepEqual(crud.record.getData(), TestData.forCompare(TestData.fullData(genericData)), 'contains default data');
+      deepEqual(crud.record.getData(true), ko.sync.unwrapAll(genericData), 'contains default data');
    });
 
    test("#sync, observableArray (empty)", function() {

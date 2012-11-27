@@ -428,7 +428,7 @@
       deepEqual(events, expected, 'all events recorded as expected');
    });
 
-   asyncTest('#subscribe, invalid delete ops', function() {
+   test('#subscribe, invalid delete ops', function() {
       var RECS_TOTAL = 5;
       var i, v,
          data     = TestData.makeRecords(RECS_TOTAL),

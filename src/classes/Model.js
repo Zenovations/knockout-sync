@@ -31,15 +31,11 @@
        * @return {ko.sync.Model} this
        */
       sync: function(target, criteria) {
-         var isObservable = ko.isObservable(target);
          if( ko.sync.isObservableArray(target) ) {
             target.crud = new ko.sync.CrudArray(target, this, criteria);
          }
          else {
-            var data;
-            if( !isObservable ) { target.data = data = target.data||{}; }
-            else { data = target; }
-            target.crud = new ko.sync.Crud(data, this);
+            target.crud = new ko.sync.Crud(target, this);
          }
          return this;
       },

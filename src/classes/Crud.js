@@ -10,7 +10,7 @@
    ko.sync.Crud = function(target, model) {
       this.parent = target;
       this.def = $.Deferred().resolve().promise();
-      this.record = model.newRecord(target);
+      this.record = model.newRecord(ko.isObservable(target)? target() : target.data);
       this.controller = new ko.sync.SyncController(model, target, this.record);
    };
 

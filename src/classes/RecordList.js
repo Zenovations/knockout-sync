@@ -37,8 +37,8 @@
     */
    ko.sync.RecordList.prototype.checkpoint = function() {
       // clear any existing changes
-      _.each(this.changeList(), function(action, rec) {
-         this.clearEvent(action, rec.hashKey());
+      _.each(this.changeList(), function(change) {
+         this.clearEvent(change[0], change[1].hashKey());
       }.bind(this));
       // reset change list
       this.changes = { added: {}, updated: {}, moved: {}, deleted: {} };
@@ -238,7 +238,7 @@
             }
          }
          else {
-            console.log('record not in this list', recordOrIdOrHash);
+            console.log('record not in list (already removed?)', recordOrIdOrHash);
          }
       }
       return this;
