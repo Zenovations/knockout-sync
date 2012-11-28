@@ -5,66 +5,63 @@
    "use strict";
    var modelInst = 1; // just a counter to make models unique
 
+   /**
+    * @param {object} props
+    * @constructor
+    */
+   ko.sync.Model = function(props) {
+      var defaults    = ko.utils.extend(ko.sync.Model.FIELD_DEFAULTS, props.defaults);
+      /** @var {ko.sync.Store} */
+      this.store      = props.store;
+      this.table      = props.table;
+      this.key        = props.key;
+      this.sort       = props.sort;
+      this.validator  = props.validator;
+      this.auto       = props.auto;
+      this.inst       = modelInst++;
+      this.fields     = processFields(defaults, props.fields);
+      this.factory    = props.recordFactory || new RecordFactory(this);
+   };
 
-   ko.sync.Model = Class.extend({
-      /**
-       * @param {object} props
-       * @constructor
-       */
-      init: function(props) {
-         var defaults    = ko.utils.extend(ko.sync.Model.FIELD_DEFAULTS, props.defaults);
-         /** @var {ko.sync.Store} */
-         this.store      = props.store;
-         this.table      = props.table;
-         this.key        = props.key;
-         this.sort       = props.sort;
-         this.validator  = props.validator;
-         this.auto       = props.auto;
-         this.inst       = modelInst++;
-         this.fields     = _processFields(defaults, props.fields);
-         this.factory    = props.recordFactory || new RecordFactory(this);
-      },
-
-      /**
-       * @param {ko.observableArray|object} target an observable array we'll store a list of records in or an object to sync to a single record
-       * @param {object} [criteria] only used for observableArray to tell it which table records to monitor/sync
-       * @return {ko.sync.Model} this
-       */
-      sync: function(target, criteria) {
-         if( ko.sync.isObservableArray(target) ) {
-            target.crud = new ko.sync.CrudArray(target, this, criteria);
-         }
-         else {
-            target.crud = new ko.sync.Crud(target, this);
-         }
-         return this;
-      },
-
-      /**
-       * @param {object} [data]
-       * @return {Record}
-       */
-      newRecord: function(data) {
-         return this.factory.create(data);
-      },
-
-      /**
-       * @param {object} data
-       * @return {*}
-       */
-      newList: function( data ) {
-         return new ko.sync.RecordList(this, data);
-      },
-
-      toString: function() {
-         return this.table+'['+this.inst+']';
-      },
-
-      equal: function(o) {
-         return o instanceof ko.sync.Model && this.inst == o.inst;
+   /**
+    * @param {ko.observableArray|object} target an observable array we'll store a list of records in or an object to sync to a single record
+    * @param {object} [criteria] only used for observableArray to tell it which table records to monitor/sync
+    * @return {ko.sync.Model} this
+    */
+   ko.sync.Model.prototype.sync = function(target, criteria) {
+      if( ko.sync.isObservableArray(target) ) {
+         target.crud = new ko.sync.CrudArray(target, this, criteria);
       }
+      else {
+         target.crud = new ko.sync.Crud(target, this);
+      }
+      return this;
+   };
 
-   });
+   /**
+    * @param {object} [data]
+    * @return {Record}
+    */
+   ko.sync.Model.prototype.newRecord = function(data) {
+      return this.factory.create(data);
+   };
+
+   /**
+    * @param {object} data
+    * @return {*}
+    */
+   ko.sync.Model.prototype.newList = function( data ) {
+      return new ko.sync.RecordList(this, data);
+   };
+
+   ko.sync.Model.prototype.toString = function() {
+      return this.table+'['+this.inst+']';
+   };
+
+   ko.sync.Model.prototype.equal = function(o) {
+      return o instanceof ko.sync.Model && this.inst == o.inst;
+   };
+
    ko.sync.Model.FIELD_DEFAULTS = {
       //todo make update_counter work?
       //todo add read-only property?
@@ -80,7 +77,7 @@
       format:    function(v) { return v; } //todo
    };
 
-   function _processFields(defaults, fields) {
+   function processFields(defaults, fields) {
       var out = {}, o, k;
       _.keys(fields).forEach(function(k) {
          o = ko.utils.extend({}, defaults);
@@ -118,24 +115,5 @@
       data instanceof ko.sync.Record && (data = data.getData());
       return new ko.sync.Record(this.model, data);
    };
-
-
-//   function _makeList(model, dataOrList) {
-//      if( dataOrList instanceof ko.sync.RecordList ) {
-//         return dataOrList;
-//      }
-//      else {
-//         return model.newList(dataOrList);
-//      }
-//   }
-//
-//   function _makeRecord(model, dataOrRecord) {
-//      if( dataOrRecord instanceof ko.sync.Record ) {
-//         return dataOrRecord;
-//      }
-//      else {
-//         return model.newRecord(dataOrRecord);
-//      }
-//   }
 
 })(ko);

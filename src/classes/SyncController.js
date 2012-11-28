@@ -40,6 +40,8 @@
          this.running    = null; //used by pushUpdates
          this.queued     = null; //used by pushUpdates
 
+         this.model.store.watch(); //debug
+
          this.sharedContext.keyFactory = new ko.sync.KeyFactory(model, true);
 
          if( this.isList && !ko.sync.isObservableArray(target) ) {
