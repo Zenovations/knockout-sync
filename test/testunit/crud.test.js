@@ -16,8 +16,29 @@
       strictEqual(view.crud.isDirty(), false, 'not dirty after record cleared');
    });
 
-   test('#create', function() {
-      //todo-test
+   asyncTest('#create', function() {
+      expect(1);
+      var model = _model({auto: false}, _callback);
+      var view  = {data: TestData.rec(5).getData()};
+      var events = [];
+
+      function _callback() {
+         if( arguments[0] in {hasTwoWaySync: 1, watch: 1, watchRecord: 1} ) { return; } // suppress this event which we don't care about
+//            console.log('store: ', $.makeArray(arguments));
+         events.push($.makeArray(arguments));
+      }
+
+      model.sync(view);
+      var def = view.crud.create().promise();
+      TestData.expires(def); // timeout
+
+      def.then(function() {
+            deepEqual(events, [
+               ['create', view.data.id]
+            ]);
+         })
+         .fail(function(e) { ok(false, e); })
+         .always(start);
    });
 
    test('#read', function() {

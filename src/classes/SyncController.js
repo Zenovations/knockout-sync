@@ -40,7 +40,19 @@
          this.running    = null; //used by pushUpdates
          this.queued     = null; //used by pushUpdates
 
-         this.model.store.watch(); //debug
+//         model.store.watch(model, function() {
+//            console.log('watch store', _.toArray(arguments));
+//         }); //debug
+//
+//         listOrRecord.subscribe(function() {
+//            console.log('watch list/record', _.toArray(arguments))
+//         });//debug
+//
+//         if( ko.isObservable(target) ) {
+//            target.subscribe(function() {
+//               console.log('watch obs', _.toArray(arguments));
+//            });
+//         } //debug
 
          this.sharedContext.keyFactory = new ko.sync.KeyFactory(model, true);
 
@@ -60,7 +72,13 @@
             ko.sync.Record.applyWithObservables(findTargetDataSource(this, target), this.rec);
             this.twoway && this.subs.push(_watchStoreRecord(this, listOrRecord, target));
             this.subs.push(_watchRecord(this, listOrRecord, target));
-            this.observed && this.subs.push(_watchObs(this, target, listOrRecord));
+            if( this.observed ) {
+               this.subs.push(_watchObs(this, target, listOrRecord));
+            }
+            else {
+               this.subs.push(_watchData(this, target.data, listOrRecord));
+            }
+
          }
       },
 
@@ -213,27 +231,40 @@
       });
    }
 
+   /**
+    * @param {ko.sync.SyncController} sync
+    * @param {ko.observableArray} obs
+    * @param {ko.sync.RecordList} list
+    * @return {object} with a dispose method
+    * @private
+    */
    function _watchObsArray(sync, obs, list) {
+//      console.log('watchObsArray initialized');//debug
       var ctx = sync.sharedContext;
-      //credits: http://stackoverflow.com/questions/12166982/determine-which-element-was-added-or-removed-with-a-knockoutjs-observablearray
-      // subscribeRecChanges is defined in knockout-sync.js!
-      obs.subscribeRecChanges(ctx.keyFactory, {
+      // subscribeChanges is defined in knockout-sync.js!
+      return obs.watchChanges(ctx.keyFactory, sync.model.observedFields(), {
          add: function(key, data, prevKey) {
             nextEventIf(ctx, 'push', key, function() {
                var rec = sync.model.newRecord(data);
-               //todo needs to get the id apply it when returned
-               //todo
+               //todo needs to get the id and apply it when returned
+               //todo there's going to be a lot of fallout with that
                //todo
                //todo
                //todo
                list.add(rec, prevKey);
-               sync.subs.push(watchFields(sync, data, rec));
+               //sync.subs.push(watchFields(sync, data, rec));
             });
+         },
+         update: function(key, data) {
+            nextEventIf(ctx, 'push', key, function() {
+               var rec = list.find(key);
+               rec && rec.updateAll(data);
+            })
          },
          delete: function(key) {
             nextEventIf(ctx, 'push', key, function() {
                list.remove(key);
-               //todo dose this need to invoke the dispose method and remove from subs?
+               //todo does this need to invoke the dispose method and remove from subs? probably
             });
          },
          move: function(key, data, prevKey) {
@@ -248,36 +279,37 @@
       })
    }
 
+   /**
+    * @param {ko.sync.SyncController} sync
+    * @param {ko.observable}  obs
+    * @param {ko.sync.Record} rec
+    * @return {object} with a dispose method
+    * @private
+    */
    function _watchObs(sync, obs, rec) {
+//      console.log('watchObs initialized'); //debug
       var ctx = sync.sharedContext;
-      obs.subscribe(function(newValue) {
+      return obs.watchChanges(sync.model.observedFields, function(data) {
+//         console.log('watchObs', data); //debug
          nextEvent(ctx, 'push', rec.hashKey(), function() {
-            rec.updateAll(newValue);
+            rec.updateAll(data);
          });
       });
    }
 
-   function watchFields(sync, obs, rec) {
-      var data = ko.utils.unwrapObservable(obs), disposables = [], ctx = sync.sharedContext;
-      _.each(rec.observed, function(v, k) {
-         if(_.has(data, k) && ko.isObservable(data[k])) {
-            disposables.push(watchField(ctx, k, data[k], rec));
-         }
-      });
-
-      return {
-         dispose: function() {
-            _.each(disposables, function(d) {d.dispose();});
-         }
-      }
-   }
-
-   function watchField(ctx, field, obs, rec) {
-      return obs.subscribe(function(newValue) {
-         nextEventIf(ctx, 'push', rec.hashKey(), function() {
-            rec.set(field, newValue);
-         });
-      });
+   /**
+    * @param {ko.sync.SyncController} sync
+    * @param {Object}  obj
+    * @param {ko.sync.Record} rec
+    * @return {object} with a dispose method
+    * @private
+    */
+   function _watchData(sync, obj, rec) {
+//      console.log('watchData initialized');//debug
+      return ko.sync.watchFields(obj, sync.model.observedFields(), nextEventHandler(sync.sharedContext, 'push', rec.hashKey(), function(data) {
+//         console.log('watchData invoked', data); //debug
+         rec.updateAll(data);
+      }));
    }
 
    function pushUpdate(model, action, rec) {
@@ -324,7 +356,12 @@
       switch(opts.action) {
          case 'added':
             pos = newPositionForRecord(ctx, target, rec, opts.prevId, true);
-            sourceData = rec.getData(true);
+            sourceData = ko.sync.Record.applyWithObservables({}, rec);
+            //todo-nested watch obs fields
+            //todo
+            //todo
+            //todo
+            //todo
             if( pos < 0 ) {
                target.push(sourceData);
             }
@@ -332,10 +369,11 @@
                target.splice(pos, 0, sourceData);
             }
             if( !rec.hasKey() ) {
+               // the record doesn't have an ID yet; when that gets assigned, update our data accordingly
                var oldKey = rec.hashKey();
                rec.onKey(function(newKey, fields, data) {
                   nextEvent(ctx, 'pull', newKey, function() {
-                     ko.sync.Record.applyWithObservables(findTargetDataSource(sync, target, oldKey), opts.rec, fields)
+                     ko.sync.Record.applyWithObservables(findTargetDataSource(sync, target, oldKey), rec, fields)
                   })
                });
             }
@@ -419,15 +457,12 @@
       return function() {
          var args = _.toArray(arguments);
          var id   = unwrapId(idAccessor, args);
-
-         if( !ctx.status[id] ) { // avoid feedback loops by making sure an event isn't in progress
-            return nextEventIf.apply(null, [ctx, pushOrPull, id, fx].concat(args));
-         }
+         return nextEventIf.apply(null, [ctx, pushOrPull, id, fx].concat(args));
       }
    }
 
    function nextEventIf(ctx, status, id, fx) {
-      if( !ctx.status[id] ) {
+      if( !ctx.status[id] ) { // avoid feedback loops by making sure an event isn't in progress
          nextEvent.apply(null, _.toArray(arguments));
       }
    }
@@ -439,7 +474,8 @@
          return $.when(fx.apply(null, args)).always(thenClearStatus(ctx, id));
       };
       //todo for large data sets, particularly where recs are going to cycle in/out in a single page app, this is
-      //todo going to slowly eat up memory
+      //todo going to slowly eat up memory since the deferred promises are never removed; this can be prevented
+      //todo by removing items from ctx.defer when they are deleted from our list
       if( id in ctx.defer ) {
          //todo does not run if the previous operation failed (should it?)
          ctx.defer[id] = ctx.defer[id].pipe(wrappedFx);

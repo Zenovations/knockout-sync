@@ -11,6 +11,8 @@
       this.parent = target;
       this.def = $.Deferred().resolve().promise();
       this.record = model.newRecord(ko.isObservable(target)? target() : target.data);
+      //todo this automagically creates the record if it does not exist, instead it should
+      //todo wait for a create action before syncing the record to the server
       this.controller = new ko.sync.SyncController(model, target, this.record);
    };
 

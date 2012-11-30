@@ -341,7 +341,7 @@
 
    asyncTest('target: an observableArray gets set with correct data', function() {
       expect(2);
-      var recs = TestData.recs(3), observedFields = _observables(TestData.model());
+      var recs = TestData.recs(3), observedFields = TestData.model().observedFields();
       syncActivity({
          fx: function(sync, list, model, target) {
             ok(ko.isObservable(target) && ko.sync.isObservableArray(target), 'is an observableArray');
@@ -619,17 +619,6 @@
          });
          return copy;
       });
-   }
-
-   /**
-    * @param {ko.sync.Model} model
-    * @return {Array}
-    * @private
-    */
-   function _observables(model) {
-      return _.chain(model.fields).map(function(v, k) {
-         return v.observe? k : null;
-      }).compact().value();
    }
 
 })(jQuery);

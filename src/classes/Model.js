@@ -62,6 +62,12 @@
       return o instanceof ko.sync.Model && this.inst == o.inst;
    };
 
+   ko.sync.Model.prototype.observedFields = function() {
+      return _.chain(this.fields).map(function(v, k) {
+         return v.observe? k : null;
+      }).compact().value();
+   };
+
    ko.sync.Model.FIELD_DEFAULTS = {
       //todo make update_counter work?
       //todo add read-only property?
