@@ -1,68 +1,69 @@
 
 (function(ko, $) {
 
-   ko.sync.Change = function(source, action, rec, meta) {
-      this.source  = source;
-      this.action  = action;
-      this.rec     = rec;
-      this.meta    = meta;
-      this.status  = 'pending';
-      this.done    = $.Deferred();
+   /**
+    * @param {ko.sync.Model} model
+    * @param {ko.sync.KeyFactory} keyFactory
+    * @constructor
+    */
+   ko.sync.ChangeController = function(model) {
+      this.model = model;
+      this.keyFactory = new ko.sync.KeyFactory(model, true); // used to generate caches and find elements inside observableArray
    };
 
-   ko.sync.Change._expect = function(dest) {
-      return new ko.sync.Change(dest, this.action, this.rec, this.meta);
+   /**
+    * @param {string} destination one of 'store' or 'obs'
+    * @param {ko.sync.RecordList} recList
+    * @param {Object|ko.observable|ko.observableArray} target
+    * @return {jQuery.Deferred} promise
+    */
+   ko.sync.ChangeController.prototype.process = function(destination, recList, target) {
+      var promises = [], self = this, context = {keyFactory: this.keyFactory};
+      _.each(recList.changeList(), function(changeListEntry) {
+         var change = ko.sync.Change.fromChangeList(this.model, changeListEntry, target);
+         promises.push(change.run(context).done(function(id) {
+            recList.clearEvent(change.action, change.key());
+            change.action.rec.isDirty(false);
+         }));
+      });
+      self.changes = [];
+      self.changesByKey = {};
+      return $.when.apply($, promises);
    };
 
-   ko.sync.Change.equals = function(change) {
-      if( change instanceof ko.sync.Change
-         && change.source === this.source
-         && change.action === this.action
-         && change.rec.hashKey() === this.rec.hashKey() ) {
-
-         switch(change.action) {
-            case 'create':
-            case 'delete':
-               return true;
-            case 'update':
-               return _.isEqual(change.meta.data, this.meta.data);
-            case 'move':
-               return change.meta.prevId = this.meta.prevId;
-            default:
-               throw new Error('invalid action ' + change.action);
-         }
-
-      }
-      return false;
-   };
-
-   ko.sync.ChangeController = function() {
-      this.changes = [];
-      this.expected = {};
-   };
-
-   ko.sync.ChangeController.prototype.process = function() {
-      //todo
-      //todo
-      //todo
-      //todo
-      //todo
-   };
-
-   ko.sync.ChangeController.prototype.add = function(change) {
-      var expectedList = this.expected, expect = change._expect();
-      if( !expectedList(expect) ) {
-         this.changes.push(change);
-         _.findOrCreate(expectedList, [expect.source, expect.action, expect.hashKey()], []).push(expect);
-         change.done.then(function() {
-            var entry = _.deepFind(expectedList, )
-         });
-      }
-   };
-
-   ko.sync.ChangeController.prototype.expected = function(change) {
-
-   };
+//   /**
+//    * @param {Object} exp
+//    * @return boolean
+//    */
+//   ko.sync.ChangeController.prototype.expected = function(exp) {
+//      var base = _.deepFind(this.expected, [exp.dest, exp.action, exp.hashKey()]);
+//      return base && _.find(base, exp) !== null;
+//   };
+//
+//   function deleteExpected(expList, exp) {
+//      if(expList && _.has(expList, exp.key)) {
+//         var keyList = expList[exp.key];
+//         var idx = _.indexOf(keyList, exp);
+//         console.log('deleteExpected', idx); //debug
+//         if( idx > -1 ) {
+//            if( keyList.length === 1 ) {
+//               delete expList[exp.key];
+//            }
+//            else {
+//               keyList.splice(idx, 1);
+//            }
+//         }
+//      }
+//   }
+//
+//   /**
+//    * Generate an expected object
+//    * @param {ko.sync.Change} change
+//    * @return Object
+//    */
+//   function expect(change) {
+//      return _.extend(_.pick(change, ['action', 'prevId', 'data']), {dest: dest, key: change.rec.hashKey()});
+//   }
 
 })(ko, jQuery);
 

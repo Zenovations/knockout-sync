@@ -441,12 +441,14 @@
 
    function _updateRecord(table, hashKey, data, sortPriority) {
        return $.Deferred(function(def) {
-          var ref = table.child(hashKey);
+          var ref = table.child(hashKey), promises = [];
           if( sortPriority ) {
-             ref.setWithPriority(data, sortPriority, def.resolve);
+             ref.update(data, function() {
+                ref.setPriority(sortPriority, def.resolve);
+             });
           }
           else {
-             ref.set(data, def.resolve);
+             ref.update(data, def.resolve);
           }
        });
    }

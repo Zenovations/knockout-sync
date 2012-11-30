@@ -4,7 +4,7 @@
 (function(ko) {
    "use strict";
 
-   var undef, RecordId = ko.sync.RecordId;
+   var undef;
 
    //var ko = this.ko;
    //var _ = this._;
@@ -21,6 +21,7 @@
       this.subs      = [];   // a list of records to which this list has subscribed
       this.sorted    = [];
       this.checkpoint();     // refresh our changelists (added/changed/moved/deleted records)
+
       // create an observableArray and load our records into it
       if( records ) {
          this.load(ko.utils.unwrapObservable(records));
@@ -30,6 +31,7 @@
       // (we haven't subscribed yet and don't get a feedback loop from the observableArray)
       //_sync(this);
    };
+   var RecordList = ko.sync.RecordList;
 
    /**
     * Clear any current change lists (added/updated/moved/deleted records) and begin tracking fresh from this point.
@@ -50,7 +52,7 @@
     * @return {ko.sync.RecordList.Iterator}
     */
    ko.sync.RecordList.prototype.iterator = function() {
-      return new ko.sync.RecordList.Iterator(this);
+      return new RecordList.Iterator(this);
    };
 
    /**
@@ -78,7 +80,7 @@
     * the last record, -2 means insert it before the last 2 records, etc.
     *
     * @param {ko.sync.Record} record
-    * @param {RecordId|ko.sync.Record|String|int} [afterRecordId] see description
+    * @param {ko.sync.RecordId|ko.sync.Record|String|int} [afterRecordId] see description
     * @return {ko.sync.RecordList} this
     */
    ko.sync.RecordList.prototype.add = function(record, afterRecordId) {
@@ -117,7 +119,7 @@
     * the last record, -2 means insert it before the last 2 records, etc.
     *
     * @param {ko.sync.Record|ko.sync.RecordId|String} recordOrId
-    * @param {RecordId|ko.sync.Record|String|int} [afterRecordIdOrIndex] see description
+    * @param {ko.sync.RecordId|ko.sync.Record|String|int} [afterRecordIdOrIndex] see description
     * @return {ko.sync.RecordList} this
     */
    ko.sync.RecordList.prototype.move = function(recordOrId, afterRecordIdOrIndex) {
@@ -165,7 +167,7 @@
     * Records which have been deleted will not be returned by this method (it only returns records in obsArray) even
     * though they are still tracked as deleted.
     *
-    * @param recordId
+    * @param {ko.sync.Record|ko.sync.RecordId|String} recordId
     * @return {ko.sync.Record|null}
     */
    ko.sync.RecordList.prototype.find = function(recordId) {
@@ -188,7 +190,7 @@
     * the last record, -2 means insert it before the last 2 records, etc.
     *
     * @param {ko.sync.Record} record
-    * @param {RecordId|ko.sync.Record|int|String} [afterRecordId] see description
+    * @param {ko.sync.RecordId|ko.sync.Record|int|String} [afterRecordId] see description
     * @param {boolean} [sendNotification] if true an added notification is sent
     * @return {ko.sync.RecordList} this
     */
@@ -215,7 +217,7 @@
 
    /**
     *
-    * @param {RecordId|ko.sync.Record|String} recordOrIdOrHash
+    * @param {ko.sync.RecordId|ko.sync.Record|String} recordOrIdOrHash
     * @return {ko.sync.RecordList} this
     */
    ko.sync.RecordList.prototype.remove = function(recordOrIdOrHash) {
@@ -300,12 +302,12 @@
    };
 
    ko.sync.RecordList.prototype.changeList = function() {
-      var out = [];
+      var out = [], self = this;
       this.changes && _.each(this.changes, function(recs, action) {
          _.each(recs, function(rec) {
-            out.push([action, rec]);
+            out.push([action, rec, RecordList.keyBefore(self, rec.hashKey())]);
          });
-      }.bind(this));
+      });
       return out;
    };
 
@@ -326,10 +328,23 @@
       return _.indexOf(list.sorted, key);
    };
 
+   ko.sync.RecordList.keyBefore = function(list, key) {
+      var pos = RecordList.getPos(list, key);
+      if( pos > 0 ) {
+         return RecordList.atPos(list, pos-1).hashKey();
+      }
+      else if( pos < 0 ) {
+         return undef;
+      }
+      else {
+         return null;
+      }
+   };
+
    ko.sync.RecordList.Iterator = function(list) {
       this.curr = -1;
       // snapshot to guarantee iterator is not mucked up if synced records update during iteration
-      this.keys = ko.sync.RecordList.ids(list);
+      this.keys = RecordList.ids(list);
       this.recs = list.byKey; //todo does this also need to be snapshotted?
       this.len  = this.keys.length;
    };
@@ -384,7 +399,7 @@
          recList.updated(record, fieldChanged);
       });
       if( sendNotification ) {
-         var after = loc > 0? ko.sync.RecordList.atPos(recList, loc-1).hashKey() : undef;
+         var after = loc > 0? RecordList.atPos(recList, loc-1).hashKey() : undef;
          _updateListeners(recList.listeners, 'added', record, after);
       }
       return loc;
@@ -392,7 +407,7 @@
 
    /**
     * @param {ko.sync.Record|RecordId} recOrId
-    * @return {RecordId}
+    * @return {ko.sync.RecordId}
     */
    function keyFor(recOrId) {
       if( typeof(recOrId) !== 'object' || !recOrId ) {
@@ -408,7 +423,7 @@
 
    /**
     * @param {ko.sync.Record|RecordId|String} recOrIdOrHash
-    * @return {RecordId}
+    * @return {ko.sync.RecordId}
     */
    function getHashKey(recOrIdOrHash) {
       if( typeof(recOrIdOrHash) === 'string' ) {
@@ -426,7 +441,7 @@
     * This keeps a partial/temporary cache of indices so that lookup speed can be improved.
     *
     * @param {ko.sync.RecordList} list
-    * @param {ko.sync.Record|RecordId|String} recOrIdOrHash
+    * @param {ko.sync.Record|ko.sync.RecordId|String} recOrIdOrHash
     * @return {int}
     * @private
     */

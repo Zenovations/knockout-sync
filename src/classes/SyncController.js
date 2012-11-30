@@ -61,7 +61,7 @@
          }
 
          if( this.isList ) {
-            syncObsArray(target, listOrRecord);
+            syncObsArray(target, listOrRecord, this.model.observedFields());
             this.list = listOrRecord;
             this.twoway && this.subs.push(_watchStoreList(this, listOrRecord, target, criteria));
             this.subs.push(_watchRecordList(this, listOrRecord, target));
@@ -69,7 +69,7 @@
          }
          else {
             this.rec = listOrRecord;
-            ko.sync.Record.applyWithObservables(findTargetDataSource(this, target), this.rec);
+            ko.sync.Record.applyWithObservables(findTargetDataSource(this, target), this.rec, this.model.observedFields());
             this.twoway && this.subs.push(_watchStoreRecord(this, listOrRecord, target));
             this.subs.push(_watchRecord(this, listOrRecord, target));
             if( this.observed ) {
@@ -351,12 +351,13 @@
       var id    = rec.hashKey();
       var ctx = sync.sharedContext;
       var target = opts.target;
+      var observedFields = model.observedFields();
       var sourceData;
 
       switch(opts.action) {
          case 'added':
             pos = newPositionForRecord(ctx, target, rec, opts.prevId, true);
-            sourceData = ko.sync.Record.applyWithObservables({}, rec);
+            sourceData = ko.sync.Record.applyWithObservables({}, rec, observedFields);
             //todo-nested watch obs fields
             //todo
             //todo
@@ -373,7 +374,7 @@
                var oldKey = rec.hashKey();
                rec.onKey(function(newKey, fields, data) {
                   nextEvent(ctx, 'pull', newKey, function() {
-                     ko.sync.Record.applyWithObservables(findTargetDataSource(sync, target, oldKey), rec, fields)
+                     ko.sync.Record.applyWithObservables(findTargetDataSource(sync, target, oldKey), rec, observedFields)
                   })
                });
             }
@@ -383,7 +384,7 @@
             if( fields.length ) {
                //todo-sort
                sourceData = findTargetDataSource(sync, target, id);
-               ko.sync.Record.applyWithObservables(sourceData, rec, fields);
+               ko.sync.Record.applyWithObservables(sourceData, rec.get(fields), observedFields);
                //todo? this only affects unobserved fields which technically shouldn't change?
                //if(sync.isList) { opts.target.notifySubscribers(opts.target()); }
             }
@@ -573,10 +574,10 @@
       return $.when.apply($, promises);
    }
 
-   function syncObsArray(target, list) {
+   function syncObsArray(target, list, obsFields) {
       var it = list.iterator(), data = [];
       while(it.hasNext()) {
-         data.push(ko.sync.Record.applyWithObservables({}, it.next()));
+         data.push(ko.sync.Record.applyWithObservables({}, it.next()), obsFields);
       }
       target(data);
    }

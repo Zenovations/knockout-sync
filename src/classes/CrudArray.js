@@ -104,6 +104,18 @@
       return this.read.apply(this, _.toArray(arguments));
    };
 
+   /**
+    * Locate a record in the observable array using its hashKey
+    * @return {Object}
+    */
+   CrudArray.prototype.find = function(hashKey) {
+      //return this.list.find(hashKey);
+      //todo
+      //todo
+      //todo
+      //todo
+   };
+
 
    /**
     * @return {jQuery.Deferred} promise

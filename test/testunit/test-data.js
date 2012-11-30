@@ -295,7 +295,7 @@
             this.testCallback('create', record.hashKey());
             return $.Deferred(function(def) {
                this.records.push(record);
-               var newId = this.records.length+'';
+               var newId = record.hasKey()? record.hashKey() : 'record-'+this.records.length;
                var prevId = this.records.length > 1? this.records[this.records.length-2].hashKey() : null;
                this.fakeNotify('added', newId, record.getData(), prevId)
                   .then(thenResolve(def, newId));

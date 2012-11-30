@@ -40,7 +40,7 @@
 
    /**
     * @param {object} [data]
-    * @return {Record}
+    * @return {ko.sync.Record}
     */
    ko.sync.Model.prototype.newRecord = function(data) {
       return this.factory.create(data);
@@ -48,7 +48,7 @@
 
    /**
     * @param {object} data
-    * @return {*}
+    * @return {ko.sync.RecordList}
     */
    ko.sync.Model.prototype.newList = function( data ) {
       return new ko.sync.RecordList(this, data);

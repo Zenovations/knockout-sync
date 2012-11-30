@@ -171,17 +171,15 @@
     * accordingly.
     *
     * @param {Object|ko.observable} target
-    * @param {ko.sync.Record} rec
-    * @param {Array} [fields]
+    * @param {Object} data updates to be applied
+    * @param {Array}  observedFields
     */
-   ko.sync.Record.applyWithObservables = function(target, rec, fields) {
-      fields || (fields = rec.fields);
-      var data = rec.getData(fields, true);
+   ko.sync.Record.applyWithObservables = function(target, data, observedFields) {
       var targetData = ko.isObservable(target)? target()||{} : target||{};
-      var obsKeys = _.keys(rec.observed);
+      if( data instanceof ko.sync.Record ) { data = record.getData(true); }
       _.each(data, function(v, f) {
          // check for observables,
-         if(_.indexOf(obsKeys, f) > -1) {
+         if( _.inArray(observedFields, f) ) {
             if(_.has(targetData, f) && ko.isObservable(targetData[f])) {
                // make sure we don't overwrite observables; subscribers would be lost
                targetData[f](v);
