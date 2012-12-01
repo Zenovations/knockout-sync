@@ -344,7 +344,7 @@
    asyncTest("#count where object", function() {
       expect(1);
       var store = resetStore(), bigModel = TestData.bigData.model(),
-          parms = { where: { aBool: true, sort: function(v) { return v < 51; } } },
+          parms = { where: { abool: true, sort: function(v) { return v < 51; } } },
           def =_deferWithTimeout();
 
       //todo-test need to test function, object, number, undefined, and "default"
@@ -366,7 +366,7 @@
    asyncTest("#count where+limit", function() {
       expect(4);
       var store = resetStore(), bigModel = TestData.bigData.model(), parms = {
-         where: { aBool: false },
+         where: { abool: false },
          limit: 75
       }, def =_deferWithTimeout(), iteratorCount = 0;
 
@@ -414,7 +414,7 @@
                start: 99,
                end:   199,
                limit: 50,
-               where: {aBool: true}
+               where: {abool: true}
             }, function() { iteratorCount++; });
          })
          .done(function(count) {
@@ -433,7 +433,7 @@
       var store = resetStore(),
          bigModel = TestData.bigData.model({sort: null}),
          parms = {
-            where: { aBool: true, sort: function(v) { return v < 51; } }
+            where: { abool: true, sort: function(v) { return v < 51; } }
          },
          iteratorCalls = 0, def = _deferWithTimeout();
 
@@ -458,7 +458,7 @@
       expect(4);
       //todo-sort
       var store = resetStore(), bigModel = TestData.bigData.model({sort: null}), parms = {
-         where: { aBool: false },
+         where: { abool: false },
          limit: 75
       }, iteratorCalls = 0, def = _deferWithTimeout();
 
@@ -493,7 +493,7 @@
       expect(2);
       //todo-sort
       var store = resetStore(), bigModel = TestData.bigData.model({sort: null}),
-         parms = { where: { aString: 'not this' } }, iteratorCalls = 0, def = _deferWithTimeout();
+         parms = { where: { astring: 'not this' } }, iteratorCalls = 0, def = _deferWithTimeout();
 
       TestData.bigData.reset(syncRoot)
          .pipe(function() {
@@ -610,15 +610,15 @@
          obs2 = store.watch(model, watcher);
 
          // add a record locally
-         store.create(model, TestData.bigData.record(201, {aString: 'hello'}, model));
+         store.create(model, TestData.bigData.record(201, {astring: 'hello'}, model));
 
          // do a remote update
          ref.child('100')
             .setWithPriority(TestData.bigData.data(100,
-               {aString: 'this is SPARTA'}, model), 100);
+               {astring: 'this is SPARTA'}, model), 100);
 
          // do a local update
-         store.update(model, TestData.bigData.record(110, {aString: 'goodbye'}, model));
+         store.update(model, TestData.bigData.record(110, {astring: 'goodbye'}, model));
 
          // move a record remotely
          ref.child('100').setPriority(101);
@@ -632,7 +632,7 @@
          // turn off the listener and then do another update to make sure it's not tracked
          obs2.dispose();
          obs1 && obs1.dispose();
-         ref.child('999').set({aString: 'I should not create a notification'});
+         ref.child('999').set({astring: 'I should not create a notification'});
          ref.child('999').remove();
       })
       .fail(function(e) { done.reject(e); });
@@ -680,9 +680,9 @@
             nullCalled = true;
             ok(true, 'called once with null');
          }
-         else if( data.aString == 'i was changed' && !changeCalled ) {
+         else if( data.astring == 'i was changed' && !changeCalled ) {
             changeCalled = true;
-            deepEqual(data, {aString: 'i was changed', aBool: true, sort: 100, id: '100a'});
+            deepEqual(data, {astring: 'i was changed', abool: true, sort: 100, id: '100a'});
          }
          else {
             console.warn('what is this?', id, data);
@@ -707,7 +707,7 @@
 
          // we add the same observer again, which should just return the first reference and not cause duplicate notifications
          obs2 = store.watchRecord(model, rec.getKey(), watcher);
-         recRef.set(TestData.bigData.data(100, {aString: 'i was changed', id: '100a'}));
+         recRef.set(TestData.bigData.data(100, {astring: 'i was changed', id: '100a'}));
          recRef.setPriority(101);
          recRef.remove();
       });

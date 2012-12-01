@@ -253,7 +253,7 @@
    ko.sync.RecordList.prototype.updated = function(record, field) {
       if( record.isDirty() ) {
          var hashKey = record.hashKey();
-         if( _recordIndex(this, hashKey) >= 0 ) { //todo-perf we could skip this check and just assume; do the checking at save time
+         if( hashKey in this.byKey ) {
             if( !(hashKey in this.changes.added) ) {
                // if the record is already marked as newly added, don't mark it as updated and lose that status
                this.changes.updated[hashKey] = record;

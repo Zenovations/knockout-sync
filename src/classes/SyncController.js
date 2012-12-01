@@ -12,11 +12,9 @@
     *
     * It is expected that by the time this class is called, that the data has been loaded and the object is ready
     * to be placed into a two-way sync state. Any time a record is reloaded or a list is reloaded with new data or
-    * criteria, this object should probably be disposed and replaced.
+    * criteria, this object should probably be disposed (SyncController.dispose()) and replaced.
     *
-    * Additionally, changes to the story are not detected and a new SyncController must be established. For example:
-    * if the model.store property is changed this will not be updated and a new SyncController is needed; if the
-    * model.auto property is toggled then a new SyncController will be needed.
+    * Changes to the model (including the auto property) are not supported and a new SyncController should be created.
     */
    ko.sync.SyncController = Class.extend({
 

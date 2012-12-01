@@ -69,62 +69,52 @@
       return this.rec.hashKey();
    };
 
+   ko.sync.Change.fromChangeList = function(to, model, changeData, target) {
+      return new ko.sync.Change({
+         model:  model,
+         obs:    target,
+         to:     to,
+         action: changeData[0],
+         rec:    changeData[1],
+         prevId: changeData[2]
+      });
+   };
+
    /**
     * @param {Object} ctx  must contain keyFactory and cachedKeys
     * @return {jQuery.Deferred}
     */
    ko.sync.Change.prototype.run = function(ctx) {
+      var self = this, def;
       switch(this.to) {
          case 'store':
-            return sendToStore(this);
+            def = sendToStore(self);
+            break;
          case 'obs':
-            sendToObs(ctx, this);
-            return $.Deferred().resolve(this).promise();
+            def = sendToObs(ctx, self);
+            break;
          default:
-            throw new Error('invalid destination: '+this.to);
+            throw new Error('invalid destination: '+self.to);
       }
+      return def.pipe(function(id) {
+               return $.Deferred(function(def) { def.resolve(self, id); });
+            });
    };
 
    function sendToStore(change) {
-      return $.Deferred(function(def) {
-         var store = change.model.store;
-         switch(change.action) {
-            case 'create':
-               store
-                  .create(change.model, change.rec)
-                  .done(function(id) {
-                     def.resolve(change, id);
-                  })
-                  .fail(def.reject);
-               break;
-            case 'update':
-               store
-                  .update(change.model, change.rec)
-                  .done(function() {
-                     def.resolve(change);
-                  })
-                  .fail(def.reject);
-               break;
-            case 'delete':
-               store
-                  .delete(change.model, change.rec)
-                  .done(function() {
-                     def.resolve(change);
-                  })
-                  .fail(def.reject);
-               break;
-            case 'move':
-               store
-                  .update(change.model, change.rec)
-                  .done(function() {
-                     def.resolve(change);
-                  })
-                  .fail(def.reject);
-               break;
-            default:
-               throw new Error('invalid action: '+change.action);
-         }
-      });
+      var store = change.model.store;
+      switch(change.action) {
+         case 'create':
+            return store.create(change.model, change.rec);
+         case 'update':
+            return store.update(change.model, change.rec);
+         case 'delete':
+            return store.delete(change.model, change.rec);
+         case 'move':
+            return store.update(change.model, change.rec);
+         default:
+            throw new Error('invalid action: '+change.action);
+      }
    }
 
    /**
@@ -132,58 +122,67 @@
     * @param {ko.sync.Change} change
     */
    function sendToObs(ctx, change) {
-      //todo this method is ugly, abstract out the various parts
-      var pos;
-
-      /** @type {ko.sync.Model} */
-      var model  = change.model;
-      /** @type {String} */
-      var id     = change.key();
-      /** @type {Object|ko.observable} */
-      var target = change.obs;
-      /** @type {Boolean} */
-      var isList = ko.sync.isObservableArray(target);
-      /** @type {Object} */
-      var data   = change.data;
-      /** @type {Object} */
-      var sourceData;
-      /** @type {Array} */
-      var observedFieldKeys = model.observedFields();
-
+      var res;
       switch(change.action) {
          case 'create':
-            if( isList ) {
-               sourceData = ko.sync.Record.applyWithObservables({}, data, observedFieldKeys);
-               pos = newPositionForRecord(ctx, target, id, change.prevId, true);
-               if( pos < 0 ) {
-                  target.push(sourceData);
-               }
-               else {
-                  target.splice(pos, 0, sourceData);
-               }
-            }
-            else {
-               ko.sync.Record.applyWithObservables(findTargetDataSource(ctx, target, id), data, observedFieldKeys);
-            }
+            res = _obsCreate(ctx, change);
             break;
          case 'update':
-            ko.sync.Record.applyWithObservables(findTargetDataSource(ctx, target, id), data, observedFieldKeys);
+            res = _obsUpdate(ctx, change);
             break;
          case 'delete':
-            pos = currentPositionForRecord(ctx, target, id);
-            if( pos > -1 ) {
-               target.splice(pos, 1);
-            }
+            res = _obsDelete(ctx, change);
             break;
          case 'move':
-            pos = currentPositionForRecord(ctx, target, id);
-            var newPos = newPositionForRecord(ctx, target, id, change.prevId);
-            if( pos > -1 && pos !== newPos ) {
-               target.splice(newPos, 0, target.splice(pos, 1));
-            }
+            res = _obsMove(ctx, change);
             break;
          default:
             throw new Error('invalid action: '+change.action);
+      }
+      return $.Deferred().resolve(res);
+   }
+
+   function _obsCreate(ctx, change) {
+      var observedFields = change.model.observedFields();
+      var id     = change.key();
+      var isList = ko.sync.isObservableArray(change.obs);
+      var target = change.obs;
+      if( isList ) {
+         var sourceData = ko.sync.Record.applyWithObservables({}, change.data, observedFields);
+         var pos = newPositionForRecord(ctx, target, id, change.prevId, true);
+         if( pos < 0 ) {
+            target.push(sourceData);
+         }
+         else {
+            target.splice(pos, 0, sourceData);
+         }
+      }
+      else {
+         var source = findTargetDataSource(ctx, target, id);
+         ko.sync.Record.applyWithObservables(source, change.data, observedFields);
+      }
+      return id;
+   }
+
+   function _obsUpdate(ctx, change) {
+      var source = findTargetDataSource(ctx, change.obs, change.key());
+      ko.sync.Record.applyWithObservables(source, change.data, change.model.observedFields());
+   }
+
+   function _obsDelete(ctx, change) {
+      var pos = currentPositionForRecord(ctx, change.obs, change.key());
+      if( pos > -1 ) {
+         change.obs.splice(pos, 1);
+      }
+   }
+
+   function _obsMove(ctx, change) {
+      var id = change.key();
+      var target = change.obs;
+      var pos = currentPositionForRecord(ctx, target, id);
+      var newPos = newPositionForRecord(ctx, target, id, change.prevId);
+      if( pos > -1 && pos !== newPos ) {
+         target.splice(newPos, 0, target.splice(pos, 1)[0]);
       }
    }
 

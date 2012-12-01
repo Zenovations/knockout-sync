@@ -81,6 +81,7 @@
    });
 
    test("#getData", function() {
+      expect(2);
       var model = TestData.model(),
          defaults = TestData.defaults(model),
          genericData = TestData.fullData(),
@@ -90,8 +91,11 @@
       // dates should be null in this case
       deepEqual(emptyRec.getData(), defaults);
 
+      console.log(_buildARecord().getData());
+      console.log(genericData);
+
       // make sure setting data works
-      deepEqual(_buildARecord().getData(), TestData.forCompare(genericData));
+      deepEqual(TestData.forCompare(_buildARecord().getData()), TestData.forCompare(genericData));
    });
 
    test("#get/#set", function() {
@@ -211,6 +215,55 @@
       rec.set('stringOptional', 'new value for stringOptional');
       sub.dispose();
       rec.set('stringOptional', 'even newer value for stringOptional');
+   });
+
+   test('#applyWithObservables, creates observables appropriately', function() {
+      expect(4);
+      var res = ko.sync.Record.applyWithObservables({}, {a: 1, b: 2, c: 3, d: 4}, ['b', 'c']);
+      ok(ko.isObservable(res.b), 'b is observable');
+      ok(ko.isObservable(res.c), 'c is observable');
+      strictEqual(res.b(), 2, 'b value correct');
+      strictEqual(res.c(), 3, 'c value correct');
+   });
+
+   test('#applyWithObservables, object', function() {
+      expect(2);
+      var target = { one: 1, two: ko.observable(2), three: 3 };
+      var data = { two: 22 };
+      var observedFields = ['two'];
+      var res = ko.sync.Record.applyWithObservables(target, data, observedFields);
+      ok(res === target, 'the object was not changed');
+      deepEqual(ko.sync.unwrapAll(res), { one: 1, two: 22, three: 3 }, 'values set correctly');
+   });
+
+   test('#applyWithObservables, object no data', function() {
+      expect(2);
+      var target = {};
+      var data = { two: 22 };
+      var observedFields = ['two'];
+      var res = ko.sync.Record.applyWithObservables(target, data, observedFields);
+      ok(res === target, 'the object was not changed');
+      deepEqual(ko.sync.unwrapAll(res), { two: 22 }, 'values set correctly');
+   });
+
+   test('#applyWithObservables, observable no data', function() {
+      expect(2);
+      var target = ko.observable({});
+      var data = { two: 22, three: 33 };
+      var observedFields = ['three'];
+      var res = ko.sync.Record.applyWithObservables(target, data, observedFields);
+      ok(res === target, 'the object was not changed');
+      deepEqual(ko.sync.unwrapAll(res), { two: 22, three: 33 }, 'values set correctly');
+   });
+
+   test('#applyWithObservables, observable', function() {
+      expect(2);
+      var target = ko.observable({ one: 1, two: 2, three: ko.observable(3) });
+      var data = { two: 22, three: 33 };
+      var observedFields = ['two', 'three'];
+      var res = ko.sync.Record.applyWithObservables(target, data, observedFields);
+      ok(res === target, 'the object was not changed');
+      deepEqual(ko.sync.unwrapAll(res), { one: 1, two: 22, three: 33 }, 'values set correctly');
    });
 
    test("#isValid", function() {

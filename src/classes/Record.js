@@ -175,8 +175,8 @@
     * @param {Array}  observedFields
     */
    ko.sync.Record.applyWithObservables = function(target, data, observedFields) {
-      var targetData = ko.isObservable(target)? target()||{} : target||{};
-      if( data instanceof ko.sync.Record ) { data = record.getData(true); }
+      var targetData = ko.isObservable(target)? target()||{} : target;
+      if( data instanceof ko.sync.Record ) { data = data.getData(true); }
       _.each(data, function(v, f) {
          // check for observables,
          if( _.inArray(observedFields, f) ) {

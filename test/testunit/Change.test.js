@@ -60,10 +60,13 @@
    });
 
    asyncTest('#run, create in store', function() {
-      expect(1);
+      expect(2);
       _runChangeWithTimeout({action: 'create', to: 'store'})
          .done(function(change, id) {
             strictEqual(id, 'record-5', 'record id is correct');
+            deepEqual(change.model.store._testEvents, [
+               ['create', 'record-5']
+            ]);
          })
          .fail(function(e) { throw e; })
          .always(start);
@@ -71,8 +74,8 @@
 
    test('#run, create in obs', function() {
       expect(1);
-      var obs = ko.observable;
-      _runChangeWithTimeout({obs: obs, action: 'create', to: 'obs'})
+      var obs = ko.observable();
+      _runChangeWithTimeout({obs: obs, action: 'create', to: 'obs', data: TestData.dat(5)}, 5)
          .done(function() {
             strictEqual(obs().id, 'record-5', 'record id is correct');
          })
@@ -82,11 +85,13 @@
 
 
    test('#run, create in observableArray', function() {
-      expect(1);
+      expect(2);
       var obs = ko.observableArray();
-      _runChangeWithTimeout({obs: obs, action: 'create', to: 'obs'})
+      _runChangeWithTimeout({obs: obs, action: 'create', to: 'obs', data: TestData.dat(3), rec: TestData.rec(3)})
          .done(function() {
-            strictEqual(obs().id, 'record-5', 'record id is correct');
+            var recs = obs();
+            strictEqual(recs.length, 1);
+            strictEqual(recs[0].id, 'record-3', 'record id is correct');
          })
          .fail(function(e) { throw e; })
          .always(start);
@@ -95,81 +100,130 @@
    test('#run, create in object', function() {
       expect(1);
       var obs = {};
-      _runChangeWithTimeout({obs: obs, action: 'create', to: 'obs'})
-         .done(function() {
-            strictEqual(obs.data.id, 'record-5', 'record id is correct');
+      _runChangeWithTimeout({obs: obs, action: 'create', to: 'obs', data: TestData.dat(5)}, 5)
+         .done(function(change, id) {
+            strictEqual(obs.data.id, id, 'record id is correct');
          })
          .fail(function(e) { throw e; })
          .always(start);
    });
 
-   test('#run, update in store', function() {
-
+   asyncTest('#run, update in store', function() {
+      expect(2);
+      var rec = TestData.rec(3);
+      rec.set('intOptional', -999);
+      _runChangeWithTimeout({action: 'update', to: 'store', rec: rec}, rec.hashKey())
+            .done(function(change) {
+               strictEqual(change.key(), rec.hashKey(), 'record id is correct');
+               deepEqual(change.model.store._testEvents, [
+                  ['update', rec.hashKey()]
+               ])
+            })
+            .fail(function(e) { throw e; })
+            .always(start);
    });
 
    test('#run, update in obs', function() {
-
+      expect(1);
+      var origData = TestData.dat(4), data = {intOptional: -999}, target = ko.observable(origData);
+      _runChangeWithTimeout({obs: target, action: 'update', to: 'obs', data: data}, 4)
+            .done(function(change) {
+               deepEqual(ko.sync.unwrapAll(target()), _.extend(origData, {intOptional: -999}));
+            })
+            .fail(function(e) { throw e; })
+            .always(start);
    });
 
    test('#run, update in obsArray', function() {
-
+      expect(2);
+      var origData = TestData.dat(4), data = {intOptional: -999}, target = ko.observableArray([origData]);
+      _runChangeWithTimeout({obs: target, action: 'update', to: 'obs', data: data}, 4)
+            .done(function(change) {
+               strictEqual(target().length, 1, 'has one record');
+               deepEqual(ko.sync.unwrapAll(target()[0]), _.extend(origData, {intOptional: -999}));
+            })
+            .fail(function(e) { throw e; })
+            .always(start);
    });
 
    test('#run, update in object', function() {
-
+      expect(1);
+      var origData = TestData.dat(4), data = {intOptional: -999}, target = { data: origData };
+      _runChangeWithTimeout({obs: target, action: 'update', to: 'obs', data: data}, 4)
+            .done(function(change) {
+               deepEqual(ko.sync.unwrapAll(target.data), _.extend(origData, {intOptional: -999}));
+            })
+            .fail(function(e) { throw e; })
+            .always(start);
    });
 
-   test('#run, delete in store', function() {
-
+   asyncTest('#run, delete in store', function() {
+      expect(1);
+      var rec = TestData.rec(2);
+      _runChangeWithTimeout({action: 'delete', to: 'store', rec: rec})
+            .done(function(change) {
+               deepEqual(change.model.store._testEvents, [
+                     ['delete', rec.hashKey()]
+               ]);
+            })
+            .fail(function(e) { throw e; })
+            .always(start);
    });
 
-   test('#run, delete in obs', function() {
-
+   test('#run, delete in obsArray', function() {
+      expect(2);
+      var obs = ko.observableArray();
+      applyRecsToObsArray(obs, TestData.recs(5));
+      _runChangeWithTimeout({obs: obs, action: 'delete', to: 'obs', rec: TestData.rec(3)})
+            .done(function() {
+               var recs = obs();
+               strictEqual(recs.length, 4);
+               deepEqual(_.pluck(obs(), 'id'),
+                     ['record-1', 'record-2', 'record-4', 'record-5']);
+            })
+            .fail(function(e) { throw e; })
+            .always(start);
    });
 
-   test('#run, move in store', function() {
-
+   asyncTest('#run, move in store', function() {
+      expect(1);
+      var recs = TestData.recs(5), recToMove = recs[3], moveAfter = recs[1].hashKey();
+      _runChangeWithTimeout({action: 'move', to: 'store', rec: recToMove, prevId: moveAfter})
+            .done(function(change) {
+               deepEqual(change.model.store._testEvents, [
+                  ['update', recToMove.hashKey()]
+               ]);
+            })
+            .fail(function(e) { throw e; })
+            .always(start);
    });
 
-   test('#run, move in obs', function() {
-
-   });
-
-   test('#run, obsArray modified on create', function() {
-
-   });
-
-   test('#run, obsArray modified on delete', function() {
-
-   });
-
-   test('#run, obsArray modified on move', function() {
-
-   });
-
-   test('#run, obs modified on update', function() {
-
-   });
-
-   test('#run, object modified on update', function() {
-
-   });
-
-   test('#run, id set correctly on record', function() {
-
+   test('#run, move in obsArray', function() {
+      expect(1);
+      var recs = TestData.recs(5), obs = ko.observableArray(), recToMove = recs[4], moveAfter = recs[1].hashKey();
+      applyRecsToObsArray(obs, recs);
+      _runChangeWithTimeout({obs: obs, action: 'move', to: 'obs', rec: recToMove, prevId: moveAfter})
+            .done(function(change) {
+               var obsKeys = _.pluck(obs(), 'id');
+               deepEqual(obsKeys, ['record-1', 'record-2', 'record-5', 'record-3', 'record-4']);
+            })
+            .fail(function(e) { throw e; })
+            .always(start);
    });
 
    test('#fromChangeList', function() {
+      var rec = TestData.rec(1), afterKey = TestData.rec(4).hashKey(),
+          change = ko.sync.Change.fromChangeList(
+            'store',
+            TestData.model(),
+            [ 'create', rec, afterKey ],
+            {}
+      );
 
+      strictEqual(change.key(), rec.hashKey(), 'key set correctly');
+      strictEqual(change.prevId, afterKey, 'prevId set correctly');
+      strictEqual(change.to, 'store', 'to set correctly');
    });
-
-//   *    to {string} one of 'store', 'list', or 'data'
-//   *    action {string} one of 'create', 'update', 'delete', or 'move'
-//   *    prevId {string} required by move and add operations
-//   *    data   {object} required by add and update, the data to be applied in the change
-//   *    model  {ko.sync.Model}
-//   *    rec    {ko.sync.Record} the reference record to determine changes
-//   *    obs    {Object|ko.sync.observable} the knockout data being synced (observed)
 
    function _change(opts, id) {
       if( typeof(opts) === 'number' ) {
@@ -177,8 +231,8 @@
          opts = null;
       }
       id || (id = 5);
-      var rec = TestData.rec(id);
       var model = getModelWithStore();
+      var rec = TestData.rec(id, opts && opts.data, model);
       return new Change(_.extend({
          to:     'store',
          action: 'create',
@@ -186,7 +240,7 @@
          data:   null,
          model:  model,
          rec:    rec,
-         obs:    ko.sync.Record.applyWithObservables(ko.observable(), rec.getData(true), model.observedFields())
+         obs:    opts && opts.obs? null : ko.sync.Record.applyWithObservables(ko.observable(), rec.getData(true), model.observedFields())
       }, opts));
    }
 
@@ -206,12 +260,20 @@
 
    function getFakeStore(recs) {
       var events = [];
-      function callback() {
-         events.push.apply(events, _.toArray(arguments));
+      function _monitor() {
+         if( arguments[0] in {hasTwoWaySync: 1, watch: 1, watchRecord: 1} ) { return; } // suppress this event which we don't care about
+         events.push($.makeArray(arguments));
       }
-      var store = new TestData.TestStore(true, TestData.model(), callback, recs || TestData.recs(5));
+      var store = new TestData.TestStore(true, TestData.model(), _monitor, recs || TestData.recs(5));
       store._testEvents = events;
       return store;
+   }
+
+   function applyRecsToObsArray(target, recs, model) {
+      var observedFields = (model || TestData.model()).observedFields();
+      _.each(recs, function(rec) {
+         target.push(ko.sync.Record.applyWithObservables({}, rec.getData(true), observedFields));
+      })
    }
 
    function FakeChangeController() {

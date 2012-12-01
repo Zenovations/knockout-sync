@@ -28,7 +28,7 @@
    test("#newList (with loaded data)", function() {
       expect(2);
       var model         = TestData.model(),
-            baseData    = TestData.makeRecords(5, {aString: 'hello world'}),
+            baseData    = TestData.makeRecords(5, {astring: 'hello world'}),
             list        = model.newList(baseData),
             compareData = [], actualData = [];
       _.each(baseData, function(v) {

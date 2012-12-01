@@ -20,6 +20,7 @@
     * credits: http://stackoverflow.com/questions/12166982/determine-which-element-was-added-or-removed-with-a-knockoutjs-observablearray
     * @param {ko.sync.KeyFactory} keyFactory (see SyncController)
     * @param callbacks
+    * @param observedFields
     */
    ko.observableArray.fn.watchChanges = function(keyFactory, callbacks, observedFields) {
       var previousValue = undefined;
@@ -197,7 +198,7 @@
    ko.sync.validators || (ko.sync.validators = []);
 
    ko.sync.isObservableArray = function(o) {
-      return typeof(o) === 'function' && ko.isObservable(o) && _.isArray(o());
+      return typeof(o) === 'function' && ko.isObservable(o) && o.splice && _.isArray(o());
    };
 
    ko.sync.watchFields = watchFields;
@@ -213,7 +214,8 @@
       data = unwrap(data);
       var out = _.isArray(data)? [] : {};
       _.each(data, function(v, key) {
-         out[key] = unwrap(v);
+         v = unwrap(v);
+         out[key] = _.isObject(v)? ko.sync.unwrapAll(v) : v;
       });
       return out;
    };

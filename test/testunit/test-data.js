@@ -118,15 +118,18 @@
    };
 
    exports.rec = function(id, moreData, model) {
-      var i = ~~id;
-      var data = $.extend({}, genericDataWithId, {
+      return (model||exports.model()).newRecord(exports.dat(id, moreData));
+   };
+
+   exports.dat = function(id, moreData) {
+      var i = ~~id || 123;
+      return $.extend({}, genericDataWithId, {
          id: typeof(id) === 'number'? 'record-'+id : id,
          intRequired: i,
          floatRequired: i + (i * .01),
          stringRequired: 'string-'+i,
          emailRequired: 'user'+i+'@no.com'
       }, moreData);
-      return (model||exports.model()).newRecord(data);
    };
 
    exports.recs = exports.makeRecords;
@@ -164,9 +167,9 @@
          sort:  'sort',
          fields: {
             id:      { required: true,  type: 'string'  },
-            aString: { required: false, type: 'string'  },
+            astring: { required: false, type: 'string'  },
             sort:    { required: false, type: 'int'     },
-            aBool:   { required: false, type: 'boolean' }
+            abool:   { required: false, type: 'boolean' }
          }
       },
 
@@ -190,7 +193,7 @@
        */
       data: function(id, moreData) {
          return $.extend(
-            {id: id, aString: 'string-'+id, sort: id, aBool: (id%2 === 0)},
+            {id: id, astring: 'string-'+id, sort: id, abool: (id%2 === 0)},
             moreData
          )
       },
