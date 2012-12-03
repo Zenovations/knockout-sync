@@ -53,10 +53,11 @@
     */
    ko.sync.Record.prototype.updateHashKey = function( hashKey ) {
       if( !this.hasKey() ) {
+         var oldKey = this.hashKey();
          this.id.update(hashKey);
          //todo if fields are updated, a notice should be delivered; this can update fields without notification
          applyUpdates(this, _.isObject(hashKey)? hashKey : this.id.parse(hashKey));
-         if( this.id.isSet() ) { applyKeyCallbacks(this); }
+         if( this.id.isSet() ) { applyKeyCallbacks(this, oldKey); }
       }
       return this;
    };
@@ -67,10 +68,11 @@
     * @param {ko.sync.RecordId} newKey
     */
    ko.sync.Record.prototype.setKey = function( newKey ) {
+      var oldKey = this.hashKey();
       this.id = newKey;
       if( newKey.isSet() ) {
          this.updateAll(newKey.parse());
-         applyKeyCallbacks(this);
+         applyKeyCallbacks(this, oldKey);
       }
    };
 
@@ -184,10 +186,15 @@
       // the underlying data with our modifications below, which means that the beforeChange event
       // will accidentally return the already updated values instead of the old ones; we have to
       // clone it here to make sure that we don't cause this very hard to trace and annoying behavior
-      var targetData = ko.isObservable(target)? _.clone(target())||{} : target||{};
+      var targetData = ko.isObservable(target)? _.clone(target()) : target;
+      if( !targetData ) {
+         targetData = {};
+         changes = true;
+      }
       if( data instanceof ko.sync.Record ) { data = data.getData(true); }
       _.each(data, function(v, f) {
          if( !_.isEqual(ko.utils.unwrapObservable(targetData[f]), v) ) {
+            changes = true;
             // check for observables,
             if( _.contains(observedFields, f) ) {
                if(_.has(targetData, f) && ko.isObservable(targetData[f])) {
@@ -326,17 +333,17 @@
       return res;
    }
 
-   function applyKeyCallbacks(rec) {
+   function applyKeyCallbacks(rec, oldKey) {
       _.each(rec.keyCallbacks, function(fx) {
-         dataKeyCallback(fx, rec);
+         dataKeyCallback(fx, rec, oldKey);
       });
       rec.keyCallbacks = [];
    }
 
-   function dataKeyCallback(callback, rec) {
+   function dataKeyCallback(callback, rec, oldKey) {
       var fields = rec.id.fields;
       var data = rec.get(fields);
-      callback(rec.hashKey(), fields, data);
+      callback(rec.hashKey(), oldKey, fields, data);
    }
 
 })(ko);

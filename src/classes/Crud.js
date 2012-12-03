@@ -33,6 +33,8 @@
    Crud.prototype.create = function() {
       this.def = this.def.pipe(function() {
 
+         //todo create the sync controller
+
          //todo
          //todo
          //todo
@@ -48,6 +50,8 @@
     */
    Crud.prototype.read = function( recordId ) {
       this.def = this.def.pipe(function() {
+
+         //todo create the sync controller
 
          //todo
          //todo

@@ -317,7 +317,7 @@
          /**
           * @param {ko.sync.Model} model
           * @param {ko.sync.Record} record
-          * @return {Promise} resolves to the new record's ID or rejects if it could not be created
+          * @return {jQuery.Deferred} resolves to the new record's ID or rejects if it could not be created
           */
          create: function(model, record) {
             this.testCallback('create', record.hashKey());
@@ -333,7 +333,7 @@
          /**
           * @param {ko.sync.Model}     model
           * @param {ko.sync.RecordId}  recordId
-          * @return {Promise}  resolves to the Record object or null if it is not found
+          * @return {jQuery.Deferred}  resolves to the Record object or null if it is not found
           */
          read: function(model, recordId) {
             this.testCallback('read', recordId.hashKey());

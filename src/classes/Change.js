@@ -20,22 +20,24 @@
    ko.sync.Change = function(props) {
       // declarations for the IDE
       /** @type {string} */
-      this.to     = undef;
+      this.to      = undef;
       /* @type {string} */
-      this.action = undef;
+      this.action  = undef;
       /* @type {string} */
-      this.prevId = undef;
+      this.prevId  = undef;
       /* @type {Object} */
-      this.data   = undef;
+      this.data    = undef;
       /* @type {ko.sync.Model} */
-      this.model  = undef;
+      this.model   = undef;
       /* @type {ko.observable|ko.observableArray|Object} */
-      this.obs    = undef;
+      this.obs     = undef;
       /* @type {ko.sync.Record} */
-      this.rec    = undef;
+      this.rec     = undef;
+      /* @type {Function} */
+      this.success = null;
 
       // apply the properties provided
-      _.extend(this, _.pick(props, ['to', 'action', 'prevId', 'data', 'model', 'rec', 'obs']));
+      _.extend(this, _.pick(props, ['to', 'action', 'prevId', 'data', 'model', 'rec', 'obs', 'success']));
       this.status  = 'pending';
       this.done    = $.Deferred();
    };
@@ -68,44 +70,48 @@
       return this.rec.hashKey();
    };
 
-   ko.sync.Change.fromChangeList = function(to, model, changeData, target) {
+   ko.sync.Change.fromChangeList = function(to, model, changeData, target, callback) {
       return new ko.sync.Change({
-         model:  model,
-         obs:    target,
-         to:     to,
-         action: _changeAction(changeData[0]),
-         rec:    changeData[1],
-         prevId: changeData[2] === null? 0 : changeData[2],
-         data:   changeData[1].getData(true)
+         model:   model,
+         obs:     target,
+         to:      to,
+         action:  _changeAction(changeData[0]),
+         rec:     changeData[1],
+         prevId:  changeData[2] === null? 0 : changeData[2],
+         data:    changeData[1].getData(true),
+         success: callback
       });
    };
 
    /**
-    * @param {Object} ctx  must contain keyFactory and cachedKeys
     * @return {jQuery.Deferred}
     */
-   ko.sync.Change.prototype.run = function(ctx) {
+   ko.sync.Change.prototype.run = function() {
       var self = this, def;
-      switch(this.to) {
+      switch(self.to) {
          case 'store':
             def = sendToStore(self);
             break;
          case 'obs':
-            def = sendToObs(ctx, self);
+            def = sendToObs(self);
             break;
          default:
             throw new Error('invalid destination: '+self.to);
       }
       return def.pipe(function(id) {
+         if( self.success ) { self.success(self, id); }
          return $.Deferred(function(def) { def.resolve(self, id); });
       });
    };
 
    function sendToStore(change) {
+      console.log('sendToStore', change.action, change.key(), change.prevId);//debug
       var store = change.model.store;
       switch(change.action) {
          case 'create':
-            return store.create(change.model, change.rec);
+            return store.create(change.model, change.rec).then(function(id) {
+               change.rec.updateHashKey(id);
+            });
          case 'update':
             return store.update(change.model, change.rec);
          case 'delete':
@@ -118,38 +124,43 @@
    }
 
    /**
-    * @param {Object} ctx
     * @param {ko.sync.Change} change
     */
-   function sendToObs(ctx, change) {
+   function sendToObs(change) {
+//      console.log('sendToObs', change.action, change.key(), change.prevId);//debug
       var res;
-      switch(change.action) {
-         case 'create':
-            res = _obsCreate(ctx, change);
-            break;
-         case 'update':
-            res = _obsUpdate(ctx, change);
-            break;
-         case 'delete':
-            res = _obsDelete(ctx, change);
-            break;
-         case 'move':
-            res = _obsMove(ctx, change);
-            break;
-         default:
-            throw new Error('invalid action: '+change.action);
+      if( ko.sync.isObservableArray(change.obs) ) {
+         switch(change.action) {
+            case 'create':
+               res = _obsCreate(change);
+               break;
+            case 'update':
+               res = _obsUpdate(change);
+               break;
+            case 'delete':
+               res = _obsDelete(change);
+               break;
+            case 'move':
+               res = _obsMove(change);
+               break;
+            default:
+               throw new Error('invalid action: '+change.action);
+         }
+      }
+      else {
+         res = _obsUpdate(change);
       }
       return $.Deferred().resolve(res);
    }
 
-   function _obsCreate(ctx, change) {
+   function _obsCreate(change) {
       var observedFields = change.model.observedFields();
       var id     = change.key();
       var isList = ko.sync.isObservableArray(change.obs);
       var target = change.obs;
       if( isList ) {
          var sourceData = ko.sync.Record.applyWithObservables({}, change.data, observedFields);
-         var pos = newPositionForRecord(ctx, target, id, change.prevId, true);
+         var pos = newPositionForKey(target, id, change.prevId);
          if( pos < 0 ) {
             target.push(sourceData);
          }
@@ -158,42 +169,43 @@
          }
       }
       else {
-         var source = findTargetDataSource(ctx, target, id);
+         var source = findTargetDataSource(target, id);
          ko.sync.Record.applyWithObservables(source, change.data, observedFields);
       }
       return id;
    }
 
-   function _obsUpdate(ctx, change) {
-      var source = findTargetDataSource(ctx, change.obs, change.key());
-      ko.sync.Record.applyWithObservables(source, change.data, change.model.observedFields());
+   function _obsUpdate(change) {
+      if( change.data ) {
+         var source = findTargetDataSource(change.obs, change.key());
+         ko.sync.Record.applyWithObservables(source, change.data, change.model.observedFields());
+      }
    }
 
-   function _obsDelete(ctx, change) {
-      var pos = currentPositionForRecord(ctx, change.obs, change.key());
+   function _obsDelete(change) {
+      var pos = change.obs.indexForKey(change.key());
       if( pos > -1 ) {
          change.obs.splice(pos, 1);
       }
    }
 
-   function _obsMove(ctx, change) {
+   function _obsMove(change) {
       var id = change.key();
       var target = change.obs;
-      var pos = currentPositionForRecord(ctx, target, id);
-      var newPos = newPositionForRecord(ctx, target, id, change.prevId);
-      console.log('_obsMove', id, pos, newPos, target()[newPos-1].id, target()[newPos].id, target()[pos].id); //debug
+      var pos = target.indexForKey(id);
+      var newPos = newPositionForKey(target, id, change.prevId);
       if( pos > -1 && pos !== newPos ) {
          _.move(target, pos, newPos);
       }
    }
 
-   function newPositionForRecord(ctx, obsArray, key, prevId, isNew) {
-      var len = obsArray().length;
+   function newPositionForKey(target, key, prevId) {
+      var len = target().length;
       var newPos = -1, oldPos, prevIdPos;
       prevId instanceof ko.sync.RecordId && (prevId = prevId.hashKey());
       if( typeof(prevId) === 'string' ) {
-         prevIdPos = currentPositionForRecord(ctx, obsArray, prevId);
-         oldPos = currentPositionForRecord(ctx, obsArray, key);
+         prevIdPos = target.indexForKey(prevId);
+         oldPos = target.indexForKey(key);
          // when moving records, if the old record exists and is earlier in the array, then it
          // will be spliced out, which causes the final position to be one lower, but normally,
          // we want the index after the prevId's position
@@ -210,22 +222,15 @@
       return newPos;
    }
 
-   function currentPositionForRecord(ctx, obsArray, key) {
-      if( !ctx.cachedKeys || !ctx.cachedKeys[key] ) {
-         cacheKeysForObsArray(ctx, obsArray);
-      }
-      return key in ctx.cachedKeys? ctx.cachedKeys[key] : -1;
-   }
-
    /**
     * @param {Object} ctx
-    * @param {ko.observable|Object} target
+    * @param {ko.observable|ko.observableArray|Object} target
     * @param {String} id
     * @return {Object}
     */
-   function findTargetDataSource(ctx, target, id) {
+   function findTargetDataSource(target, id) {
       if( ko.sync.isObservableArray(target) ) {
-         return target()[ currentPositionForRecord(ctx, target, id) ];
+         return target()[ target.indexForKey(id) ];
       }
       else if( ko.isObservable(target) ) {
          return target;
@@ -234,13 +239,6 @@
          target.data || (target.data = {});
          return target.data;
       }
-   }
-
-   function cacheKeysForObsArray(ctx, obsArray) {
-      var cache = ctx.cachedKeys = {}, f = ctx.keyFactory;
-      _.each(ko.utils.unwrapObservable(obsArray), function(v, i) {
-         cache[ f.make(v) ] = i;
-      });
    }
 
    var CHANGE_CONVERSIONS = {

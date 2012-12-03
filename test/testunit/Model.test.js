@@ -61,7 +61,7 @@
 
    test("#sync, observable (with data)", function() {
       expect(2);
-      var genericData = TestData.genericData();
+      var genericData = TestData.fullData();
       var obs = ko.observable(genericData);
       var model = TestData.model();
       model.sync(obs);

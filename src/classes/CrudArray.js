@@ -59,7 +59,7 @@
    };
 
    /**
-    * Save any unsynced changes to the local list.
+    * Save any unsynced changes to the database.
     *
     * @return {ko.sync.CrudArray} this
     */

@@ -14,7 +14,7 @@
    ko.sync.Store = Class.extend({
       init: function(properties) { throw new Error('Interface not implemented'); },
 
-      //todo change all the promise callbacks to reject on failure? at the very least have them return success first and id second
+      //todo-mass add a way to mass update at once (Firebase can use ref.update() on the base with .priority)
 
       /**
        * Create a record in the database.

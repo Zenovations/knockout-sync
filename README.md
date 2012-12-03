@@ -236,7 +236,7 @@ with `destroy()` and `_destroy` as deleted items are automagically tracked and h
  - loading data locally is very tricky (for now); you should always start by using `read()` for lists (excluding simple create operations)
  - updating fields that are part of the record's ids doesn't affect the stored ID (try `updateHashKey()` to accomplish this)
  - updating fields that are part of the sort order doesn't affect actual ordering on client until a save occurs (and server tells us the records moved)
- - composite keys currently don't work well with creates from client unless all data exists in the record when it is created (updating a composite field doesn't change the compiled ID)
+ - composite keys are not thoroughly tested and surely have problems (will work on these soon)
  - validation isn't implemented yet (soon, soon)
 
 # API

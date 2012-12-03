@@ -48,15 +48,17 @@
       TD.pushRecsToObservableArray(obs, TD.recs(5));
       _watch(obs, events);
 
-      obs.splice(0, 0, obs.splice(2,1)[0]);
-      obs.splice(2, 0, obs.pop());
-      obs.splice(5, 0, obs.splice(0,1)[0]);
+      console.log('findHashKey', obs.findHashKey);
+
+      _.move(obs, 2, 0);
+      obs.splice(3, 0, obs.pop());
+      _.move(obs, 0, 3);
 
       _.delay(function() {
          deepEqual(events, [
             ['move', 'record-3'],
-            ['move', 'record-5', 'record-1'],
-            ['move', 'record-3', 'record-4']
+            ['move', 'record-5', 'record-2'],
+            ['move', 'record-3', 'record-5']
          ]);
          start();
       }, 100);
@@ -157,7 +159,7 @@
    });
 
    function _watch(target, events) {
-      target.watchChanges(TD.keyFactory(), {
+      target.watchChanges(TD.keyFactory(), TD.model().observedFields(), {
          add: function(key, data, prevId) {
             events.push( ['add', key].concat(prevId? [prevId] : []) );
          },
@@ -170,7 +172,7 @@
          delete: function(key) {
             events.push( ['delete', key] );
          }
-      }, TD.model().observedFields());
+      });
    }
 
    function _add(obsArray, rec, pos) {

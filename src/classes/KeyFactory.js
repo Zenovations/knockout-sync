@@ -3,6 +3,7 @@
 
    ko.sync.KeyFactory = function(model, hashKeyField) {
       this.model = model;
+      this.fields = _.isArray(model.key)? model.key : [model.key];
       this.hashKeyField = hashKeyField === true? KeyFactory.HASHKEY_FIELD : hashKeyField;
    };
    var KeyFactory = ko.sync.KeyFactory;

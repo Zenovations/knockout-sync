@@ -22,7 +22,7 @@
     * @param callbacks
     * @param observedFields
     */
-   ko.observableArray.fn.watchChanges = function(keyFactory, callbacks, observedFields) {
+   ko.observableArray.fn.watchChanges = function(keyFactory, observedFields, callbacks) {
       var previousValue = undefined;
       var disposables = [];
       var ctx = {
@@ -31,7 +31,15 @@
          deferred: {},
          latestValue: null,
          observedFields: observedFields,
-         disposables: disposables
+         disposables: disposables,
+         keys: _buildInitialKeys(keyFactory, this()),
+         keyFields: keyFactory.fields
+      };
+
+      console.log('watchChanges', this+'');//debug
+
+      this.indexForKey = function(hashKey) {
+         return _.indexOf(ctx.keys, hashKey);
       };
 
       disposables.push(this.subscribe(function(_previousValue) {
@@ -50,10 +58,12 @@
          var self = this, keyField = ko.sync.KeyFactory.HASHKEY_FIELD;
          _.each(self(), function(v) {
             var id = keyFactory.make(v);
+            //todo duplicated below
             disposables.push(
                _.extend(
                   {key: id}, // add an id to the disposable
                   watchFields(v, observedFields, function(newData) {
+                     //todo doesn't handle key field changes
                      newData[keyField] = id;
                      applyRecChange(ctx, 'updated', newData);
                   })
@@ -78,21 +88,18 @@
       fieldsSub = watchFields(this(), observedFields, callback);
 
       preSub = this.subscribe(function(prevValue) {
-         console.log('beforeChange', prevValue);//debug
          oldValue = ko.sync.unwrapAll(prevValue);
       }, undefined, 'beforeChange');
 
       // watch for replacement of the entire object
       rootSub = this.subscribe(function(newValue) {
-         console.log('change', newValue);//debug
          if( observedFields.length ) {
             // whenever the observable is changed out (this probably won't work for sync), reset the fields
-            fieldsSub.dispose();
+            fieldsSub && fieldsSub.dispose();
             fieldsSub = watchFields(newValue, observedFields, callback);
          }
 
          var changes = _.changes(oldValue, ko.sync.unwrapAll(newValue));
-         oldValue = _.clone(newValue);
          if(!_.isEmpty(changes)) {
             // invoke the callback
             callback(changes);
@@ -117,6 +124,7 @@
       });
 
       return {
+         //todo should have the key property here (see observableArray.fn.watchFields)
          dispose: function() {
             _.each(disposables, function(d) {d.dispose();});
          }
@@ -124,17 +132,16 @@
    }
 
    function watchField(field, obs, callback) {
-//      console.log('watchField', field);//debug
       var oldValue, preSub, changeSub;
 
       preSub = obs.subscribe(function(prevValue) {
-         console.log('watchField::beforeChange', prevValue);
+//         console.log('watchField::beforeChange', prevValue);
          oldValue = prevValue;
       }, undefined, 'beforeChange');
 
       changeSub = obs.subscribe(function(newValue) {
          if( oldValue !== newValue ) {
-            console.log('watchField::change', newValue);
+//            console.log('watchField::change', newValue);
             var out = {};
             out[field] = newValue;
             callback(out);
@@ -164,40 +171,58 @@
                break;
             case "deleted":
                _findAndDispose(ctx.disposables, key);
-               ctx.deferred[key] = deferDelete(key, ctx.deferred, ctx.callbacks.delete.bind(ctx.callbacks));
+               _.remove(ctx.keys, key); // remove it from the index right now, even if we don't delete it yet
+               ctx.deferred[key] = deferDelete(key, ctx.keys, ctx.deferred, ctx.callbacks.delete.bind(ctx.callbacks));
                break;
             case "updated":
+               //todo-sort sort fields
+               //todo handle key field changes
                ctx.callbacks.update(key, data);
                break;
             case "added":
+               // add key back into the index wherever it exists now in list
+               // for a move, it will have been deleted above (when it was pulled out)
+               var i = ko.sync.findByKey(ctx.latestValue, ctx.keyFactory, key);
+               if( i === -1 ) {
+                  throw new Error('added a rec but its not in the observable?');
+               }
+               ctx.keys.splice(i, 0, key);
+
                if( key in ctx.deferred ) {
+                  // move operation
                   clearTimeout(ctx.deferred);
                   delete ctx.deferred[key];
-                  ctx.callbacks.move(key, data, prevVal(ctx.keyFactory, data, ctx.latestValue));
+                  ctx.callbacks.move(key, data, prevKey(ctx.keys, key));
                }
                else {
-                  ctx.callbacks.add(key, data, prevVal(ctx.keyFactory, data, ctx.latestValue));
+                  // add operation
+                  ctx.callbacks.add(key, data, prevKey(ctx.keys, key));
                   var keyField = ko.sync.KeyFactory.HASHKEY_FIELD;
-                  ctx.disposables.push(watchFields(data, ctx.observedFields, function(newData) {
-                     newData[keyField] = key;
-                     applyRecChange(ctx, 'updated', newData);
-                  }));
+                  //todo duplicated above
+                  ctx.disposables.push(_.extend(
+                     { key: key },
+                     watchFields(data, ctx.observedFields, function(newData) {
+                        //todo doesn't handle key field changes
+                        newData[keyField] = key;
+                        applyRecChange(ctx, 'updated', newData);
+                     })
+                  ));
                }
                break;
          }
       }
    }
 
-   function prevVal(keyBuilder, val, list) {
-      var i = ko.sync.findByKey(list, keyBuilder, val);
-      if( i === -1 ) { return null; }
-      else if( i === 0 ) { return 0; }
+   function prevKey(keyList, key) {
+      var currIndex = _.indexOf(keyList, key);
+      if( currIndex === -1 ) { return null; } //todo-sort use the sort value to position in this case
+      else if( currIndex === 0 ) { return 0; }
       else {
-         return keyBuilder.make(list[i-1]);
+         return keyList[currIndex-1];
       }
    }
 
-   function deferDelete(key, delayed, deleteCallback) {
+   function deferDelete(key, keyList, delayed, deleteCallback) {
       return setTimeout(function() {
          if(key in delayed) {
             delete delayed[key];
@@ -214,10 +239,12 @@
     * @private
     */
    function _findAndDispose(disposables, key) {
-      var s = _.find(disposables, function(v) { return v.key === key; });
-      if( s ) {
-         s.dispose();
-         disposables.splice(_.indexOf(disposables, s), 1);
+      if( key ) {
+         var s = _.find(disposables, function(v) { return v.key === key; });
+         if( s ) {
+            s.dispose();
+            disposables.splice(_.indexOf(disposables, s), 1);
+         }
       }
    }
 
@@ -234,6 +261,8 @@
    ko.sync.watchFields = watchFields;
 
    /**
+    * Use this only when making changes to the obsArray. For all other cases, you can use obsArray.findByKey instead.
+    *
     * @param {ko.observableArray|Array} obsArray
     * @param {ko.sync.KeyFactory} keyFactory
     * @param {string|Object|ko.sync.Record} keyOrData
@@ -271,6 +300,12 @@
       });
       return out;
    };
+
+   function _buildInitialKeys(keyBuilder, unwrappedArray) {
+      return _.map(unwrappedArray||[], function(v) {
+         return keyBuilder.make(v);
+      })
+   }
 
    // the fromat of this value is coupled with RecordId's privade _isTempId() method :(
    ko.sync.instanceId = moment().unix()+':'+(((1+Math.random())*1000)|0);
