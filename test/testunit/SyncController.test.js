@@ -1,10 +1,6 @@
 
 (function($) {
    "use strict";
-   var undef;
-
-   var FIREBASE_URL = 'http://wordspot.firebaseio.com/';
-   var FIREBASE_TEST_URL = 'GitHub/firebase-sync';
 
    var TestData       = ko.sync.TestData,
        RecordList     = ko.sync.RecordList,
@@ -549,9 +545,8 @@
    function syncActivity(conf) {
       //todo this method is ugly
       conf = _.extend({twoWaySync: true, recs: []}, conf);
-      var storeEvents = [],
-          listEvents  = [],
-          model       = TestData.model($.extend({store: new TestData.TestStore(conf.twoWaySync, TestData.model(), _monitorStore, conf.recs), auto: true}, conf.model)),
+      var listEvents  = [],
+          model       = TestData.model($.extend({auto: true}, conf.model), conf.twoWaySync, conf.recs),
           list        = new RecordList(model, conf.recs),
           target      = conf.target? conf.target : (conf.rec? ko.observable() : ko.observableArray()),
           sync        = new ko.sync.SyncController(model, target, conf.rec? conf.rec: list);
@@ -580,13 +575,7 @@
 
       // callback to resolve and invoke the test analysis
       function _resolve() {
-         conf.results && conf.results(storeEvents, listEvents, target, list);
-      }
-
-      function _monitorStore() {
-         if( arguments[0] in {hasTwoWaySync: 1, watch: 1, watchRecord: 1} ) { return; } // suppress this event which we don't care about
-//            console.log('store: ', $.makeArray(arguments));
-         storeEvents.push($.makeArray(arguments));
+         conf.results && conf.results(model.store.eventsFiltered(), listEvents, target, list);
       }
 
       function _monitorList() {

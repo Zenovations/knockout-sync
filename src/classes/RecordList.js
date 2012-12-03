@@ -130,25 +130,25 @@
          var currentLoc = _recordIndex(this, record);
          if( currentLoc !== newLoc ) { // if these are equal, we've already recorded the move or it's superfluous
             // store in changelist
-            if( !(key in this.changes.added) && !(key in this.changes.updated) ) {
+            if( !(key in this.changes.added) ) {
                this.changes.moved[key] = record;
+               this.numChanges++;
             }
-            this.numChanges++;
 
-            var sortedVals = this.sorted;
+            var sortedKeys = this.sorted;
 
             // now we move it, we use the underlying element so this doesn't generate
             // two updates (a delete event followed by an add event)
-            _.move(sortedVals, currentLoc, newLoc);
+            _.move(sortedKeys, currentLoc, newLoc);
 
             // determine what record we have moved it after
             var afterRecord;
-            if( newLoc >= sortedVals.length ) {
+            if( newLoc >= sortedKeys.length ) {
                newLoc--;
             }
             if( newLoc > 0 ) {
                // find the record before the new slot
-               afterRecord = sortedVals[newLoc-1];
+               afterRecord = sortedKeys[newLoc-1];
             }
 
             // now we shoot off the correct notification
@@ -253,11 +253,11 @@
    ko.sync.RecordList.prototype.updated = function(record, field) {
       if( record.isDirty() ) {
          var hashKey = record.hashKey();
-         if( hashKey in this.byKey ) {
+         if( hashKey in this.byKey && !(hashKey in this.changes.deleted) ) {
             if( !(hashKey in this.changes.added) ) {
                // if the record is already marked as newly added, don't mark it as updated and lose that status
                this.changes.updated[hashKey] = record;
-               delete this.changes.moved[hashKey];
+               //delete this.changes.moved[hashKey];
                this.numChanges++;
             }
             //todo differentiate between moves and updates?
@@ -271,10 +271,15 @@
    };
 
    ko.sync.RecordList.prototype.clearEvent = function(action, hashKey) {
-      if( action in {added: 1, deleted: 1, moved: 1, updated: 1} && hashKey in this.changes[action] ) {
-         delete this.changes[action][hashKey];
-         if( action === 'deleted' ) { delete this.byKey[hashKey]; }
-         this.numChanges--;
+      if(_.isArray(action)) {
+         _.each(action, function(a) { this.clearEvent(a, hashKey); }.bind(this));
+      }
+      else {
+         if( action in {added: 1, deleted: 1, moved: 1, updated: 1} && hashKey in this.changes[action] ) {
+            delete this.changes[action][hashKey];
+            if( action === 'deleted' ) { delete this.byKey[hashKey]; }
+            this.numChanges--;
+         }
       }
       return this;
    };
@@ -305,7 +310,18 @@
       var out = [], self = this;
       this.changes && _.each(this.changes, function(recs, action) {
          _.each(recs, function(rec) {
-            out.push([action, rec, RecordList.keyBefore(self, rec.hashKey())]);
+            switch(action) {
+               case 'added':
+               case 'moved':
+                  out.push([action, rec, RecordList.keyBefore(self, rec.hashKey())]);
+                  break;
+               case 'deleted':
+               case 'updated':
+                  out.push([action, rec]);
+                  break;
+               default:
+                  throw new Error('invalid changelist action: '+action);
+            }
          });
       });
       return out;
@@ -363,14 +379,20 @@
       // mark dirty
       record.isDirty(true);
 
-      // mark it deleted
-      recList.changes.deleted[key] = record;
-      recList.numChanges++;
+      if( key in recList.changes.added ) {
+         // if the record is newly added, we just remove it from
+         // the changelist (it never existed) and don't bother adding/deleting
+         // stuff that only existed here momentarily
+         delete recList.byKey[key];
+      }
+      else {
+         // mark it deleted
+         recList.changes.deleted[key] = record;
+         recList.numChanges++;
+      }
 
       // if rec is removed, that supersedes added/updated/moved status
-      delete recList.changes.added[key];
-      delete recList.changes.updated[key];
-      delete recList.changes.moved[key];
+      recList.clearEvent(['added', 'updated', 'moved'], key);
 
       //delete recList.byKey[key]; (deleted after checkpoint is called)
 
@@ -387,8 +409,8 @@
       var loc = _findInsertPosition(recList, record, afterRecordId);
       var key = record.hashKey();
       recList.byKey[key] = record;
-      if( loc < recList.length && loc > 0 ) {
-         recList.sorted.splice(loc, 0, record);
+      if( loc > -1 && loc < recList.sorted.length ) {
+         recList.sorted.splice(loc, 0, key);
       }
       else {
          recList.sorted.push(key);
@@ -399,8 +421,7 @@
          recList.updated(record, fieldChanged);
       });
       if( sendNotification ) {
-         var after = loc > 0? RecordList.atPos(recList, loc-1).hashKey() : undef;
-         _updateListeners(recList.listeners, 'added', record, after);
+         _updateListeners(recList.listeners, 'added', record, RecordList.keyBefore(recList, key));
       }
       return loc;
    }

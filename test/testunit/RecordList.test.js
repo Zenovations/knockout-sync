@@ -53,6 +53,47 @@
       ok(key in list.changes.added, 'change list contains the newly added record');
    });
 
+   test('#add to start', function() {
+      var model = TestData.model(),
+            data = TestData.makeRecords(5),
+            list = new RecordList(model, data.slice(0, 4)),
+            newRec = data[4], key = newRec.hashKey();
+
+      list.add(newRec, 0);
+      strictEqual(RecordList.getPos(list, key), 0);
+   });
+
+
+   test('#add using integer', function() {
+      var model = TestData.model(),
+            data = TestData.makeRecords(5),
+            list = new RecordList(model, data.slice(0, 4)),
+            newRec = data.slice(4,5)[0], key = newRec.hashKey();
+
+      list.add(newRec, 2);
+      strictEqual(RecordList.getPos(list, key), 2);
+   });
+
+   test('#add using negative integer', function() {
+      var model = TestData.model(),
+            data = TestData.makeRecords(5),
+            list = new RecordList(model, data.slice(0, 4)),
+            newRec = data[4], key = newRec.hashKey();
+
+      list.add(newRec, -1);
+      strictEqual(RecordList.getPos(list, key), 2);
+   });
+
+   test('#add using prevId', function() {
+      var model = TestData.model(),
+            data = TestData.makeRecords(5),
+            list = new RecordList(model, data.slice(0, 4)),
+            newRec = data.slice(4,5)[0], key = newRec.hashKey();
+
+      list.add(newRec, data[1].hashKey());
+      strictEqual(RecordList.keyBefore(list, key), data[1].hashKey());
+   });
+
    test('#load', function() {
       var model = TestData.model(),
          data = TestData.makeRecords(5),
@@ -248,6 +289,18 @@
       deepEqual(origList, RecordList.ids(list), 'list should not change');
    });
 
+   test('add followed by delete is like it never existed', function() {
+      expect(4);
+      var rec = TestData.rec(2);
+      var list = new RecordList(TestData.model());
+      list.add(rec);
+      list.remove(rec);
+      strictEqual(list.isDirty(), false, 'not dirty after add/delete in sequence');
+      strictEqual(list.iterator().size(), 0, 'no records in list');
+      strictEqual(list.changeList().length, 0, 'no recs in changelist');
+      strictEqual(list.find(rec.hashKey()), null, 'rec not in list');
+   });
+
    test('change tracking', function() {
       var RECS_TOTAL = 6;
       var RECS_PRELOADED = 3;
@@ -266,7 +319,8 @@
       list.remove([data[2], data[3]]);
 
       // in total we've deleted one of each type: added, updated, unchanged
-      var deleted_recs = _.map(data.slice(1, 4), getHashKey);
+      // the rec which was added and deleted won't appear here
+      var deleted_recs = _.map(data.slice(1, 3), getHashKey);
 
       // now update the even records (one of each type)
       var updated_recs = [];
@@ -459,24 +513,31 @@
    });
 
    test('#changeList', function() {
-      var recs = TestData.recs(25);
+      var recs     = TestData.recs(26);
       var origData = recs.slice(0,20);
-      var list = new RecordList(TestData.model(), origData);
+      var last     = origData[19];
+      var list     = new RecordList(TestData.model(), origData);
       var events = [], expected = [];
-
-      function callback() {
-         var args = _.toArray(arguments);
-         args[1] = args[1] && args[1].hashKey();
-         events.push(args);
-      }
-      list.subscribe(callback);
 
       // add records
       var addedRecs = recs.slice(22);
       _.each(addedRecs, function(v, i) {
-         expected.push(['added', v.hashKey(), i===0? origData[origData.length-1].hashKey() : addedRecs[i-1].hashKey()]);
+         var pos;
+         if( i === 0 ) {
+            pos = 0;
+            expected.push(['added', v.hashKey(), null]);
+         }
+         else if( i === 1 ) {
+            pos = recs[3].hashKey();
+            expected.push(['added', v.hashKey(), recs[3].hashKey()]);
+         }
+         else {
+            pos = null;
+            expected.push(['added', v.hashKey(), last.hashKey()]);
+            last = v;
+         }
+         list.add(addedRecs[i], pos);
       });
-      list.add(addedRecs);
 
       console.log(list.byKey);
 
@@ -491,12 +552,56 @@
       list.move(recs[5], recs[12]);
 
       // change records
-      expected.push(['updated', recs[1].hashKey(), 'stringOptional']);
+      expected.push(['updated', recs[1].hashKey()]);
       recs[1].set('stringOptional', 'changed it');
-      expected.push(['updated', recs[22].hashKey(), 'stringOptional']);
+      expected.push(['updated', recs[22].hashKey()]);
       recs[22].set('stringOptional', 'changed it');
 
-      deepEqual(events, expected, 'all events recorded as expected');
+      deepEqual(_filterChangeList(list.changeList()), _sortChangeList(expected), 'all events recorded as expected');
    });
+
+
+   test('#ids', function() {
+      var recs = TestData.recs(25), list = new RecordList(TestData.model(), recs);
+      deepEqual(RecordList.ids(list), _.map(recs, function(v) { return v.hashKey(); }));
+   });
+
+   test('#atPos', function() {
+      expect(5);
+      var recs = TestData.recs(25), list = new RecordList(TestData.model(), recs);
+      _.each([0, 1, 5, 23, 24], function(i) {
+         strictEqual(RecordList.atPos(list, i).hashKey(), recs[i].hashKey());
+      });
+   });
+
+   test('#getPos', function() {
+      expect(5);
+      var recs = TestData.recs(25), list = new RecordList(TestData.model(), recs);
+      _.each([0, 1, 5, 23, 24], function(i) {
+         strictEqual(RecordList.getPos(list, recs[i].hashKey()), i);
+      });
+   });
+
+   test('#keyBefore', function() {
+      expect(6);
+      var recs = TestData.recs(25), list = new RecordList(TestData.model(), recs);
+      _.each([0, 1, 5, 23, 24], function(i) {
+         strictEqual(RecordList.keyBefore(list, recs[i].hashKey()), i===0? null : recs[i-1].hashKey());
+      });
+      strictEqual(RecordList.keyBefore(list, 'am not in the list'), undef, 'not in list returns undef');
+   });
+
+   function _filterChangeList(changes) {
+      return _sortChangeList(_.map(changes, function(change) {
+         change[1] = change[1].hashKey();
+         return change;
+      }));
+   }
+
+   function _sortChangeList(changes) {
+      _.sortBy(changes, function(v) {
+         return v[0]+'::'+v[1];
+      });
+   }
 
 })(jQuery);

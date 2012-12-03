@@ -166,6 +166,10 @@
       }
    };
 
+   ko.sync.Record.prototype.applyData = function(target) {
+      return ko.sync.Record.applyWithObservables(target||{}, this.getData(true), _.keys(this.observed));
+   };
+
    /**
     * Apply the record's data to target element. Make sure than any fields which are observables are created/updated
     * accordingly.
@@ -175,27 +179,35 @@
     * @param {Array}  observedFields
     */
    ko.sync.Record.applyWithObservables = function(target, data, observedFields) {
-      var targetData = ko.isObservable(target)? target()||{} : target;
+      var changes = false;
+      // if the target data is an observable and it's an object, then we'll inadvertently change
+      // the underlying data with our modifications below, which means that the beforeChange event
+      // will accidentally return the already updated values instead of the old ones; we have to
+      // clone it here to make sure that we don't cause this very hard to trace and annoying behavior
+      var targetData = ko.isObservable(target)? _.clone(target())||{} : target||{};
       if( data instanceof ko.sync.Record ) { data = data.getData(true); }
       _.each(data, function(v, f) {
-         // check for observables,
-         if( _.inArray(observedFields, f) ) {
-            if(_.has(targetData, f) && ko.isObservable(targetData[f])) {
-               // make sure we don't overwrite observables; subscribers would be lost
-               targetData[f](v);
+         if( !_.isEqual(ko.utils.unwrapObservable(targetData[f]), v) ) {
+            // check for observables,
+            if( _.contains(observedFields, f) ) {
+               if(_.has(targetData, f) && ko.isObservable(targetData[f])) {
+                  // make sure we don't overwrite observables; subscribers would be lost
+                  targetData[f](v);
+               }
+               else {
+                  // doesn't exist or isn't the right data type; fix it
+                  targetData[f] = _.isArray(v)? ko.observableArray(v) : ko.observable(v);
+               }
             }
             else {
-               // doesn't exist or isn't the right data type; fix it
-               targetData[f] = _.isArray(v)? ko.observableArray(v) : ko.observable(v);
+               // isn't observed so just set it
+               targetData[f] = v;
             }
          }
-         else {
-            // isn't observed so just set it
-            targetData[f] = v;
-         }
       });
-      if( ko.isObservable(target) ) {
-         // drop it back into the observed world
+      if( changes && ko.isObservable(target) ) {
+         // drop it back into the observed world which will trigger an update once for all of the values
+         // if any of the values are themselves observables, they will have already triggered an update
          target(targetData);
       }
       return target;
@@ -203,8 +215,8 @@
 
    function _setFields(fields, data) {
       //todo validate the data before applying it
-      var k, out = {}, keys = _.keys(fields), i = keys.length;
-      while(i--) {
+      var k, out = {}, keys = _.keys(fields), i = -1, len = keys.length;
+      while(++i < len) {
          k = keys[i];
          out[k] = _value(k, fields, data);
       }
@@ -281,7 +293,7 @@
          if( _.has(rec.data, k) ) {
             var newVal = ko.utils.unwrapObservable(data[k]);
             if( setWithoutNotice(rec, k, newVal) ) {
-               if(_.inArray(idFields, k)) { idChanged = true; }
+               if(_.contains(idFields, k)) { idChanged = true; }
                changed.push(k);
             }
          }

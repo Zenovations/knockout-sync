@@ -41,12 +41,16 @@
 
    /**
     * @param {object}  [moreOpts]
+    * @param {boolean} [hasTwoWaySync]
+    * @param {Array}   [recs]
     * @return {ko.sync.Model}
     */
-   exports.model = function(moreOpts) {
-      var noSort = moreOpts && 'sort' in moreOpts && !moreOpts.sort;
+   exports.model = function(moreOpts, hasTwoWaySync, recs) {
+      var noSort = moreOpts && moreOpts.sort === false;
       var props = $.extend({}, (noSort? genericModelProps : genericModelPropsWithSort), moreOpts);
-      return new Model(props);
+      var model = new Model(props);
+      model.store || (model.store = new exports.TestStore(hasTwoWaySync, recs, model));
+      return model;
    };
 
    /**
@@ -79,17 +83,19 @@
    /**
     * Ensures dates are converted to compatible formats for comparison
     * @param {object} data
+    * @param {ko.sync.Model} [model]
     * @return {object}
     */
-   exports.forCompare = function(data) {
-      var out = $.extend({}, data);
+   exports.forCompare = function(data, model) {
+      var out = $.extend({}, data), fields = _.keys((model||exports.model()).fields);
       if( 'dateOptional' in out && out.dateOptional ) {
-         out.dateOptional = moment.utc(out.dateOptional).toDate();
+         out.dateOptional = moment.utc(out.dateOptional).format();
       }
       if( 'dateRequired' in out && out.dateRequired ) {
-         out.dateRequired = moment.utc(out.dateRequired).toDate();
+         out.dateRequired = moment.utc(out.dateRequired).format();
       }
-      return ko.sync.unwrapAll(out);
+      // using pick here essentially sorts the values and ensures ordering is consistent
+      return _.pick(ko.sync.unwrapAll(out), fields);
    };
 
    exports.defaults = function(model) {
@@ -133,6 +139,10 @@
    };
 
    exports.recs = exports.makeRecords;
+
+   exports.keyFactory = function() {
+      return new ko.sync.KeyFactory(exports.model(), true);
+   };
 
    /**
     * @param {ko.sync.Model} model
@@ -246,6 +256,14 @@
       }
    };
 
+   exports.pushRecsToObservableArray = function(target, recs, model) {
+      var observedFields = (model || exports.model()).observedFields();
+      _.each(recs, function(rec) {
+         target.push(rec.applyData());
+      });
+      return target;
+   };
+
    /**
     * @param {jQuery.Deferred} def
     * @param {int} [timeout]
@@ -280,13 +298,20 @@
        * meets all the requirements of Store interface and can be used normally in place of an asynchronous Store.
        *
        * However, the watch() methods filterCriteria parameter is ignored and does not come into play here.
+       *
+       * The special methods events() and eventsWithoutMeta() will also return all events from this object so
+       * that no callback is necessary in most cases.
        */
       exports.TestStore = ko.sync.Store.extend({
-         init: function(hasTwoWaySync, model, testCallback, records) {
+         init: function(hasTwoWaySync, records, model) {
+            if(_.isArray(hasTwoWaySync)) {
+               records = hasTwoWaySync;
+            }
+            if( hasTwoWaySync !== false ) { hasTwoWaySync = true; }
             this.hasSync = hasTwoWaySync;
-            this.testCallback = testCallback;
-            this.records = _copyRecords(model, records);
+            this.records = _copyRecords(model||exports.model(), records);
             this.callbacks = [];
+            this._testEvents = [];
          },
 
          /**
@@ -469,6 +494,26 @@
                   def.resolve(id);
                }
             }.bind(this));
+         },
+
+         /**
+          * @param {String} action
+          * @param [meta1]
+          * @param [meta2]
+          * @param [meta3]
+          */
+         testCallback: function(action, meta1, meta2, meta3) {
+            this._testEvents.push(_.toArray(arguments));
+         },
+
+         eventsFiltered: function() {
+            return _.filter(this._testEvents, function(v) {
+               return v && !(v[0] in {hasTwoWaySync: 1, watch: 1, watchRecord: 1});
+            })
+         },
+
+         events: function() {
+            return this._testEvents.slice(0);
          }
       });
 

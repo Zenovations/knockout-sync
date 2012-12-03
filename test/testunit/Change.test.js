@@ -64,7 +64,7 @@
       _runChangeWithTimeout({action: 'create', to: 'store'})
          .done(function(change, id) {
             strictEqual(id, 'record-5', 'record id is correct');
-            deepEqual(change.model.store._testEvents, [
+            deepEqual(change.model.store.eventsFiltered(), [
                ['create', 'record-5']
             ]);
          })
@@ -115,7 +115,7 @@
       _runChangeWithTimeout({action: 'update', to: 'store', rec: rec}, rec.hashKey())
             .done(function(change) {
                strictEqual(change.key(), rec.hashKey(), 'record id is correct');
-               deepEqual(change.model.store._testEvents, [
+               deepEqual(change.model.store.eventsFiltered(), [
                   ['update', rec.hashKey()]
                ])
             })
@@ -162,7 +162,7 @@
       var rec = TestData.rec(2);
       _runChangeWithTimeout({action: 'delete', to: 'store', rec: rec})
             .done(function(change) {
-               deepEqual(change.model.store._testEvents, [
+               deepEqual(change.model.store.eventsFiltered(), [
                      ['delete', rec.hashKey()]
                ]);
             })
@@ -173,7 +173,7 @@
    test('#run, delete in obsArray', function() {
       expect(2);
       var obs = ko.observableArray();
-      applyRecsToObsArray(obs, TestData.recs(5));
+      TestData.pushRecsToObservableArray(obs, TestData.recs(5));
       _runChangeWithTimeout({obs: obs, action: 'delete', to: 'obs', rec: TestData.rec(3)})
             .done(function() {
                var recs = obs();
@@ -190,7 +190,7 @@
       var recs = TestData.recs(5), recToMove = recs[3], moveAfter = recs[1].hashKey();
       _runChangeWithTimeout({action: 'move', to: 'store', rec: recToMove, prevId: moveAfter})
             .done(function(change) {
-               deepEqual(change.model.store._testEvents, [
+               deepEqual(change.model.store.eventsFiltered(), [
                   ['update', recToMove.hashKey()]
                ]);
             })
@@ -201,7 +201,7 @@
    test('#run, move in obsArray', function() {
       expect(1);
       var recs = TestData.recs(5), obs = ko.observableArray(), recToMove = recs[4], moveAfter = recs[1].hashKey();
-      applyRecsToObsArray(obs, recs);
+      TestData.pushRecsToObservableArray(obs, recs);
       _runChangeWithTimeout({obs: obs, action: 'move', to: 'obs', rec: recToMove, prevId: moveAfter})
             .done(function(change) {
                var obsKeys = _.pluck(obs(), 'id');
@@ -216,7 +216,7 @@
           change = ko.sync.Change.fromChangeList(
             'store',
             TestData.model(),
-            [ 'create', rec, afterKey ],
+            [ 'added', rec, afterKey ],
             {}
       );
 
@@ -240,7 +240,7 @@
          data:   null,
          model:  model,
          rec:    rec,
-         obs:    opts && opts.obs? null : ko.sync.Record.applyWithObservables(ko.observable(), rec.getData(true), model.observedFields())
+         obs:    opts && opts.obs? null : rec.applyData()
       }, opts));
    }
 
@@ -259,41 +259,8 @@
    }
 
    function getFakeStore(recs) {
-      var events = [];
-      function _monitor() {
-         if( arguments[0] in {hasTwoWaySync: 1, watch: 1, watchRecord: 1} ) { return; } // suppress this event which we don't care about
-         events.push($.makeArray(arguments));
-      }
-      var store = new TestData.TestStore(true, TestData.model(), _monitor, recs || TestData.recs(5));
-      store._testEvents = events;
-      return store;
+      return new TestData.TestStore(recs || TestData.recs(5));
    }
-
-   function applyRecsToObsArray(target, recs, model) {
-      var observedFields = (model || TestData.model()).observedFields();
-      _.each(recs, function(rec) {
-         target.push(ko.sync.Record.applyWithObservables({}, rec.getData(true), observedFields));
-      })
-   }
-
-   function FakeChangeController() {
-      this.expect = function(exp) {
-         this.events.push(exp);
-      };
-      this.events = [];
-   }
-//         add: function(change) {
-//            if( !(change instanceof ko.sync.Change) ) { throw new Error('not a Change instance'); }
-//            changes.push(change);
-//         },
-//         process: function(store) {
-//            var promises = [], self = this;
-//            _.each(changes, function(change) {
-//               promises.push(change.run(self, store));
-//            });
-//            return $.when.apply($, promises);
-//         }
-//   }
 
 })(ko, jQuery);
 

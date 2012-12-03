@@ -47,11 +47,11 @@
    };
 
    /**
-    * @param {object} data
+    * @param {Array} [recs]
     * @return {ko.sync.RecordList}
     */
-   ko.sync.Model.prototype.newList = function( data ) {
-      return new ko.sync.RecordList(this, data);
+   ko.sync.Model.prototype.newList = function( recs ) {
+      return new ko.sync.RecordList(this, recs);
    };
 
    ko.sync.Model.prototype.toString = function() {

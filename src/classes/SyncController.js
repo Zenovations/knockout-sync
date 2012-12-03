@@ -67,7 +67,7 @@
          }
          else {
             this.rec = listOrRecord;
-            ko.sync.Record.applyWithObservables(findTargetDataSource(this, target), this.rec, this.model.observedFields());
+            this.rec.applyData(findTargetDataSource(this, target));
             this.twoway && this.subs.push(_watchStoreRecord(this, listOrRecord, target));
             this.subs.push(_watchRecord(this, listOrRecord, target));
             if( this.observed ) {
@@ -259,7 +259,7 @@
                rec && rec.updateAll(data);
             })
          },
-         delete: function(key) {
+         'delete': function(key) {
             nextEventIf(ctx, 'push', key, function() {
                list.remove(key);
                //todo does this need to invoke the dispose method and remove from subs? probably
@@ -355,7 +355,7 @@
       switch(opts.action) {
          case 'added':
             pos = newPositionForRecord(ctx, target, rec, opts.prevId, true);
-            sourceData = ko.sync.Record.applyWithObservables({}, rec, observedFields);
+            sourceData = rec.applyData();
             //todo-nested watch obs fields
             //todo
             //todo
@@ -372,7 +372,8 @@
                var oldKey = rec.hashKey();
                rec.onKey(function(newKey, fields, data) {
                   nextEvent(ctx, 'pull', newKey, function() {
-                     ko.sync.Record.applyWithObservables(findTargetDataSource(sync, target, oldKey), rec, observedFields)
+                     //todo this doesn't apply the new key?
+                     rec.applyData(findTargetDataSource(sync, target, oldKey));
                   })
                });
             }
@@ -382,7 +383,7 @@
             if( fields.length ) {
                //todo-sort
                sourceData = findTargetDataSource(sync, target, id);
-               ko.sync.Record.applyWithObservables(sourceData, rec.get(fields), observedFields);
+               rec.applyData(sourceData);
                //todo? this only affects unobserved fields which technically shouldn't change?
                //if(sync.isList) { opts.target.notifySubscribers(opts.target()); }
             }
@@ -397,7 +398,7 @@
             pos = currentPositionForRecord(ctx, target, id);
             var newPos = newPositionForRecord(ctx, target, rec, opts.prevId);
             if( pos > -1 && pos !== newPos ) {
-               target.splice(newPos, 0, target.splice(pos, 1));
+               _.move(target, pos, newPos);
             }
             break;
          default:
@@ -575,7 +576,7 @@
    function syncObsArray(target, list, obsFields) {
       var it = list.iterator(), data = [];
       while(it.hasNext()) {
-         data.push(ko.sync.Record.applyWithObservables({}, it.next()), obsFields);
+         data.push(it.next().applyData());
       }
       target(data);
    }

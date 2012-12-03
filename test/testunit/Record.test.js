@@ -91,9 +91,6 @@
       // dates should be null in this case
       deepEqual(emptyRec.getData(), defaults);
 
-      console.log(_buildARecord().getData());
-      console.log(genericData);
-
       // make sure setting data works
       deepEqual(TestData.forCompare(_buildARecord().getData()), TestData.forCompare(genericData));
    });
@@ -279,6 +276,7 @@
     */
    function _buildARecord(addData, withId, modelProps) {
       var args = _buildArgs(arguments), data = TestData.genericData(args.unkeyed, args.data);
+      //console.log('_buildARecord', addData, withId, modelProps, args, data);
       return new ko.sync.Record(TestData.model(args.model), data);
    }
 

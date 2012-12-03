@@ -40,18 +40,21 @@
 
       disposables.push(this.subscribe(function(latestValue) {
          ctx.latestValue = latestValue;
-         var diff = ko.utils.compareArrays(previousValue, latestValue);
-         for (var i = 0, j = diff.length; i < j; i++) {
-            applyRecChange(ctx, diff[i].status, diff[i].value);
+         var changes = ko.utils.compareArrays(previousValue, latestValue);
+         for (var i = 0, j = changes.length; i < j; i++) {
+            applyRecChange(ctx, changes[i].status, changes[i].value);
          }
       }));
 
       if( observedFields.length ) {
-         _.each(this(), function(v) {
+         var self = this, keyField = ko.sync.KeyFactory.HASHKEY_FIELD;
+         _.each(self(), function(v) {
+            var id = keyFactory.make(v);
             disposables.push(
                _.extend(
-                  {key: keyFactory.make(v)}, // add an id to the disposable
+                  {key: id}, // add an id to the disposable
                   watchFields(v, observedFields, function(newData) {
+                     newData[keyField] = id;
                      applyRecChange(ctx, 'updated', newData);
                   })
                )
@@ -69,38 +72,46 @@
    };
 
    ko.observable.fn.watchChanges = function(observedFields, callback) {
-      var fieldsSub, rootSub;
+      var fieldsSub, rootSub, preSub, oldValue;
 
-      // initialize
+      // watch for changes on any nested observable fields
       fieldsSub = watchFields(this(), observedFields, callback);
 
-      // watch for replacements of the entire object
+      preSub = this.subscribe(function(prevValue) {
+         console.log('beforeChange', prevValue);//debug
+         oldValue = ko.sync.unwrapAll(prevValue);
+      }, undefined, 'beforeChange');
+
+      // watch for replacement of the entire object
       rootSub = this.subscribe(function(newValue) {
-         // whenever the observable is changed out (this probably shouldn't happen and wouldn't work), reset the fields
+         console.log('change', newValue);//debug
          if( observedFields.length ) {
+            // whenever the observable is changed out (this probably won't work for sync), reset the fields
             fieldsSub.dispose();
             fieldsSub = watchFields(newValue, observedFields, callback);
          }
 
-         // invoke the callback
-         callback(newValue);
+         var changes = _.changes(oldValue, ko.sync.unwrapAll(newValue));
+         oldValue = _.clone(newValue);
+         if(!_.isEmpty(changes)) {
+            // invoke the callback
+            callback(changes);
+         }
       });
 
       return {
          dispose: function() {
             fieldsSub && fieldsSub.dispose();
             rootSub && rootSub.dispose();
+            preSub && preSub.dispose();
          }
       };
    };
 
    function watchFields(data, observedFields, callback) {
-//      console.log('watchFields', observedFields, data); //debug
       var disposables = [];
       _.each(observedFields, function(k) {
-//         console.log('testing', k); //debug
          if( _.has(data, k) && ko.isObservable(data[k]) ) {
-//            console.log('observing', k); //debug
             disposables.push(watchField(k, data[k], callback));
          }
       });
@@ -114,12 +125,28 @@
 
    function watchField(field, obs, callback) {
 //      console.log('watchField', field);//debug
-      return obs.subscribe(function(newValue) {
-//         console.log('watchField invoked', field);//debug
-         var out = {};
-         out[field] = newValue;
-         callback(out);
+      var oldValue, preSub, changeSub;
+
+      preSub = obs.subscribe(function(prevValue) {
+         console.log('watchField::beforeChange', prevValue);
+         oldValue = prevValue;
+      }, undefined, 'beforeChange');
+
+      changeSub = obs.subscribe(function(newValue) {
+         if( oldValue !== newValue ) {
+            console.log('watchField::change', newValue);
+            var out = {};
+            out[field] = newValue;
+            callback(out);
+         }
       });
+
+      return {
+         dispose: function() {
+            preSub.dispose();
+            changeSub.dispose();
+         }
+      }
    }
 
    function applyRecChange(ctx, status, data) {
@@ -131,6 +158,7 @@
       else {
          //todo this key isn't applied to the data; we can't match them up later
          var key = ctx.keyFactory.make(data);
+//         status !== 'retained' && console.log('applyRecChange', status, key, data);
          switch (status) {
             case "retained":
                break;
@@ -149,7 +177,9 @@
                }
                else {
                   ctx.callbacks.add(key, data, prevVal(ctx.keyFactory, data, ctx.latestValue));
+                  var keyField = ko.sync.KeyFactory.HASHKEY_FIELD;
                   ctx.disposables.push(watchFields(data, ctx.observedFields, function(newData) {
+                     newData[keyField] = key;
                      applyRecChange(ctx, 'updated', newData);
                   }));
                }
@@ -159,8 +189,8 @@
    }
 
    function prevVal(keyBuilder, val, list) {
-      var i = _.indexOf(val);
-      if( i === -1 || i === list.length-1 ) { return null; }
+      var i = ko.sync.findByKey(list, keyBuilder, val);
+      if( i === -1 ) { return null; }
       else if( i === 0 ) { return 0; }
       else {
          return keyBuilder.make(list[i-1]);
@@ -204,6 +234,28 @@
    ko.sync.watchFields = watchFields;
 
    /**
+    * @param {ko.observableArray|Array} obsArray
+    * @param {ko.sync.KeyFactory} keyFactory
+    * @param {string|Object|ko.sync.Record} keyOrData
+    */
+   ko.sync.findByKey = function(obsArray, keyFactory, keyOrData) {
+      var key = keyOrData;
+      if( typeof(keyOrData) !== 'string' ) {
+         if( keyOrData instanceof ko.sync.Record) {
+            keyOrData = keyOrData.getData(true);
+         }
+         key = keyFactory.make(keyOrData);
+      }
+      var list = ko.utils.unwrapObservable(obsArray), i = -1, len = list.length;
+      while(++i < len) {
+         if( keyFactory.make(list[i]) === key ) {
+            return i;
+         }
+      }
+      return -1;
+   };
+
+   /**
     * Creates a copy of the data with all observables unwrapped to their value
     *
     * @param {Object|Array} data
@@ -215,7 +267,7 @@
       var out = _.isArray(data)? [] : {};
       _.each(data, function(v, key) {
          v = unwrap(v);
-         out[key] = _.isObject(v)? ko.sync.unwrapAll(v) : v;
+         out[key] = _.isObjectLiteral(v)? ko.sync.unwrapAll(v) : v;
       });
       return out;
    };

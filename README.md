@@ -233,8 +233,8 @@ with `destroy()` and `_destroy` as deleted items are automagically tracked and h
 # Limitations
 
  - conflicts are not resolved intelligently (yet); if client changes data and server changes same record, the later change wins
- - unless you perform a read() on a list, it is not hooked up for two-way sync, but changes can still be saved to the server (you can't just sync an arbitrary set of records to an existing table, how would they resolve differences?)
- - updating fields that are part of the records ids doesn't affect the ID
+ - loading data locally is very tricky (for now); you should always start by using `read()` for lists (excluding simple create operations)
+ - updating fields that are part of the record's ids doesn't affect the stored ID (try `updateHashKey()` to accomplish this)
  - updating fields that are part of the sort order doesn't affect actual ordering on client until a save occurs (and server tells us the records moved)
  - composite keys currently don't work well with creates from client unless all data exists in the record when it is created (updating a composite field doesn't change the compiled ID)
  - validation isn't implemented yet (soon, soon)

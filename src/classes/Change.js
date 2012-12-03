@@ -57,7 +57,6 @@
             default:
                throw new Error('invalid action ' + change.action);
          }
-
       }
       return false;
    };
@@ -74,9 +73,10 @@
          model:  model,
          obs:    target,
          to:     to,
-         action: changeData[0],
+         action: _changeAction(changeData[0]),
          rec:    changeData[1],
-         prevId: changeData[2]
+         prevId: changeData[2] === null? 0 : changeData[2],
+         data:   changeData[1].getData(true)
       });
    };
 
@@ -97,8 +97,8 @@
             throw new Error('invalid destination: '+self.to);
       }
       return def.pipe(function(id) {
-               return $.Deferred(function(def) { def.resolve(self, id); });
-            });
+         return $.Deferred(function(def) { def.resolve(self, id); });
+      });
    };
 
    function sendToStore(change) {
@@ -181,28 +181,33 @@
       var target = change.obs;
       var pos = currentPositionForRecord(ctx, target, id);
       var newPos = newPositionForRecord(ctx, target, id, change.prevId);
+      console.log('_obsMove', id, pos, newPos, target()[newPos-1].id, target()[newPos].id, target()[pos].id); //debug
       if( pos > -1 && pos !== newPos ) {
-         target.splice(newPos, 0, target.splice(pos, 1)[0]);
+         _.move(target, pos, newPos);
       }
    }
 
    function newPositionForRecord(ctx, obsArray, key, prevId, isNew) {
       var len = obsArray().length;
-      var newLoc = -1;
-      var oldLoc = isNew? -1 : currentPositionForRecord(ctx, obsArray, key);
-
+      var newPos = -1, oldPos, prevIdPos;
       prevId instanceof ko.sync.RecordId && (prevId = prevId.hashKey());
       if( typeof(prevId) === 'string' ) {
-         newLoc = currentPositionForRecord(ctx, obsArray, prevId);
-         if( newLoc > -1 && oldLoc > -1 && newLoc < oldLoc ) {
-            newLoc++;
+         prevIdPos = currentPositionForRecord(ctx, obsArray, prevId);
+         oldPos = currentPositionForRecord(ctx, obsArray, key);
+         // when moving records, if the old record exists and is earlier in the array, then it
+         // will be spliced out, which causes the final position to be one lower, but normally,
+         // we want the index after the prevId's position
+         if( prevIdPos > -1 && (oldPos < 0 || oldPos > prevIdPos)  ) {
+            newPos = prevIdPos+1;
+         }
+         else {
+            newPos = prevIdPos;
          }
       }
       else if( typeof(prevId) === 'number' ) {
-         newLoc = prevId < 0? len - prevId : prevId;
+         newPos = prevId < 0? Math.max(len - 1 - prevId, 0) : Math.min(len, prevId);
       }
-
-      return newLoc;
+      return newPos;
    }
 
    function currentPositionForRecord(ctx, obsArray, key) {
@@ -236,6 +241,20 @@
       _.each(ko.utils.unwrapObservable(obsArray), function(v, i) {
          cache[ f.make(v) ] = i;
       });
+   }
+
+   var CHANGE_CONVERSIONS = {
+      added: 'create',
+      updated: 'update',
+      deleted: 'delete',
+      moved: 'move'
+   };
+
+   function _changeAction(recListChangeType) {
+      if( !_.has(CHANGE_CONVERSIONS, recListChangeType) ) {
+         throw new Error('invalid action: '+recListChangeType);
+      }
+      return CHANGE_CONVERSIONS[recListChangeType];
    }
 
 })(ko, jQuery);

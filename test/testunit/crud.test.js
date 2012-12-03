@@ -22,18 +22,12 @@
       var view  = {data: TestData.rec(5).getData()};
       var events = [];
 
-      function _callback() {
-         if( arguments[0] in {hasTwoWaySync: 1, watch: 1, watchRecord: 1} ) { return; } // suppress this event which we don't care about
-//            console.log('store: ', $.makeArray(arguments));
-         events.push($.makeArray(arguments));
-      }
-
       model.sync(view);
       var def = view.crud.create().promise();
       TestData.expires(def); // timeout
 
       def.then(function() {
-            deepEqual(events, [
+            deepEqual(model.store.eventsFiltered(), [
                ['create', view.data.id]
             ]);
          })
@@ -80,8 +74,7 @@
          fx = moreOpts;
          moreOpts = {};
       }
-      fx || (fx = function() {});
-      return TestData.model(_.extend({store: new TestData.TestStore(true, TestData.model(), fx, {})}, moreOpts||{}));
+      return TestData.model(moreOpts);
    }
 
 })(jQuery);
