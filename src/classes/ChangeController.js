@@ -2,23 +2,33 @@
 (function(ko, $) {
 
    /**
-    * @param {ko.sync.KeyFactory} keyFactory
     * @constructor
     */
-   ko.sync.ChangeController = function(keyFactory) {
-      // KeyFactory is used to generate caches and find elements inside observableArray
-      // context is used to store the cached ids for quickly searching observable arrays
-      this.keyFactory = keyFactory;
-      this.changes = [];
+   ko.sync.ChangeController = function() {
+      this.changes = []; // used to run the changes in order
+      this.changesIndexed = {}; // used to find the changes by key
+      this.failed = [];
    };
 
    ko.sync.ChangeController.prototype.process = function() {
-      var promises = [], changes = this.changes, keyFactory = this.keyFactory;
+      var promises = [], changes = this.changes, failed = this.failed;
       this.changes = [];
-      _.each(changes, function(change) {
-         promises.push(change.run(keyFactory).then());
+      this.changesIndexed = {};
+      _.each(changes, function(changeSet) {
+         _.each(changeSet, function(change) {
+            promises.push(change.run().fail(function(e) {
+               //todo what to do with failed changes? we need some form of error recovery here
+               console.error(e);
+               failed.push(change);
+            }));
+         });
       });
-      return $.when.apply($, promises);
+      // wait for all the items to succeed or for any to fail and return the promises for every change
+      return $.Deferred(function(def) {
+         $.when.apply($, promises)
+            .done(function() { def.resolve(promises); })
+            .fail(function() { def.reject(promises);  })
+      });
    };
 
    /**
@@ -26,7 +36,7 @@
     * @return {ko.sync.ChangeController} this
     */
    ko.sync.ChangeController.prototype.addChange = function(change) {
-      this.changes.push(change);
+      _addOrReconcileChange(this.changesIndexed, this.changes, change);
       return this;
    };
 
@@ -39,9 +49,9 @@
    ko.sync.ChangeController.prototype.addList = function(destination, recList, target) {
       //todo-mass come up with a way to handle mass updates at the store level
       //todo-mass and implement that here
-      var self = this, context = this.context;
+      var self = this;
       _.each(recList.changeList(), function(changeListEntry) {
-         self.changes.push(ko.sync.Change.fromChangeList(
+         self.addChange(ko.sync.Change.fromChangeList(
             destination,
             recList.model,
             changeListEntry,
@@ -49,8 +59,6 @@
             function(change) {
                recList.clearEvent(_translateActionToChangeListEvent(change.action), change.key());
             }));
-//         var change = self.changes[self.changes.length-1];//debug
-//         console.log('addChange', change.action, change.key(), change.prevId);//debug
       });
       return this;
    };
@@ -67,6 +75,23 @@
          throw new Error('invalid action: '+changeActionType);
       }
       return INVERT_ACTIONS[changeActionType];
+   }
+
+   /**
+    * @param {Object} changeListIndex
+    * @param {Array} changeListOrdered
+    * @param {ko.sync.Change} change
+    * @private
+    */
+   function _addOrReconcileChange(changeListIndex, changeListOrdered, change){
+      var key = change.key();
+      if( key in changeListIndex ) {
+         changeListIndex[key].reconcile(change);
+      }
+      else {
+         changeListIndex[key] = change;
+         changeListOrdered.push(change);
+      }
    }
 
 })(ko, jQuery);

@@ -226,6 +226,19 @@
       strictEqual(change.to, 'store', 'to set correctly');
    });
 
+   test('#invalidate', function() {
+      var obs = {}, change = _change({obs: obs, action: 'create', to: 'obs', data: TestData.dat(5)});
+      change.invalidate();
+      var def = change.run();
+      TestData.expires(def);
+      def
+         .done(function(change) {
+            deepEqual(obs, {}, 'change did not run');
+         })
+         .fail(function(e) { throw e; })
+         .always(start);
+   });
+
    function _change(opts, id) {
       if( typeof(opts) === 'number' ) {
          id = opts;
@@ -246,13 +259,9 @@
    }
 
    function _runChangeWithTimeout(opts, id) {
-      var def = _change(opts, id).run({keyFactory: getKeyFactory()});
+      var def = _change(opts, id).run();
       TestData.expires(def);
       return def;
-   }
-
-   function getKeyFactory() {
-      return new ko.sync.KeyFactory(TestData.model(), true);
    }
 
    function getModelWithStore() {

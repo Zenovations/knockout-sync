@@ -39,8 +39,6 @@
          keyFields: keyFactory.fields
       };
 
-      console.log('watchChanges', this+'');//debug
-
       this.indexForKey = function(hashKey) {
          return _.indexOf(ctx.keys, hashKey);
       };

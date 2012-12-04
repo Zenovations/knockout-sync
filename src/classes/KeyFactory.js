@@ -1,6 +1,11 @@
 
 (function(ko) {
 
+   /**
+    * @param {ko.sync.Model} model
+    * @param {boolean} [hashKeyField]
+    * @constructor
+    */
    ko.sync.KeyFactory = function(model, hashKeyField) {
       this.model = model;
       this.fields = _.isArray(model.key)? model.key : [model.key];

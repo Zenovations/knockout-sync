@@ -14,7 +14,13 @@
    });
 
    asyncTest('#construct, create record from object', function() {
-      start();
+      syncActivity({
+         criteria: TestData.dat(2),
+         target:   {},
+         results: function(x) {
+            console.log(x.sync.queue);
+         }
+      });
    });
 
    asyncTest('#construct, sync record from object', function() {
@@ -69,6 +75,10 @@
       start();
    });
 
+   asyncTest('handles failures', function() {
+      start();
+   });
+
    /**
     * Create a SyncController and run some tests on it, then evaluate results. Sets a timeout for tests which are overdue.
     *
@@ -86,25 +96,30 @@
     * @return {*}
     */
    function syncActivity(conf) {
-      //todo this method is ugly
       conf = _.extend({twoWaySync: true, recs: []}, conf);
       var listEvents  = [],
           model       = TestData.model($.extend({auto: true}, conf.model), conf.twoWaySync, conf.recs),
-          list        = new RecordList(model, conf.recs),
-          target      = conf.target? conf.target : (conf.rec? ko.observable() : ko.observableArray()),
-          sync        = new ko.sync.SyncController(model, target, conf.rec? conf.rec: list);
+          target      = conf.target? conf.target : ko.observableArray(),
+          sync        = new ko.sync.SyncController(model, target, conf.criteria);
 
-      if( conf.rec ) {
-         conf.rec.subscribe(_monitorList);
+      if( ko.isObservable(target) ) {
+         target.watchChanges(_monitorList);
       }
-      else {
-         list.subscribe(_monitorList);
-      }
+
+      var props = {
+         events: {
+            store: model.store.eventsFiltered(),
+            obs:   listEvents
+         },
+         target: target,
+         model:  model,
+         sync:   sync
+      };
 
       // invoke the test
       var def = $.Deferred(function(def) {
          TestData.expires(def);
-         $.when(conf.fx(sync, list, model, target)).then(def.resolve, def.reject);
+         $.when( (conf.fx || function() { return true })(props) ).then(def.resolve, def.reject);
       });
 
       // make sure our async test restarts and rejects are handled
@@ -118,14 +133,14 @@
 
       // callback to resolve and invoke the test analysis
       function _resolve() {
-         conf.results && conf.results(model.store.eventsFiltered(), listEvents, target, list);
+         conf.results && conf.results(props);
       }
 
       function _monitorList() {
 //            console.log('list: ', $.makeArray(arguments));
          var args = $.makeArray(arguments);
-         $.each(args, function(i,v) {
-            if( v && v instanceof ko.sync.Record ) { args[i] = v.hashKey(); }
+         _.each(args, function(v, i) {
+            if( v instanceof ko.sync.Record ) { args[i] = v.hashKey(); }
          });
          listEvents.push(args);
       }

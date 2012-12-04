@@ -320,7 +320,7 @@
 
    function _controller(model) {
       model || (model = TD.model(null, true, TD.recs(5)));
-      var con = new ko.sync.ChangeController(new ko.sync.KeyFactory(model, true));
+      var con = new ko.sync.ChangeController();
       con._testModel = model;
       return con;
    }
