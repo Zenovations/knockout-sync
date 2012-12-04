@@ -193,8 +193,8 @@ Once an object is synced, it has a `crud` member which can be used outside knock
 
     // chain them all for great joy!
     // async actions like read and update automagically queue and run in sequence!
-    view.crud.read( 'recordXYZ' ).update({name: 'John Smith'}).delete()
-        .promise().then(function(crud) { /* no race conditions here */ });
+    view.crud.chain().read( 'recordXYZ' ).update({name: 'John Smith'}).delete()
+        .then(function(crud) { /* no race conditions here */ });
 ```
 
 ### Perform CRUD operations on observable arrays
@@ -226,8 +226,8 @@ with `destroy()` and `_destroy` as deleted items are automagically tracked and h
     users.splice(2, 1); // works too
 
     // just like crud ops on records, these can be chained too
-    users.crud.read( {limit: 100} ).update('record123', {name: 'John Smith'}).delete( 'recordXYZ' ).create( {name: 'Jim Campbell'} )
-        .promise().then(function(crud) { /* all operations completed and saved */ });
+    users.crud.chain().read( {limit: 100} ).update('record123', {name: 'John Smith'}).delete( 'recordXYZ' ).create( {name: 'Jim Campbell'} )
+        .then(function(crud) { /* all operations completed and saved */ });
 ```
 
 # Limitations
@@ -489,22 +489,6 @@ immediately force a save to occur.
    view.crud.isDirty(); // true
 ```
 
-
-### Crud.ifDirty()
-
-@returns {Promise}
-
-An alternate version of isDirty() that returns a promise for chaining. Fulfilled if true and rejected if false.
-
-```javascript
-   view.counter(25)     // set the counter
-      .crud.ifDirty()   // see if it changed
-      .then(
-           function() { /* invoked if isDirty is true  */ },
-           function() { /* invoked if isDirty is false */ }
-      );
-```
-
 ### Crud.create(fields)
 
 @param {object} fields
@@ -615,6 +599,36 @@ Mark record for deletion and set isDirty true.
       );
 ```
 
+
+### Crud.chain()
+
+@returns {Crud}
+
+Returns a special version of the Crud object where the commands run in sequence and only if the previous command
+has succeeded.
+
+### Crud.ifDirty()
+
+@returns {Promise}
+
+An alternate version of chain() that runs only if isDirty() would return true.
+
+```javascript
+   view.counter(25);     // set the counter
+   view.crud.ifDirty()   // see if it changed
+      .update()
+      .then(
+           function(crud) { /* invoked if isDirty is true  */ },
+           function(crud) { /* invoked if isDirty is false */ }
+      );
+```
+
+This can also be used in the middle of a chain() operation:
+
+```javascript
+   view.chain().update({counter: 25}).ifDirty().then(...);
+```
+
 ### Crud.promise
 
 @returns {Promise}
@@ -626,16 +640,16 @@ Normally, the promise is only rejected in the rare case that a non-recoverable s
 
 When auto-update is false, `promise` fulfills as follows based on the previous operation:
 
- - create: null (can't get record ID until `update()` is invoked)
+ - create: {string} new record's ID, but won't fulfill until after update() is called
  - read:   {boolean} true if the record was found
  - update: {boolean} false
  - delete: {boolean} false
 
 When auto-update is true, `promise` fulfills as follows based on the previous operation:
 
- - create: {string} new record's ID after save completes, if set with a record ID that already exists, `fail` is invoked
+ - create: {string} new record's ID after save completes
  - read:   {boolean} true if the record was found
- - update: {boolean} true if updated (isDirty() == true)
+ - update: {boolean} true if anything changed (isDirty() === true)
  - delete: {boolean} true if record exists and was deleted
 
 #### Crud.load()
@@ -699,20 +713,6 @@ auto-update is true, this is always going to be false as changes will be synced 
    data.crud.isDirty(); // false
    data()[0].counter(1);
    data.crud.isDirty(); // true
-```
-
-### Crud.Array.ifDirty()
-
-@returns {Promise}
-
-An alternate version of isDirty() that returns a promise for chaining. Fulfilled if true and rejected if false.
-
-```javascript
-   list.ifDirty()   // see if it changed
-       .then(
-           function() { /* invoked if isDirty is true  */ },
-           function() { /* invoked if isDirty is false */ }
-       );
 ```
 
 ### Crud.Array.create( record [, record...] )
@@ -892,7 +892,7 @@ It is also possible to perform several CRUD operations at once:
    );
 ```
 
-#### Crud.Array.delete(id)
+### Crud.Array.delete(id)
 
 @param {Array|String} id the id(s) of the record(s) to remove
 @returns {Promise} resolved after the data store returns results
@@ -913,13 +913,22 @@ If autoUpdate is true, then the promise resolves after the save. Otherwise, it r
    list.splice(5, 1);
 ```
 
-#### Crud.Array.load()
+### Crud.Array.load()
 An alias to Crud.Array.read();
 
-#### Crud.Array.save()
+### Crud.Array.save()
 An alias to Crud.Array.update();
 
-#### Crud.Array.parent
+### Crud.Array.promise()
+Returns a promise object; see Crud.promise()
+
+### Crud.Array.chain()
+Same as Crud.chain()
+
+### Crud.Array.ifDirty()
+Runs if any record in the list is dirty. See Crud.ifDirty()
+
+### Crud.Array.parent
 An alias back to the parent list to which we attached this Crud instance. Used for chaining:
 
 ```javascript
@@ -928,6 +937,8 @@ An alias back to the parent list to which we attached this Crud instance. Used f
 
     list.crud.parent.crud.parent.crud.parent; // recursive fun
  ```
+
+ #### Crud.Array
 
 ## ko.validate.Validator
 

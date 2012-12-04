@@ -111,6 +111,10 @@
       return this.changed;
    };
 
+   /**
+    * @param {boolean} [newVal]
+    * @return {boolean}
+    */
    ko.sync.Record.prototype.isDirty = function(newVal) {
       if( typeof(newVal) === 'boolean' ) {
          this.changed = newVal;

@@ -166,7 +166,7 @@
          id:             'record123',
          stringRequired: '2-stringRequired',
          dateRequired:   moment().add('days', 7).toDate(),
-         intRequired:    -2,
+         intRequired:    2,
          boolRequired:   false,
          floatRequired:  1.2,
          emailRequired:  'me2@me2.com'

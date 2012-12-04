@@ -366,7 +366,7 @@
    };
 
    ko.sync.RecordList.Iterator.prototype.size    = function() { return this.len; };
-   ko.sync.RecordList.Iterator.prototype.reset   = function(i) { this.curr = typeof(i) === 'number'? i : -1; };
+   ko.sync.RecordList.Iterator.prototype.reset   = function(i) { this.curr = typeof(i) === 'number'? i : -1; return this; };
    ko.sync.RecordList.Iterator.prototype.next    = function() { return this.hasNext()? this.recs[this.keys[++this.curr]] : null; };
    ko.sync.RecordList.Iterator.prototype.prev    = function() { return this.hasPrev()? this.recs[this.keys[--this.curr]] : null; };
    ko.sync.RecordList.Iterator.prototype.hasPrev = function() { return this.len && this.curr > 0; };

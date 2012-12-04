@@ -87,7 +87,7 @@
       var con = _controller();
       var def = $.Deferred(function(def) {
          var promises = [];
-         promises.push(processRecord(con, 'store', 'delete', rec4));
+         promises.push(processRecord(con, 'store', 'delete', rec2));
          promises.push(processRecord(con, 'store', 'delete', rec4));
          $.when.apply($, promises)
             .done(def.resolve)
@@ -97,7 +97,7 @@
       def
          .done(function() {
             deepEqual(_storeEvents(con), [
-               ['delete', rec4.hashKey()],
+               ['delete', rec2.hashKey()],
                ['delete', rec4.hashKey()]
             ]);
          })
@@ -230,8 +230,8 @@
       var obs      = ko.observableArray();
       var expected = [];
       var events   = [];
-      var list     = model.newList(recs.slice(0,11));
-      TD.pushRecsToObservableArray(obs, recs.slice(0,11));
+      var list     = model.newList(recs.slice(0,10));
+      TD.pushRecsToObservableArray(obs, recs.slice(0,10));
       _watch(obs, events, model, model.observedFields());
 
       _do('update', expected, list, recs[1], {intOptional: 5});
@@ -279,22 +279,22 @@
    function _do(action, expected, list, rec, meta) {
       switch(action) {
          case 'create':
-            list.add(rec, meta);
             expected.push(['create', rec.hashKey(), meta]);
+            list.add(rec, meta);
             break;
          case 'update':
             _.each(meta, function(v,k) { rec.set(k, v); });
-            list.updated(rec);
             expected.push(['update', rec.hashKey()]);
+            list.updated(rec);
             break;
          case 'move':
             rec.isDirty(true);
+            expected.push(['move', rec.hashKey(), meta|| _.last(ko.sync.RecordList.ids(list))]);
             list.move(rec, meta);
-            expected.push(['move', rec.hashKey(), meta]);
             break;
          case 'delete':
-            list.remove(rec);
             expected.push(['delete', rec.hashKey()]);
+            list.remove(rec);
             break;
          default:
             throw new Error('invalid action: '+action);

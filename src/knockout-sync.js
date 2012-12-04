@@ -23,6 +23,9 @@
     * @param observedFields
     */
    ko.observableArray.fn.watchChanges = function(keyFactory, observedFields, callbacks) {
+      function f(){}
+      _.defaults(callbacks, {add: f, update: f, move: f, delete: f});
+      //todo make this stateful; only one instance no matter how many times watchChanges is called
       var previousValue = undefined;
       var disposables = [];
       var ctx = {
@@ -82,6 +85,7 @@
    };
 
    ko.observable.fn.watchChanges = function(observedFields, callback) {
+      //todo make this stateful; only one instance no matter how many times watchChanges is called
       var fieldsSub, rootSub, preSub, oldValue;
 
       // watch for changes on any nested observable fields
@@ -275,13 +279,20 @@
          }
          key = keyFactory.make(keyOrData);
       }
-      var list = ko.utils.unwrapObservable(obsArray), i = -1, len = list.length;
-      while(++i < len) {
-         if( keyFactory.make(list[i]) === key ) {
-            return i;
-         }
+      if( obsArray.indexForKey ) {
+         // optimized lookup since the obsArray can use cached keys that are always ordered and up to date
+         return obsArray.indexForKey(key);
       }
-      return -1;
+      else {
+         // just manually grok it ourselves
+         var list = ko.utils.unwrapObservable(obsArray), i = -1, len = list.length;
+         while(++i < len) {
+            if( keyFactory.make(list[i]) === key ) {
+               return i;
+            }
+         }
+         return -1;
+      }
    };
 
    /**

@@ -266,17 +266,17 @@
          child_added: function(snapshot, prevSiblingId) {
             var data = snapshot.val();
             if( data !== null ) {
-               self.trigger('added', snapshot.name(), data, prevSiblingId);
+               self.trigger('added', snapshot.name(), data, prevSiblingId, snapshot.getPriority());
             }
          },
          child_removed: function(snapshot) {
-            self.trigger('deleted', snapshot.name(), snapshot.val());
+            self.trigger('deleted', snapshot.name(), snapshot.val(), null, snapshot.getPriority());
          },
          child_changed: function(snapshot, prevSiblingId) {
-            self.trigger('updated', snapshot.name(), snapshot.val(), prevSiblingId);
+            self.trigger('updated', snapshot.name(), snapshot.val(), prevSiblingId, snapshot.getPriority());
          },
          child_moved: function(snapshot, prevSiblingId) {
-            self.trigger('moved', snapshot.name(), snapshot.val(), prevSiblingId);
+            self.trigger('moved', snapshot.name(), snapshot.val(), prevSiblingId, snapshot.getPriority());
          }
       };
 
@@ -441,11 +441,13 @@
 
    function _updateRecord(table, hashKey, data, sortPriority) {
        return $.Deferred(function(def) {
-          var ref = table.child(hashKey), promises = [];
+          var ref = table.child(hashKey);
           if( sortPriority ) {
              ref.update(data, function() {
                 ref.setPriority(sortPriority, def.resolve);
              });
+             //todo update this when Firebase replies to error
+//             ref.update(_.extend({'.priority': sortPriority+''}, data), def.resolve);
           }
           else {
              ref.update(data, def.resolve);

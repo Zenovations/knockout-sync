@@ -102,6 +102,7 @@
       var obs = {};
       _runChangeWithTimeout({obs: obs, action: 'create', to: 'obs', data: TestData.dat(5)}, 5)
          .done(function(change, id) {
+               console.log(obs);
             strictEqual(obs.data.id, id, 'record id is correct');
          })
          .fail(function(e) { throw e; })

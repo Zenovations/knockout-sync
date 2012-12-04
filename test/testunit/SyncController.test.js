@@ -9,6 +9,26 @@
 
    module('SyncController');
 
+   asyncTest('#construct, load record from id', function() {
+      start();
+   });
+
+   asyncTest('#construct, create record from object', function() {
+      start();
+   });
+
+   asyncTest('#construct, sync record from object', function() {
+      start();
+   });
+
+   asyncTest('#construct, load list from criteria', function() {
+      start();
+   });
+
+   asyncTest('#construct, load list from all available', function() {
+      start();
+   });
+
    test('#pushUpdates', function() {});
 
    test('#dispose', function() {});
@@ -115,21 +135,6 @@
    function dataFromRecs(recs) {
       return _.map(recs, function(rec) {
          return rec.getData(true);
-      });
-   }
-
-   /**
-    * @param {ko.observableArray} obsArray
-    * @param {Array} observedFields
-    * @return {Array}
-    */
-   function unwrapList(obsArray, observedFields) {
-      return _.map(obsArray() , function(v) {
-         var copy = _.extend({}, v);
-         _.each(observedFields, function(f) {
-            copy[f] = ko.utils.unwrapObservable(copy[f]);
-         });
-         return copy;
       });
    }
 

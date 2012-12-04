@@ -31,7 +31,7 @@
    var genericDataWithoutId = {
       stringRequired: 'required',
       dateRequired:   moment().utc().format(),
-      intRequired:    -25,
+      intRequired:    25,
       boolRequired:   true,
       floatRequired:  2.5,
       emailRequired:  'null@no.com'
@@ -373,8 +373,8 @@
          delete: function(model, recOrId) {
             var key = recOrId.hashKey(), rec = this.find(key);
             this.testCallback('delete', key);
-            var idx = _.indexOf(this.records, rec);
-            if( idx >= 0 ) {
+            if( rec ) {
+               _.remove(this.records, rec);
                return $.Deferred(function(def) {
                   this.fakeNotify('deleted', key)
                         .then(thenResolve(def, key));
@@ -433,6 +433,11 @@
             this.testCallback('watch', filterCriteria);
             var self = this;
             this.callbacks.push(callback);
+            var prevId = null;
+            _.each(this.records, function(rec) {
+               _delayCallback(callback, 'added', rec, prevId);
+               prevId = rec.hashKey();
+            });
             return {
                dispose: function() {
                   self.callbacks = _.without(self.callbacks, callback);
@@ -447,10 +452,15 @@
           * @return {Object}
           */
          watchRecord: function(model, recordId, callback) {
-            var key = recordId.hashKey();
+            var key = recordId.hashKey(), rec = this.find(key);
             this.testCallback('watchRecord', key);
+            if( rec ) {
+               _.delay(function() {
+                  callback(recordId, rec.getData());
+               }, 20);
+            }
             return this.watch(model, function() {
-               if( arguments[1] == key ) {
+               if( arguments[1] === key ) {
                   callback.apply(null, _.toArray(arguments).slice(1));
                }
             });
@@ -516,6 +526,19 @@
             return this._testEvents.slice(0);
          }
       });
+
+      /**
+       * @param {Function} callback
+       * @param {String} action
+       * @param {ko.sync.Record} rec
+       * @param {String} [prevId]
+       * @private
+       */
+      function _delayCallback(callback, action, rec, prevId) {
+         _.delay(function() {
+            callback(action, rec.hashKey(), rec.getData(), prevId || null);
+         }, 20);
+      }
 
       function _buildFilter(opts) {
          var w =  'where' in opts? opts.where : null;

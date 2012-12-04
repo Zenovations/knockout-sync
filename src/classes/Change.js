@@ -19,7 +19,7 @@
     */
    ko.sync.Change = function(props) {
       // declarations for the IDE
-      /** @type {string} */
+      /** @type string */
       this.to      = undef;
       /* @type {string} */
       this.action  = undef;
@@ -38,6 +38,10 @@
 
       // apply the properties provided
       _.extend(this, _.pick(props, ['to', 'action', 'prevId', 'data', 'model', 'rec', 'obs', 'success']));
+
+      /** @type {ko.sync.KeyFactory} */
+      this.keyFactory = new ko.sync.KeyFactory(this.model);
+
       this.status  = 'pending';
       this.done    = $.Deferred();
    };
@@ -99,8 +103,9 @@
             throw new Error('invalid destination: '+self.to);
       }
       return def.pipe(function(id) {
+         self.rec && self.rec.isDirty(false);
          if( self.success ) { self.success(self, id); }
-         return $.Deferred(function(def) { def.resolve(self, id); });
+         return $.Deferred(function(def) { def.resolve(self, id); }).promise();
       });
    };
 
@@ -150,7 +155,7 @@
       else {
          res = _obsUpdate(change);
       }
-      return $.Deferred().resolve(res);
+      return $.Deferred().resolve(res).promise();
    }
 
    function _obsCreate(change) {
@@ -160,7 +165,7 @@
       var target = change.obs;
       if( isList ) {
          var sourceData = ko.sync.Record.applyWithObservables({}, change.data, observedFields);
-         var pos = newPositionForKey(target, id, change.prevId);
+         var pos = newPositionForKey(change.keyFactory, target, id, change.prevId);
          if( pos < 0 ) {
             target.push(sourceData);
          }
@@ -169,7 +174,7 @@
          }
       }
       else {
-         var source = findTargetDataSource(target, id);
+         var source = findTargetDataSource(change.keyFactory, target, id, change.keyFactory);
          ko.sync.Record.applyWithObservables(source, change.data, observedFields);
       }
       return id;
@@ -177,35 +182,47 @@
 
    function _obsUpdate(change) {
       if( change.data ) {
-         var source = findTargetDataSource(change.obs, change.key());
-         ko.sync.Record.applyWithObservables(source, change.data, change.model.observedFields());
+         var source = findTargetDataSource(change.obs, change.key(), change.keyFactory);
+         source && ko.sync.Record.applyWithObservables(source, change.data, change.model.observedFields());
+         !source && console.debug('tried to update non-existent record', change.key());
       }
+      return change.key();
    }
 
    function _obsDelete(change) {
-      var pos = change.obs.indexForKey(change.key());
+      var pos = ko.sync.findByKey(change.obs, change.keyFactory, change.key());
       if( pos > -1 ) {
          change.obs.splice(pos, 1);
       }
+      return change.key();
    }
 
    function _obsMove(change) {
       var id = change.key();
       var target = change.obs;
-      var pos = target.indexForKey(id);
-      var newPos = newPositionForKey(target, id, change.prevId);
+      var pos = ko.sync.findByKey(target, change.keyFactory, id);
+      var newPos = newPositionForKey(change.keyFactory, target, id, change.prevId);
       if( pos > -1 && pos !== newPos ) {
          _.move(target, pos, newPos);
       }
+      return id;
    }
 
-   function newPositionForKey(target, key, prevId) {
+   /**
+    * @param {ko.sync.KeyFactory} keyFactory
+    * @param {ko.observableArray} target
+    * @param {String} [key]
+    * @param {String} [prevId]
+    * @return {number}
+    */
+   function newPositionForKey(keyFactory, target, key, prevId) {
       var len = target().length;
       var newPos = -1, oldPos, prevIdPos;
       prevId instanceof ko.sync.RecordId && (prevId = prevId.hashKey());
       if( typeof(prevId) === 'string' ) {
-         prevIdPos = target.indexForKey(prevId);
-         oldPos = target.indexForKey(key);
+         prevIdPos = ko.sync.findByKey(target, keyFactory, prevId);
+         oldPos = ko.sync.findByKey(target, keyFactory, key);
+
          // when moving records, if the old record exists and is earlier in the array, then it
          // will be spliced out, which causes the final position to be one lower, but normally,
          // we want the index after the prevId's position
@@ -223,14 +240,15 @@
    }
 
    /**
-    * @param {Object} ctx
     * @param {ko.observable|ko.observableArray|Object} target
     * @param {String} id
+    * @param {ko.sync.KeyFactory} [keyFactory] required for obsArray
     * @return {Object}
     */
-   function findTargetDataSource(target, id) {
+   function findTargetDataSource(target, id, keyFactory) {
       if( ko.sync.isObservableArray(target) ) {
-         return target()[ target.indexForKey(id) ];
+         var idx = ko.sync.findByKey(target, keyFactory, id);
+         return target()[ idx ];
       }
       else if( ko.isObservable(target) ) {
          return target;
