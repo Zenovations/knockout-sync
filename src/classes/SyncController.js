@@ -32,15 +32,21 @@
     * @constructor
     */
    ko.sync.SyncController = function(model, target, criteria) {
-      this.target     = target;
-      this.observed   = ko.isObservable(target);
-      this.isList     = this.observed && ko.sync.isObservableArray(target);
-      this.twoway     = model.store.hasTwoWaySync();
-      this.auto       = model.auto;
-      this.subs       = [];
-      this.expected   = {};  // the feedback notifications when we push/pull updates
-      this.queued     = [];  // stores activities to be pushed to server
+      this.subs       = [];   // subscriptions to everything SyncController is monitoring
+      this.expected   = {};   // the feedback notifications when we push/pull updates
+      this.deferred   = $.Deferred().resolve(); // used to determine when record(s) completely loaded
+      this.disposed   = false; // set to true if dispose() is called to prevent anything from trying to queue/process
 
+      /** @type {ko.observable|ko.observableArray} */
+      this.target     = target;
+      /** @type {boolean} */
+      this.observed   = ko.isObservable(target);
+      /** @type {boolean} */
+      this.isList     = this.observed && ko.sync.isObservableArray(target);
+      /** @type {boolean} */
+      this.twoway     = model.store.hasTwoWaySync();
+      /** @type {boolean} */
+      this.auto       = model.auto;
       /** @type ko.sync.ChangeController */
       this.con        = new ko.sync.ChangeController();
       /** @type ko.sync.KeyFactory */
@@ -67,68 +73,123 @@
             this.subs[i].dispose();
          }
       }
+      this.con        = null;
       this.subs       = [];
-      this.expected   = {}; // the feedback notifications when we push/pull updates
+      this.expected   = {};
       this.model      = null;
       this.list       = null;
       this.rec        = null;
-      this.queue      = []; // used for updating records
+      this.disposed   = true;
       return this;
    };
 
    ko.sync.SyncController.prototype.queue = function(props) {
-      if( expect(this.expected, props) ) {
-         this.con.addChange(newChange(this.model, this.keyFactory, this.target, props, this.rec));
+      if( !this.disposed && expect(this.expected, props) ) {
+         var change = newChange(this.con, this.model, this.keyFactory, this.target, props, this.rec);
+         console.log('queue', change.key()); //debug
+         this.con.addChange(change);
          this.auto && this.pushUpdates();
       }
    };
 
    ko.sync.SyncController.prototype.pushUpdates = function() {
-      return this.con.process()
-         .fail(function(possiblyUnresolvedPromises) {
-            //todo what do we do about failures?
-            //todo
-            //todo
-            //todo
-         });
+      if( this.disposed ) {
+         return $.Deferred().reject(new Error('SyncController has been disposed'));
+      }
+      else {
+         return this.con.process()
+            .fail(function(possiblyUnresolvedPromises) {
+               //todo what do we do about failures?
+               //todo
+               //todo
+               //todo
+            });
+      }
+   };
+
+   ko.sync.SyncController.prototype.ready = function() {
+      return this.deferred.promise();
    };
 
    function _syncList(sync, model, criteria) {
-      sync.twoway && sync.subs.push(_watchStoreList(sync, criteria));
-      //todo if there is no two-way, do a static query()? is that CrudArray's job?
-      sync.subs.push(_watchObsArray(sync, sync.target));
+      var target = sync.target;
+      if( criteria && !sync.twoway ) {
+         // a one time query to get the data down
+         sync.deferred = sync.deferred.pipe(function() {
+            console.log('_syncList', criteria);
+            return model.store.query(model, function(data, key) {
+               target.push(model.newRecord(data).applyData());
+            }, criteria);
+         });
+      }
+
+      sync.deferred.then(function() {
+         sync.twoway && sync.subs.push(_watchStoreList(sync, criteria));
+         //todo if there is no two-way, do a static query()? is that CrudArray's job?
+         sync.subs.push(_watchObsArray(sync, target));
+      });
    }
 
    function _syncRecord(sync, criteria) {
       var target = sync.target;
+      var model  = sync.model;
       if( typeof(criteria) === 'string' ) {
-         //todo load it from server
-         //todo
-         //todo
-         //todo
+         // load a record from the server
+         console.log('sync record from id'); //debug
+         if( sync.twoway ) {
+            sync.rec = sync.model.newRecord(criteria);
+         }
+         else {
+            // a static, one time read
+            sync.deferred = sync.deferred.pipe(function() {
+               return model.store
+                  .read(model, ko.sync.RecordId.for(model, criteria))
+                  .then(function(rec) {
+                     sync.rec = rec;
+                     rec.applyData(target);
+                  });
+            });
+         }
       }
       else if( criteria instanceof ko.sync.Record ) {
+         // use the record provided
          sync.rec = criteria;
          sync.rec.applyData(target);
       }
       else if( criteria ) {
+         // create a record using a data object
          //todo decide if we need to create or update
-         sync.rec = sync.model.newRecord(criteria);
+         sync.rec = model.newRecord(criteria);
          sync.rec.applyData(target);
       }
       else {
-         sync.rec = sync.model.newRecord();
+         // create an empty record
+         sync.rec = model.newRecord();
          sync.rec.applyData(target);
       }
-      sync.twoway && sync.subs.push(_watchStoreRecord(sync, target));
-      //todo do we do a static read() if no two-way? maybe that's the Crud/CrudArray's job?
-      if( sync.observed ) {
-         sync.subs.push(_watchObs(sync, target));
-      }
-      else {
-         if( !target.data ) { target.data = {}; }
-         sync.subs.push(_watchData(sync, target.data));
-      }
+
+      sync.deferred.then(function() {
+         // wait for any record loading as necessary
+         if( sync.twoway ) {
+            if( sync.rec.hasKey() ) {
+               // if the record is valid, sync it up now
+               _watchStoreRecord(sync);
+            }
+            else {
+               // otherwise, wait until it has an ID to sync it
+               sync.rec.onKey(function() {
+                  _watchStoreRecord(sync);
+               });
+            }
+         }
+
+         if( sync.observed ) {
+            sync.subs.push(_watchObs(sync, target));
+         }
+         else {
+            sync.subs.push(_watchData(sync, target));
+         }
+      });
    }
 
 
@@ -137,20 +198,16 @@
    //todo probably, we should be using sort values and not prevId to do this stuff
 
    function _watchStoreList(sync, criteria) {
-      var model = sync.model, list = sync.list;
+      var model = sync.model;
       //todo-sort make store.watch return sortPriority?
       return model.store.watch(model, function(action, name, value, prevSibling) {
-               var rec = list.find(name), key;
-               if( !rec && action !== 'added' ) {
-                  console.debug('action invalid (record does not exist in this list)', action, name);
-                  return;
-               }
                sync.queue({action: _translateToAction(action), rec: model.newRecord(value), data: value, prevId: prevSibling, to: 'obs'});
             }, criteria);
    }
 
    function _watchStoreRecord(sync) {
       var model = sync.model, store = model.store, rec = sync.rec;
+      console.log('_watchStoreRecord', rec.hashKey()); //debug
       return store.watchRecord(model, rec, function(id, val, sortPriority) {
           sync.queue({action: 'update', rec: rec, data: val, priority: sortPriority, to: 'obs'});
       });
@@ -174,13 +231,17 @@
    }
 
    function _watchObs(sync, target) {
+      console.log('_watchObs', sync.rec && sync.rec.hashKey()); //debug
       return target.watchChanges(sync.model.observedFields(), function(data) {
+         console.log('_watchObs::updated', data);//debug
          sync.queue({action: 'update', data: data, to: 'store'});
       });
    }
 
    function _watchData(sync, data) {
+      console.log('_watchData', data && data.id); //debug
       return ko.sync.watchFields(data, sync.model.observedFields(), function(data) {
+         console.log('_watchData::updated', data); //debug
          sync.queue({action: 'update', data: data, to: 'store'});
       });
    }
@@ -215,10 +276,13 @@
       }
    }
 
-   function newChange(model, keyFactory, target, queueEntry, rec) {
-      var data = _.pick(queueEntry, ['to', 'action', 'prevId', 'data', 'rec']);
-      if( !rec ) {
-         if( !data.rec ) {
+   function newChange(con, model, keyFactory, target, queueEntry, rec) {
+      var data = _.extend(_.pick(queueEntry, ['to', 'action', 'prevId', 'data', 'rec']), {model: model, obs: target});
+      if( !data.rec ) {
+         if( rec ) {
+            data.rec = rec;
+         }
+         else {
             data.rec = model.newRecord();
             if( data.key ) {
                var o = target()[ko.sync.findByKey(target, keyFactory, data.key)];
@@ -226,11 +290,32 @@
             }
          }
       }
-      else {
-         data.rec = rec;
-      }
       queueEntry.data && data.rec.updateAll(queueEntry.data);
-      return new ko.sync.Change(data);
+
+      var change = new ko.sync.Change(data);
+
+      if( change.to === 'store' && ko.sync.RecordId.isTempId(change.key()) && !con.findChange(change.key()) ) {
+         // the first call to store should always be a create for newly added records
+         change.action = 'create';
+      }
+
+      return change;
+   }
+
+   function checkChangeStatus(changeKeys, change) {
+      if( change.to === 'store' && !change.rec.hasKey() ) {
+         switch(change.action) {
+            case 'update':
+               change.action = 'create';
+               break;
+            case 'move':
+               // don't let the first action be a move, just wait for the create or update command
+               change.invalidate();
+               break;
+            default:
+            // do nothing
+         }
+      }
    }
 
 })(jQuery);

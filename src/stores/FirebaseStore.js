@@ -144,9 +144,6 @@
     * - start:   {int=0}           using the sort's integer values, this will start us at record matching this sort value
     * - end:     {int=-1}          using the sort's integer values, this will end us at record matching this sort value
     * - where:   {function|object} filter rows using this function or value map
-    * - sort:    {array|string}    Sort returned results by this field or fields. Each field specified in sort
-    *                              array could also be an object in format {field: 'field_name', desc: true} to obtain
-    *                              reversed sort order
     *
     * Start/end are more useful with sorted records (and faster). Limit/offset are slower but can be used with
     * unsorted records. Additionally, limit/offset will work with where conditions. Obviously, `start`/`end` are hard
@@ -635,7 +632,7 @@
             curr     = -1,
             matches  = 0;
          _buildFilter(opts);
-         //todo-perf Util.each requires iterating the entire table; optimize?
+         //todo-perf Util.each requires iterating the entire table; optimize where possible!
          return Util.each(table, function(data, id) {
             if( data !== null && (!opts.filter || opts.filter(data, id)) ) {
                curr++;
@@ -648,6 +645,7 @@
                   return iterator && iterator(data, id);
                }
             }
+            return false;
          }).pipe(function(ct) { return matches; });
       },
 

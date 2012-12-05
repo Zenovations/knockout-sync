@@ -28,7 +28,7 @@
    test("#newList (with loaded data)", function() {
       expect(2);
       var model         = TestData.model(),
-            baseData    = TestData.makeRecords(5, {astring: 'hello world'}),
+            baseData    = TestData.recs(5, {astring: 'hello world'}),
             list        = model.newList(baseData),
             compareData = [], actualData = [];
       _.each(baseData, function(v) {
@@ -85,7 +85,7 @@
       expect(2);
       // create observable array and put some pre-populated data into it
       var obs = ko.observableArray();
-      $.each(TestData.makeRecords(5), function(i,v) {
+      $.each(TestData.recs(5), function(i,v) {
          obs.push(v.getData());
       });
       var model = TestData.model();

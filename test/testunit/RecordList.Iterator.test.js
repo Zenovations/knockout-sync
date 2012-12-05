@@ -69,7 +69,7 @@
 
 
    function _newIt(len) {
-      var list = new RecordList(TestData.model(), TestData.makeRecords(len));
+      var list = new RecordList(TestData.model(), TestData.recs(len));
       return new RecordList.Iterator(list);
    }
 

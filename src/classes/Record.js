@@ -46,7 +46,9 @@
 
    /**
     * Updating the key is intended to be used after a create operation during which the database sets the ID.
-    * Thus, it does not mark the record dirty or send out notifications.
+    * Thus, it does not mark the record dirty or send out notifications. To update the id and send notifications
+    * as usual (the normal method of getting things done) just update the fields with updateAll() or set(),
+    * which will call this anyway.
     *
     * This method will ignore any set requests if an ID already exists on the record
     * @param {string|object} hashKey
@@ -55,29 +57,18 @@
       if( !this.hasKey() ) {
          var oldKey = this.hashKey();
          this.id.update(hashKey);
-         //todo if fields are updated, a notice should be delivered; this can update fields without notification
-         applyUpdates(this, _.isObject(hashKey)? hashKey : this.id.parse(hashKey));
-         if( this.id.isSet() ) { applyKeyCallbacks(this, oldKey); }
+         if( this.id.isSet() && this.id.hashKey() !== oldKey ) {
+            // notify listeners waiting for the id to sync
+            applyKeyCallbacks(this, oldKey);
+            // make sure fields stay in sync with id
+            applyUpdates(this, _.isObject(hashKey)? hashKey : this.id.parse(hashKey));
+         }
       }
       return this;
    };
 
    /**
-    * This physically changes the record ID. This does update fields on the record and can result in notifications
-    * being sent and database transactions. The old record is not deleted by this change (it's just forgotten).
-    * @param {ko.sync.RecordId} newKey
-    */
-   ko.sync.Record.prototype.setKey = function( newKey ) {
-      var oldKey = this.hashKey();
-      this.id = newKey;
-      if( newKey.isSet() ) {
-         this.updateAll(newKey.parse());
-         applyKeyCallbacks(this, oldKey);
-      }
-   };
-
-   /**
-    * @param {Array} [fields]
+    * @param {Array}   [fields]
     * @param {boolean} [withTempId]
     * @return {Object}
     */
@@ -310,7 +301,7 @@
          }
       });
 
-      // changes may affect the record id
+      // changes may affect the record id; keep fields and id in sync
       idChanged && rec.updateHashKey(rec.get(rec.id.fields));
 
       return changed;

@@ -109,21 +109,16 @@
 
 
    /**
-    * Creates records using ko.sync.TestData.makeRecord()
-    *
-    * @param {int}           len    how many records to create?
-    * @param {object}        [data] adjust the default data object
-    * @return {Array}
+    * @param {int|string} [id]
+    * @param {Object} [moreData]
+    * @param {ko.sync.Model} [model]
+    * @return {ko.sync.Record}
     */
-   exports.makeRecords = function(len, data) {
-      var recs = [], base = $.extend({}, genericDataWithId, data);
-      for(var i = 1; i <= len; i++) {
-         recs.push(exports.makeRecord(exports.model(), base, i));
-      }
-      return recs;
-   };
-
    exports.rec = function(id, moreData, model) {
+      if( typeof(id) === 'object' && !moreData ) {
+         moreData = id;
+         id = moreData.id || 1;
+      }
       return (model||exports.model()).newRecord(exports.dat(id, moreData));
    };
 
@@ -138,26 +133,26 @@
       }, moreData);
    };
 
-   exports.recs = exports.makeRecords;
-
-   exports.keyFactory = function() {
-      return new ko.sync.KeyFactory(exports.model(), true);
+   exports.tempRec = function(moreData, model) {
+      return (model||exports.model()).newRecord(exports.dat(0, _.extend({id: null}, moreData)));
    };
 
    /**
-    * @param {ko.sync.Model} model
-    * @param {object}        base   a data template
-    * @param {int}           i      used to build id, requiredInt, requiredFloat, and requiredString values
-    * @return {ko.sync.Record}
+    * @param {int} len
+    * @param {Object} [data]
+    * @param {ko.sync.Model} [model]
+    * @return {Array}
     */
-   exports.makeRecord = function(model, base, i) {
-      var data = $.extend({}, base);
-      data.id             = 'record-'+i;
-      data.requiredInt    = i;
-      data.requiredFloat  = i + (i * .01);
-      data.requiredString = 'string-'+i;
-      data.emailRequired  = 'user'+i+'@no.com';
-      return model.newRecord(data);
+   exports.recs = function(len, data, model) {
+      var recs = [];
+      for(var i = 1; i <= len; i++) {
+         recs.push(exports.rec(i, data, model));
+      }
+      return recs;
+   };
+
+   exports.keyFactory = function() {
+      return new ko.sync.KeyFactory(exports.model(), true);
    };
 
    /**
@@ -493,7 +488,6 @@
             return $.Deferred(function(def) {
                if( this.hasTwoWaySync() ) {
                   _.delay(function() { // simulate event returning from server
-//                     console.log('fakeNotify', action, id, changedData, prevId); //debug
                      _.each(this.callbacks, function(fx) {
                         fx(action, id, data, prevId);
                      });
@@ -582,21 +576,32 @@
       }
 
       function _iterateRecords(records, criteria, iterator) {
-         var matches = 0;
+         var matches = 0, start, end, list = records, len = list.length;
+         var s = ~~criteria.start, e = ~~criteria.end;
+         if( s || e ) {
+            list = _.filter(list, function(rec) {
+               var x = rec.getPriority();
+               return x >= s && (!e || x < e);
+            });
+         }
+         if( criteria.limit || criteria.offset ) {
+            len = list.length;
+            start = ~~criteria.offset;
+            end = ~~criteria.limit? (~~criteria.limit + start) : len;
+            list = list.slice(start, end);
+         }
+
          _buildFilter(criteria);
-         _.each(records, function(rec, curr) {
-            var data = rec.getData(), key = rec.hashKey(), start = ~~criteria.offset, end = ~~criteria.limit + start;
-            if( !criteria.filter || criteria.filter(data, key) ) {
-               //todo-sort
-               if( end && curr == end ) {
-                  return true;
-               }
-               else if( curr >= start ) {
-                  matches++;
-                  return iterator && iterator(data, key);
-               }
-            }
+         if( criteria.filter ) {
+            list = _.filter(list, criteria.filter);
+         }
+
+         iterator && _.find(list, function(rec, curr) {
+            var data = rec.getData(), key = rec.hashKey();
+            matches++;
+            return iterator && iterator(data, key);
          });
+
          return matches;
       }
 
@@ -616,11 +621,9 @@
    }
 
    function _copyRecords(model, recs) {
-      var out = [];
-      recs && _.each(recs, function(rec) {
-         out.push(model.newRecord(rec.getData()));
+      return _.map(recs||[], function(rec) {
+         return model.newRecord(rec.getData());
       });
-      return out;
    }
 
    //todo make these work with exports/et al

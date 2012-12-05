@@ -5,14 +5,15 @@
 
    /**
     * Props:
-    *    to     {string} one of 'store' or 'obs'
-    *    action {string} one of 'create', 'update', 'delete', or 'move'
-    *    id     {String} the hashKey for the record being modified
-    *    prevId {string} required by move and add operations
-    *    data   {object} required by add and update, the data to be applied in the change
-    *    model  {ko.sync.Model}
-    *    obs    {Object|ko.sync.observable} the knockout data being synced, which can be an observableArray (observed)
-    *    rec    {ko.sync.Record} required when `to` is set to 'store'
+    *    to      {string} one of 'store' or 'obs'
+    *    action  {string} one of 'create', 'update', 'delete', or 'move'
+    *    id      {String} the hashKey for the record being modified
+    *    prevId  {string} required by move and add operations
+    *    data    {object} required by add and update, the data to be applied in the change
+    *    model   {ko.sync.Model}
+    *    obs     {Object|ko.sync.observable} the knockout data being synced, which can be an observableArray (observed)
+    *    rec     {ko.sync.Record} required when `to` is set to 'store'
+    *    success {Function} a callback to invoke when (and if) the change is completed successfully
     *
     * @param props see above
     * @constructor
@@ -142,19 +143,21 @@
    };
 
    function sendToStore(change) {
-      var store = change.model.store;
-      if( change.data ) { change.rec.updateAll(change.data); }
+      var model = change.model;
+      var rec   = change.rec;
+      var store = model.store;
+      if( change.data ) { rec.updateAll(change.data); }
       switch(change.action) {
          case 'create':
-            return store.create(change.model, change.rec).then(function(id) {
+            return store.create(model, rec).then(function(id) {
                change.rec.updateHashKey(id);
             });
          case 'update':
-            return store.update(change.model, change.rec);
+            return store.update(model, rec);
          case 'delete':
-            return store.delete(change.model, change.rec);
+            return store.delete(model, rec);
          case 'move':
-            return store.update(change.model, change.rec);
+            return store.update(model, rec);
          default:
             throw new Error('invalid action: '+change.action);
       }

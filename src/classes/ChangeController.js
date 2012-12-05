@@ -11,17 +11,20 @@
    };
 
    ko.sync.ChangeController.prototype.process = function() {
+      //todo change to the server could be applied using update() in Firebase, add a new method to
+      //todo Store which allows for multiple updates to be committed and send store updates in one batch
+      //todo maybe with a StoreQueue of some sort? maybe just a list of Change objects?
       var promises = [], changes = this.changes, failed = this.failed;
       this.changes = [];
       this.changesIndexed = {};
-      _.each(changes, function(changeSet) {
-         _.each(changeSet, function(change) {
-            promises.push(change.run().fail(function(e) {
-               //todo what to do with failed changes? we need some form of error recovery here
-               console.error(e);
-               failed.push(change);
-            }));
-         });
+      _.each(changes, function(change) {
+         console.log('process', change.key(), change.action, change.to); //debug
+         promises.push(change.run().fail(function(e) {
+            //todo what to do with failed changes? we need some form of error recovery here
+            console.error(e);
+            failed.push(change);
+         })
+            .done(function(change, id) { console.log('done', id); })); //debug
       });
       // wait for all the items to succeed or for any to fail and return the promises for every change
       return $.Deferred(function(def) {
@@ -63,6 +66,14 @@
       return this;
    };
 
+   /**
+    * @param {string} hashKey
+    * @return {boolean}
+    */
+   ko.sync.ChangeController.prototype.findChange = function(hashKey) {
+      return hashKey in this.changesIndexed && this.changesIndexed[hashKey];
+   };
+
    var INVERT_ACTIONS = {
       'create': 'added',
       'update': 'updated',
@@ -95,4 +106,3 @@
    }
 
 })(ko, jQuery);
-

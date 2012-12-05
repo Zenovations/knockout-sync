@@ -39,10 +39,13 @@
    };
 
    /**
-    * @param {object} [data]
+    * @param {Object|String} [data]
     * @return {ko.sync.Record}
     */
    ko.sync.Model.prototype.newRecord = function(data) {
+      if( typeof(data) === 'string' ) {
+         data = ko.sync.RecordId.parse(data, this.key);
+      }
       return this.factory.create(data);
    };
 

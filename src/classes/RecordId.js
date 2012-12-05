@@ -65,14 +65,28 @@
 
    /**
     * @param {Model} model
-    * @param {ko.sync.Record|Object} record
+    * @param {ko.sync.Record|Object|String} record a Record, data for a record, or a hash key
     * @return {ko.sync.RecordId}
     */
    RecordId.for = function(model, record) {
-      var data = record instanceof ko.sync.Record? record.getData() : record;
+      var data;
+      if( typeof(record) === 'string' ) {
+         data = RecordId.parse(record, model.key);
+      }
+      else {
+         data = record instanceof ko.sync.Record? record.getData() : record;
+      }
       return new RecordId(model.key, data);
    };
+
+   /**
+    * @param {String} hashKey
+    * @param {Array|String} fields
+    * @param [separator]
+    * @return {Object}
+    */
    RecordId.parse = function(hashKey, fields, separator) {
+      _.isArray(fields) || (fields = [fields]);
       var out = {}, vals;
       if( !RecordId.isTempId(hashKey) ) {
          if( fields.length > 1 ) {

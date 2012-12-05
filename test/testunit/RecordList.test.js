@@ -9,7 +9,7 @@
 
    test('#checkpoint', function() {
       var model = TestData.model(), list = new RecordList(model);
-      list.add( TestData.makeRecords(2) );
+      list.add( TestData.recs(2) );
       strictEqual(list.isDirty(), true, 'list is dirty after adding records');
       list.checkpoint();
       strictEqual(list.isDirty(), false, 'not dirty after checkpoint');
@@ -18,7 +18,7 @@
    test('#iterator', function() {
       var it,
           model = TestData.model(),
-          recs = TestData.makeRecords(5),
+          recs = TestData.recs(5),
           list = new RecordList(model);
       // try one before we have any records
       it = list.iterator();
@@ -31,7 +31,7 @@
    });
 
    test('#isDirty', function() {
-      var recs = TestData.makeRecords(5), list = new RecordList(TestData.model(), recs);
+      var recs = TestData.recs(5), list = new RecordList(TestData.model(), recs);
       strictEqual(list.isDirty(), false);
       // changing a record should cascade out to the list
       recs[0].set('intOptional', 99);
@@ -40,7 +40,7 @@
 
    test('#add', function() {
       var model = TestData.model(),
-          data = TestData.makeRecords(5),
+          data = TestData.recs(5),
           list = new RecordList(model, data.slice(0, 4)),
           newRec = data.slice(4,5)[0], key = newRec.hashKey();
 
@@ -55,7 +55,7 @@
 
    test('#add to start', function() {
       var model = TestData.model(),
-            data = TestData.makeRecords(5),
+            data = TestData.recs(5),
             list = new RecordList(model, data.slice(0, 4)),
             newRec = data[4], key = newRec.hashKey();
 
@@ -66,7 +66,7 @@
 
    test('#add using integer', function() {
       var model = TestData.model(),
-            data = TestData.makeRecords(5),
+            data = TestData.recs(5),
             list = new RecordList(model, data.slice(0, 4)),
             newRec = data.slice(4,5)[0], key = newRec.hashKey();
 
@@ -76,7 +76,7 @@
 
    test('#add using negative integer', function() {
       var model = TestData.model(),
-            data = TestData.makeRecords(5),
+            data = TestData.recs(5),
             list = new RecordList(model, data.slice(0, 4)),
             newRec = data[4], key = newRec.hashKey();
 
@@ -86,7 +86,7 @@
 
    test('#add using prevId', function() {
       var model = TestData.model(),
-            data = TestData.makeRecords(5),
+            data = TestData.recs(5),
             list = new RecordList(model, data.slice(0, 4)),
             newRec = data.slice(4,5)[0], key = newRec.hashKey();
 
@@ -95,10 +95,9 @@
    });
 
    test('#load', function() {
-      var model = TestData.model(),
-         data = TestData.makeRecords(5),
-         list = new RecordList(model, data.slice(0, 4)),
-         newRec = TestData.makeRecord(model, data.slice(4,5)[0]), key = newRec.hashKey();
+      var data = TestData.recs(5),
+         list = new RecordList(data.slice(0, 4)),
+         newRec = TestData.rec(data[4]), key = newRec.hashKey();
       strictEqual(list.isDirty(), false, 'list is not dirty before push');
       strictEqual(list.find(key), null, 'list does not contain record before push');
       list.load(newRec);
@@ -108,7 +107,7 @@
    });
 
    test('#remove using Record', function() {
-      var data = TestData.makeRecords(5),
+      var data = TestData.recs(5),
          list = new RecordList(TestData.model(), data),
             key = 'record-5', recToDelete = list.find(key);
       strictEqual(list.isDirty(), false, 'list is not dirty before remove');
@@ -120,7 +119,7 @@
    });
 
    test('#remove using RecordId', function() {
-      var data = TestData.makeRecords(5),
+      var data = TestData.recs(5),
          list = new RecordList(TestData.model(), data),
           key = 'record-5', recToDelete = list.find(key);
       strictEqual(list.isDirty(), false, 'list is not dirty before remove');
@@ -132,7 +131,7 @@
 
    test('#move using record id', function() {
       expect(9);
-      var list = new RecordList(TestData.model(), TestData.makeRecords(5)),
+      var list = new RecordList(TestData.model(), TestData.recs(5)),
           rec = RecordList.atPos(list, 0), after = RecordList.atPos(list, 2), callbackInvoked = false;
 
       function callback(action, record, afterRec) {
@@ -158,7 +157,7 @@
 
    test('#move with undefined', function() {
       expect(6);
-      var list = new RecordList(TestData.model(), TestData.makeRecords(5)),
+      var list = new RecordList(TestData.model(), TestData.recs(5)),
          rec = RecordList.atPos(list, 0), after = RecordList.atPos(list, 4), callbackInvoked = false;
 
       function callback(action, record, afterRec) {
@@ -179,7 +178,7 @@
 
    test('#move, with null', function() {
       expect(6);
-      var list = new RecordList(TestData.model(), TestData.makeRecords(5)),
+      var list = new RecordList(TestData.model(), TestData.recs(5)),
          rec = RecordList.atPos(list, 2), after = RecordList.atPos(list, 4), callbackInvoked = false;
 
       function callback(action, record, afterRec) {
@@ -200,13 +199,12 @@
 
    test('#move, integer', function() {
       expect(17);
-      var list = new RecordList(TestData.model(), TestData.makeRecords(10)),
+      var list = new RecordList(TestData.model(), TestData.recs(10)),
           callbackInvoked = false, rec, after,
           ids = list.sorted;
 
       function callback(action, record, afterRec) {
          callbackInvoked = true;
-         console.log(action, record, afterRec);//debug
          strictEqual(action, 'moved', 'notification was a move event');
          strictEqual(record.hashKey(), rec.hashKey(), 'notification with correct record id');
          strictEqual(afterRec, after, 'notification with correct "after" record');
@@ -219,35 +217,31 @@
       after = ids[5];
       list.move(rec, 5);
       strictEqual(_.indexOf(ids, rec.hashKey()), 5, 'moved forwards');
-      console.log(ids);//debug
 
       // move backwards
       rec = list.find(ids[7]);
       after = ids[1];
       list.move(rec, 2);
       strictEqual(_.indexOf(ids, rec.hashKey()), 2, 'moved backward');
-      console.log(ids);//debug
 
       // move first to last
       rec = list.find(ids[0]);
       after = ids[9];
       list.move(rec, 9);
       strictEqual(_.indexOf(ids, rec.hashKey()), 9, 'moved first to last');
-      console.log(ids);//debug
 
       // move last to first
       rec = list.find(ids[9]);
       after = undef;
       list.move(rec, 0);
       strictEqual(_.indexOf(ids, rec.hashKey()), 0, 'moved last to first');
-      console.log(ids);//debug
 
       ok(callbackInvoked, 'callback was invoked');
    });
 
    test('#move with negative integer', function() {
       expect(9);
-      var list = new RecordList(TestData.model(), TestData.makeRecords(10)), callbackInvoked = false,
+      var list = new RecordList(TestData.model(), TestData.recs(10)), callbackInvoked = false,
          ids = list.sorted, rec, after;
 
       function callback(action, record, afterRec) {
@@ -273,7 +267,7 @@
    });
 
    test('#move invalid move options', function() {
-      var data = TestData.makeRecords(10), list = new RecordList(TestData.model(), data.slice(0, 5)),
+      var data = TestData.recs(10), list = new RecordList(TestData.model(), data.slice(0, 5)),
           origList = RecordList.ids(list), a = data[1], b = data[8];
 
       function callback() {
@@ -305,7 +299,7 @@
       var RECS_TOTAL = 6;
       var RECS_PRELOADED = 3;
       var i, v, k,
-         data     = TestData.makeRecords(RECS_TOTAL),
+         data     = TestData.recs(RECS_TOTAL),
          // create the list with 4 records pre-populated
          list     =  new RecordList(TestData.model(), data.slice(0, RECS_PRELOADED));
 
@@ -345,7 +339,7 @@
    });
 
    test('#updated dirty', function() {
-      var data = TestData.makeRecords(5),
+      var data = TestData.recs(5),
          list  = new RecordList(TestData.model(), data),
          rec   = list.find('record-4');
       rec.isDirty(true);
@@ -355,7 +349,7 @@
    });
 
    test('#updated not dirty', function() {
-      var data = TestData.makeRecords(5),
+      var data = TestData.recs(5),
          list  = new RecordList(TestData.model(), data),
          key   = 'record-4', rec = list.find(key);
       strictEqual(list.isDirty(), false, 'list is not dirty before updated()');
@@ -367,7 +361,7 @@
       var RECS_TOTAL = 5;
       var RECS_PRELOADED = 2;
       var i, v,
-          data     = TestData.makeRecords(RECS_TOTAL+1), //create one extra for the manual push/delete ops; it won't be in list
+          data     = TestData.recs(RECS_TOTAL+1), //create one extra for the manual push/delete ops; it won't be in list
           // create the list with 2 records pre-populated
           list     =  new RecordList(TestData.model(), data.slice(0, RECS_PRELOADED+1)),
           events   = [],
@@ -432,7 +426,7 @@
 
    test('#subscribe, invalid update ops', function() {
       var RECS_TOTAL = 5;
-      var i, data = TestData.makeRecords(RECS_TOTAL),
+      var i, data = TestData.recs(RECS_TOTAL),
       // create the list with 2 records pre-populated
          list     =  new RecordList(TestData.model(), data),
          events   = [],
@@ -485,7 +479,7 @@
    test('#subscribe, invalid delete ops', function() {
       var RECS_TOTAL = 5;
       var i, v,
-         data     = TestData.makeRecords(RECS_TOTAL),
+         data     = TestData.recs(RECS_TOTAL),
         // create the list but leave out one record (so we can use it for a record not in the list)
          list     =  new RecordList(TestData.model(), data.slice(0, -1)),
          events   = [],

@@ -74,9 +74,6 @@
        * - start:   {int=0}           using the sort's integer values, this will start us at record matching this sort value
        * - end:     {int=-1}          using the sort's integer values, this will end us at record matching this sort value
        * - where:   {function|object} filter rows using this function or value map
-       * - sort:    {array|string}    Sort returned results by this field or fields. Each field specified in sort
-       *                              array could also be an object in format {field: 'field_name', desc: true} to obtain
-       *                              reversed sort order
        *
        * Start/end are more useful with sorted records (and faster). Limit/offset are slower but can be used with
        * unsorted records. Additionally, limit/offset will work with where conditions. Obviously, `start`/`end` are hard
@@ -99,7 +96,8 @@
        * of the record starting from 0
        *
        * In the case of a failure, the fail() method on the promise will always be notified immediately,
-       * and the load operation will end immediately.
+       * and the load operation will end immediately. It is acceptable for `iterator` to throw an error or string
+       * in order to invoke a failure event and implementations should handle this gracefully.
        *
        * PERFORMANCE
        * -----------
@@ -139,35 +137,46 @@
       hasTwoWaySync: function() { throw new Error('Interface not implemented'); },
 
       /**
-       * Given a particular data model, notify `callback` any time any record is added, updated, deleted, or moved
-       * ON THE SERVER. Calling the create/update/read/delete methods locally will not trigger any notifications.
+       * Given a particular data model, notify `callback` once with the entire list of matching results and then
+       * any time any record is added, updated, deleted, or moved on the server. Calling the create/update/read/delete
+       * methods locally will indirectly trigger notifications once they are applied at the server.
        *
        * The signature of the callback is as follows:
-       *     added:    callback( 'added',   record_id, record_data, prevRecordId )
-       *     updated:  callback( 'updated', record_id, record_data  )
-       *     deleted:  callback( 'deleted', record_id, record_data  )
-       *     moved:    callback( 'moved',   record_id, prevRecordId )
+       *     added:    callback( 'added',   record_id, record_data, sortPriority, prevRecordId )
+       *     updated:  callback( 'updated', record_id, record_data  sortPriority )
+       *     deleted:  callback( 'deleted', record_id, record_data  sortPriority )
+       *     moved:    callback( 'moved',   record_id, record_data, sortPriority, prevRecordId )
        *
-       * When prevRecordId is null (for applicable calls), this means it is inserted at the first record in the list
+       * For added/moved events, a prevRecordId of null means it is the first record in the list. Generally, it would
+       * be preferable to use a compare function based on the sort priority rather than relying on prevRecordId (which
+       * should really only be used as an optimization tip for the sort algorithm)
        *
        * The return value is an Object which contains a dispose() method to stop observing the data layer's
        * changes.
        *
        * @param  {ko.sync.Model} model
        * @param  {Function}     callback
-       * @param  {object}       [filterCriteria]
+       * @param  {object}       [filterCriteria] see query() method for details about filterCriteria
        * @return {Object}
        */
       watch: function(model, callback, filterCriteria) { throw new Error('Interface not implemented'); },
 
       /**
-       * Given a particular record, invoke `callback` any time the data record changes ON THE SERVER. This does not
-       * get invoked for local create/read/update/delete events.
+       * Given a particular record, invoke `callback` once with the current server value (same as read()) and then
+       * any time the data record changes on the server. This would be indirectly invoked by local
+       * create/read/update/delete operations, because after the server applies the update, that should trigger
+       * an update event (watch for feedback loops in your event handlers).
        *
        * The signature of the callback is as follows: callback( record_id, data_object, sort_priority )
        *
        * The return value is an Object which contains a dispose() method to stop observing the data layer's
-       * changes.
+       * changes. Nothing needs to be passed into dispose:
+       * <code>
+       *    var sub = store.watchRecord( model, recordId, callback );
+       *    function callback(id, data, sortPriority) {
+       *       sub.dispose(); // stop watching after the first notification
+       *    }
+       * </code>
        *
        * @param {ko.sync.Model}  model
        * @param {ko.sync.RecordId|ko.sync.Record} recordId
