@@ -58,10 +58,10 @@
          var oldKey = this.hashKey();
          this.id.update(hashKey);
          if( this.id.isSet() && this.id.hashKey() !== oldKey ) {
-            // notify listeners waiting for the id to sync
-            applyKeyCallbacks(this, oldKey);
             // make sure fields stay in sync with id
             applyUpdates(this, _.isObject(hashKey)? hashKey : this.id.parse(hashKey));
+            // notify listeners waiting for the id to sync
+            applyKeyCallbacks(this, oldKey);
          }
       }
       return this;

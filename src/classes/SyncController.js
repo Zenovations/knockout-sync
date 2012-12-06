@@ -93,11 +93,14 @@
    };
 
    ko.sync.SyncController.prototype.pushUpdates = function() {
+      console.log('pushUpdates?'); //debug
       if( this.disposed ) {
          return $.Deferred().reject(new Error('SyncController has been disposed'));
       }
       else {
+         console.log('pushUpdates'); //debug
          return this.con.process()
+            .done(function() { console.log('pushUpdates completed'); })//debug
             .fail(function(possiblyUnresolvedPromises) {
                //todo what do we do about failures?
                //todo
@@ -177,7 +180,10 @@
             }
             else {
                // otherwise, wait until it has an ID to sync it
-               sync.rec.onKey(function() {
+               sync.rec.onKey(function(id, oldKey, fields, data) {
+                  var props = {action: 'update', key: id, data: data, to: 'store', rec: sync.rec};
+                  expect(sync.expected, props);
+                  newChange(sync.con, model, sync.keyFactory, target, props, sync.rec).run();
                   _watchStoreRecord(sync);
                });
             }
@@ -260,10 +266,23 @@
       return CHANGE_CONVERSIONS[recListChangeType];
    }
 
-   function expect(expectedCache, entry) {
+   function expect(expectedCache, data) {
+      var entry = _.pick(data, ['action', 'to', 'key', 'prevId', 'data']);
+      var HK = ko.sync.KeyFactory.HASHKEY_FIELD;
+      if( !entry.key ) {
+         if( typeof(data.key) === 'function' ) { entry.key = data.key(); }
+         else if( data.rec ) { entry.key = data.rec.hashKey(); }
+         else if( HK in data ) {
+            entry.key = data[HK];
+         }
+         else if( data.data && HK in entry.data ) {
+            entry.key = entry.data[HK];
+         }
+      }
       var set = _.findOrCreate(expectedCache, [], entry.to, entry.action, entry.key);
       if( _.find(set, function(o) { return _.isEqual(o, entry) } ) ) {
          _.remove(set, entry);
+         console.log('expected::removing', entry.key, entry, set);//debug
          if( set.length === 0 ) {
             // free memory
             _.deepRemove(expectedCache, entry.key, entry.to, entry.action);
@@ -271,6 +290,7 @@
          return false;
       }
       else {
+         console.log('expected::adding', entry.key, entry);//debug
          set.push(entry);
          return true;
       }

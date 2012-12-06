@@ -108,8 +108,18 @@
       return (hashKey && hashKey.match(/^tmp[.][0-9]+:[0-9]+[.]/))? true : false;
    };
 
-   RecordId.createTempHashKey = function() {
-      return _.uniqueId('tmp.'+ko.sync.instanceId+'.');
+   /**
+    * @param {Object} [data]
+    * @return {String}
+    */
+   RecordId.createTempHashKey = function(data) {
+      var kf = ko.sync.KeyFactory.HASHKEY_FIELD;
+      if( _.isObject(data) && RecordId.isTempId(data[kf]) ) {
+         return data[kf];
+      }
+      else {
+         return _.uniqueId('tmp.'+ko.sync.instanceId+'.');
+      }
    };
 
    function _createHash(separator, fields, data) {
@@ -119,7 +129,7 @@
             f = fields[i];
             // if any of the composite key fields are missing, there is no key value
             if( !exists(data[f]) ) {
-               return RecordId.createTempHashKey();
+               return RecordId.createTempHashKey(data);
             }
             if( i > 0 ) { s += separator; }
             s += data[f];
@@ -127,7 +137,7 @@
          return s;
       }
       else {
-         return RecordId.createTempHashKey();
+         return RecordId.createTempHashKey(data);
       }
    }
 

@@ -113,6 +113,7 @@
       expect(2);
       var tempRec = TD.tempRec(6), key = tempRec.hashKey();
       tempRec.onKey(function(id, oldKey, fields, data) {
+         console.log('invoking onKey'); //debug
          key = id;
       });
       syncActivity({
@@ -122,6 +123,7 @@
          target: ko.observable(),
          recs:  TD.recs(5),
          fx: function(x) {
+            console.log('invoking fx'); //debug
             x.target(tempRec.getData(true));
             deepEqual(x.changes, [
                _expectedChange({key: x.sync.rec.hashKey(), action: 'create'})
@@ -129,6 +131,7 @@
             return x.sync.pushUpdates();
          },
          results: function(x) {
+            console.log('invoking results', x.target()); //debug
             deepEqual(x.events.store, [
                ['added', key]
             ]);

@@ -315,6 +315,7 @@
           * @return {jQuery.Deferred} resolves to the new record's ID or rejects if it could not be created
           */
          create: function(model, record) {
+            console.log('TestStore::create', record.hashKey()); //debug
             this.testCallback('create', record.hashKey());
             return $.Deferred(function(def) {
                this.records.push(record);
