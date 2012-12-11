@@ -117,10 +117,18 @@
                throw new Error('invalid destination: '+self.to);
          }
       }
+
+      // time out all changes after 15 seconds
+      setTimeout(function() {
+         if( def.state() === 'pending' ) {
+            def.reject('expired');
+         }
+      }, 15000);
+
       return def.pipe(function(id) {
          self.rec && self.rec.isDirty(false);
-         if( self.success ) { self.success(self, id); }
-         return $.Deferred(function(def) { def.resolve(self, id); }).promise();
+         if( self.success ) { self.success(self, id||self.key()); }
+         return $.Deferred(function(def) { def.resolve(self, id||self.key()); }).promise();
       });
    };
 

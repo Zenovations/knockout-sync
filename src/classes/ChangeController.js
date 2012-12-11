@@ -24,11 +24,11 @@
             console.error(e);
             failed.push(change);
          })
-            .done(function(change, id) { console.log('done', id); })); //debug
+         .done(function(change, id) { console.log('done', id); })); //debug
       });
       // wait for all the items to succeed or for any to fail and return the promises for every change
       return $.Deferred(function(def) {
-         $.when.apply($, promises)
+         $.whenAll.apply($, promises)
             .done(function() { def.resolve(promises); })
             .fail(function() { def.reject(promises);  })
       });

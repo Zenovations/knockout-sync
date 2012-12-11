@@ -49,9 +49,11 @@
       var noSort = moreOpts && moreOpts.sort === false;
       var props = $.extend({}, (noSort? genericModelProps : genericModelPropsWithSort), moreOpts);
       var model = new Model(props);
+      model._testInstance = modelCount++;
       model.store || (model.store = new exports.TestStore(hasTwoWaySync, recs, model));
       return model;
    };
+   var modelCount = 1;
 
    /**
     * @param {boolean} [unkeyed]
@@ -287,6 +289,7 @@
     * TEST STORE
     **********************************/
    (function() {
+      var testStoreCount = 1;
 
       /**
        * A pretend Store object that notifies a callback whenever a method is called on the Store interface. TestStore
@@ -307,6 +310,7 @@
             this.records = _copyRecords(model||exports.model(), records);
             this.callbacks = [];
             this._testEvents = [];
+            this._testInstance = testStoreCount++;
          },
 
          /**
