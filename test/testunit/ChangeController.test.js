@@ -276,6 +276,8 @@
       }, 100);
    });
 
+   test('#listen', function() {}); //todo-test
+
    function _do(action, expected, list, rec, meta) {
       switch(action) {
          case 'create':

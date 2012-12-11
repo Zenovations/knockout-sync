@@ -121,6 +121,19 @@
       }, 100);
    });
 
+   test('observableArray.indexForKey', function() {
+      expect(6);
+      var obs = TD.pushRecsToObservableArray(ko.observableArray(), TD.recs(5));
+      var keyFactory = TD.keyFactory();
+      obs.watchChanges(keyFactory, TD.model().observedFields(), {});
+      strictEqual(obs.indexForKey('record-xyz'), -1, 'record-xyz');
+      strictEqual(obs.indexForKey('record-1'), 0, 'record-1');
+      strictEqual(obs.indexForKey('record-2'), 1, 'record-2');
+      strictEqual(obs.indexForKey('record-3'), 2, 'record-3');
+      strictEqual(obs.indexForKey('record-4'), 3, 'record-4');
+      strictEqual(obs.indexForKey('record-5'), 4, 'record-5');
+   });
+
    asyncTest('observable.watchChanges, update observable', function() {
       var rec = TD.rec(1), obs = rec.applyData(ko.observable());
       var events = [];

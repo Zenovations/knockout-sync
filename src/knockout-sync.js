@@ -172,9 +172,10 @@
             case "retained":
                break;
             case "deleted":
-               _findAndDispose(ctx.disposables, key);
-               _.remove(ctx.keys, key); // remove it from the index right now, even if we don't delete it yet
-               ctx.deferred[key] = deferDelete(key, ctx.keys, ctx.deferred, ctx.callbacks.delete.bind(ctx.callbacks));
+               // remove it from the index right now, even if we don't delete it yet
+               // this will keep it from affecting sort order and before/after id calculations
+               _.remove(ctx.keys, key);
+               ctx.deferred[key] = deferDelete(key, ctx.keys, ctx.deferred, ctx.callbacks.delete.bind(ctx.callbacks), ctx.disposables);
                break;
             case "updated":
                //todo-sort sort fields
@@ -184,10 +185,12 @@
             case "added":
                // add key back into the index wherever it exists now in list
                // for a move, it will have been deleted above (when it was pulled out)
-               var i = ko.sync.findByKey(ctx.latestValue, ctx.keyFactory, key);
+               var i = ko.sync.findByKey(ctx.latestValue, ctx.keyFactory, key, true);
                if( i === -1 ) {
                   throw new Error('added a rec but its not in the observable?');
                }
+
+               // for moves, the old key was already deleted in `deleted` above, so it's not a concern here
                ctx.keys.splice(i, 0, key);
 
                if( key in ctx.deferred ) {
@@ -224,9 +227,10 @@
       }
    }
 
-   function deferDelete(key, keyList, delayed, deleteCallback) {
+   function deferDelete(key, keyList, delayed, deleteCallback, disposables) {
       return setTimeout(function() {
          if(key in delayed) {
+            _findAndDispose(disposables, key);
             delete delayed[key];
             deleteCallback(key);
          }
@@ -268,8 +272,10 @@
     * @param {ko.observableArray|Array} obsArray
     * @param {ko.sync.KeyFactory} keyFactory
     * @param {string|Object|ko.sync.Record} keyOrData
+    * @param {boolean} ignoreIndex do not use the obsArray index (because we're modifying it right now)
+    * @return {int}
     */
-   ko.sync.findByKey = function(obsArray, keyFactory, keyOrData) {
+   ko.sync.findByKey = function(obsArray, keyFactory, keyOrData, ignoreIndex) {
       var key = keyOrData;
       if( typeof(keyOrData) !== 'string' ) {
          if( keyOrData instanceof ko.sync.Record) {
@@ -277,7 +283,7 @@
          }
          key = keyFactory.make(keyOrData);
       }
-      if( obsArray.indexForKey ) {
+      if( !ignoreIndex && obsArray.indexForKey ) {
          // optimized lookup since the obsArray can use cached keys that are always ordered and up to date
          return obsArray.indexForKey(key);
       }

@@ -85,11 +85,34 @@
       })
    });
 
-   test('#queue', function() {
+   asyncTest('#queue', function() {
+      var tmp = TD.tempRec();
+      syncActivity({
+         criteria: {limit: 50},
+         model: {auto: false},
+         twoWaySync: false,
+         fx: function(x) {
+            x.sync.queue({action: 'delete', key: tmp.hashKey(), to: 'store', rec: tmp});
+            x.sync.queue({action: 'create', key: TD.rec(1).hashKey(), data: TD.dat(1), prevId: null, to: 'store'});
+         },
+         results: function(x) {
+            deepEqual(_unwrapChanges(x.sync.con.changes), [
+               _expectedChange({action: 'delete', key: tmp.hashKey(), invalidated: true}),
+               _expectedChange({action: 'create', key: TD.rec(1).hashKey(), data: TD.dat(1), prevId: null})
+            ]);
+         }
+      });
+   });
+
+   asyncTest('#pushUpdates, empty', function() {
+      start();
+   });
+
+   asyncTest('#pushUpdates, failure', function() {
       //todo-test
    });
 
-   test('#pushUpdates', function() {
+   asyncTest('#pushUpdates, success', function() {
       //todo-test
    });
 
@@ -111,46 +134,45 @@
 
    asyncTest('obs: create', function() {
       expect(2);
-      var tempRec = TD.tempRec(6), key = tempRec.hashKey();
-      tempRec.onKey(function(id, oldKey, fields, data) {
-         console.log('invoking onKey'); //debug
-         key = id;
-      });
+      var model = TD.model(), tempRec = TD.tempRec(6, model), key;
       syncActivity({
          criteria: null,
-         model: {auto: false},
+         model: model,
          twoWaySync: true,
          target: ko.observable(),
-         recs:  TD.recs(5),
+         recs:  TD.recs(5, model),
          fx: function(x) {
-            console.log('invoking fx'); //debug
+            key = x.sync.rec.hashKey();
             x.target(tempRec.getData(true));
             deepEqual(x.changes, [
-               _expectedChange({key: x.sync.rec.hashKey(), action: 'create'})
+               _expectedChange({key: key, action: 'create'})
             ]);
             return x.sync.pushUpdates();
          },
          results: function(x) {
-            console.log('invoking results', x.target()); //debug
             deepEqual(x.events.store, [
-               ['added', key]
+               ['create', key]
             ]);
          }
       })
    });
 
    asyncTest('obs: update', function() {
+      var obs = TD.rec(4).applyData(ko.observable());
+      var data = TD.rec(4).applyData();
       syncActivity({
-         criteria: null,
+         criteria: 'record-4',
          model: {auto: false},
          twoWaySync: false,
          recs:  TD.recs(5),
+         target: obs,
          fx: function(x) {
-
+            data.floatRequired = 9.9;
+            x.target(data);
          },
          results: function(x) {
             deepEqual(x.changes, [
-               _expectedChange({key: TD.rec(6).hashKey(), action: 'update', prevId: 0})
+               _expectedChange({key: 'record-4', action: 'update'})
             ]);
          }
       })
@@ -158,17 +180,19 @@
 
    asyncTest('field: updated', function() {
       syncActivity({
-         criteria: null,
+         criteria: 'record-4',
          model: {auto: false},
          twoWaySync: false,
-         target: {},
          recs:  TD.recs(5),
+         target: {},
          fx: function(x) {
-            x.target.boolOptional(true);
+            x.target.emailOptional('doom@doomy.doom');
+            x.target.stringRequired('hilo!');
          },
          results: function(x) {
             deepEqual(x.changes, [
-               _expectedChange({key: x.target._hashKey})
+               _expectedChange({key: 'record-4', action: 'update'}),
+               _expectedChange({key: 'record-4', action: 'update'})
             ]);
          }
       })
@@ -192,11 +216,50 @@
    });
 
    asyncTest('obsArray: delete', function() {
-      start();
+      var key;
+      syncActivity({
+         criteria: {limit: 50},
+         model: {auto: false},
+         twoWaySync: false,
+         recs:  TD.recs(5),
+         fx: function(x) {
+            key = x.target.splice(2, 1)[0].id;
+            // delete events are tricky, so give it a bit before we check
+            return $.Deferred(function(def) {
+               _.delay(def.resolve, 25);
+            });
+         },
+         results: function(x) {
+            deepEqual(x.changes, [
+               _expectedChange({key: key, action: 'delete'})
+            ]);
+         }
+      })
    });
 
    asyncTest('obsArray: move', function() {
-      start();
+      var key, prevKey;
+      syncActivity({
+         criteria: {limit: 50},
+         model: {auto: false},
+         twoWaySync: false,
+         recs:  TD.recs(5),
+         fx: function(x) {
+            key = x.target()[4]._hashKey;
+            prevKey = x.target()[1]._hashKey;
+            console.log('starting move'); //debug
+            _.move(x.target, 4, 2);
+            // delete events are tricky, so give it a bit before we check
+            return $.Deferred(function(def) {
+               _.delay(def.resolve, 25);
+            });
+         },
+         results: function(x) {
+            deepEqual(x.changes, [
+               _expectedChange({key: key, action: 'move', prevId: prevKey})
+            ]);
+         }
+      })
    });
 
    asyncTest('store: create', function() {
@@ -239,7 +302,7 @@
       conf = _.extend({twoWaySync: true, recs: []}, conf);
       var listEvents  = [],
           changes     = [],
-          model       = TD.model($.extend({auto: true}, conf.model), conf.twoWaySync, conf.recs),
+          model       = conf.model instanceof ko.sync.Model? conf.model : TD.model($.extend({auto: true}, conf.model), conf.twoWaySync, conf.recs),
           target      = conf.target? conf.target : ko.observableArray(),
           sync        = new ko.sync.SyncController(model, target, conf.criteria);
 
@@ -256,7 +319,7 @@
 
       var props = {
          events: {
-            store: model.store.eventsFiltered(),
+            store: [],
             obs:   listEvents
          },
          target:  target,
@@ -272,6 +335,9 @@
 
             // expire test case if it doesn't return
             TD.expires(def);
+
+            // get a copy of the current store events
+            _.extend(props.events, {store: model.store.eventsFiltered()});
 
             // invoke the test case
             $.when( (conf.fx || function(){})(props) ).then(def.resolve, def.reject);
@@ -290,6 +356,10 @@
 
       // callback to resolve and invoke the test analysis
       function _resolve() {
+         // get a copy of the current store events
+         _.extend(props.events, {store: model.store.eventsFiltered()});
+
+         // invoke the results function
          conf.results && conf.results(props);
       }
 
@@ -319,19 +389,29 @@
       };
    }
 
+   var CHANGE_KEYS_FOR_COMPARE = ['to', 'action', 'prevId', 'invalidated', 'moved', 'status'];
+
    function _changeProps(change) {
-      return _.extend({key: change.key()}, _.pick(change, ['to', 'action', 'prevId', 'invalidated', 'moved', 'status']));
+      return _.extend({key: change.key()}, _.pick(change, CHANGE_KEYS_FOR_COMPARE));
    }
 
    function _expectedChange(props) {
-      return _.extend({
+      return _.pick(_.extend({
          to: 'store',
          action: 'update',
          prevId: undefined,
          invalidated: false,
          moved: false,
          status: 'pending'
-      }, props);
+      }, props? ko.sync.unwrapAll(props) : {}), CHANGE_KEYS_FOR_COMPARE.concat(['key']));
+   }
+
+   function _unwrapChanges(changes) {
+      var out = [];
+      _.each(changes, function(change) {
+         out.push(_changeProps(change));
+      });
+      return out;
    }
 
 })(jQuery);
