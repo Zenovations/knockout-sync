@@ -111,26 +111,24 @@
 
    asyncTest('obs: create', function() {
       expect(2);
-      var tempRec = TD.tempRec(6), key = tempRec.hashKey();
-      tempRec.onKey(function(id, oldKey, fields, data) {
-         key = id;
-      });
+      var model = TD.model(), tempRec = TD.tempRec(6, model), key;
       syncActivity({
          criteria: null,
-         model: {auto: false},
+         model: model,
          twoWaySync: true,
          target: ko.observable(),
-         recs:  TD.recs(5),
+         recs:  TD.recs(5, model),
          fx: function(x) {
+            key = x.sync.rec.hashKey();
             x.target(tempRec.getData(true));
             deepEqual(x.changes, [
-               _expectedChange({key: x.sync.rec.hashKey(), action: 'create'})
+               _expectedChange({key: key, action: 'create'})
             ]);
             return x.sync.pushUpdates();
          },
          results: function(x) {
             deepEqual(x.events.store, [
-               ['added', key]
+               ['create', key]
             ]);
          }
       })
@@ -236,7 +234,7 @@
       conf = _.extend({twoWaySync: true, recs: []}, conf);
       var listEvents  = [],
           changes     = [],
-          model       = TD.model($.extend({auto: true}, conf.model), conf.twoWaySync, conf.recs),
+          model       = conf.model instanceof ko.sync.Model? conf.model : TD.model($.extend({auto: true}, conf.model), conf.twoWaySync, conf.recs),
           target      = conf.target? conf.target : ko.observableArray(),
           sync        = new ko.sync.SyncController(model, target, conf.criteria);
 
@@ -253,7 +251,7 @@
 
       var props = {
          events: {
-            store: model.store.eventsFiltered(),
+            store: [],
             obs:   listEvents
          },
          target:  target,
@@ -269,6 +267,9 @@
 
             // expire test case if it doesn't return
             TD.expires(def);
+
+            // get a copy of the current store events
+            _.extend(props.events, {store: model.store.eventsFiltered()});
 
             // invoke the test case
             $.when( (conf.fx || function(){})(props) ).then(def.resolve, def.reject);
@@ -287,6 +288,10 @@
 
       // callback to resolve and invoke the test analysis
       function _resolve() {
+         // get a copy of the current store events
+         _.extend(props.events, {store: model.store.eventsFiltered()});
+
+         // invoke the results function
          conf.results && conf.results(props);
       }
 
