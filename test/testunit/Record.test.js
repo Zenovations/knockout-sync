@@ -263,6 +263,13 @@
       deepEqual(ko.sync.unwrapAll(res), { one: 1, two: 22, three: 33 }, 'values set correctly');
    });
 
+   test('#compare', function() {
+      expect(3);
+      var rec1a = TestData.rec(1);
+      var rec1b = TestData.rec(1);
+      var rec2 = TestData.rec(2);
+   });
+
    test("#isValid", function() {
       //todo-test
    });

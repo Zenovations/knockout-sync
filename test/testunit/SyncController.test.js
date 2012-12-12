@@ -105,18 +105,63 @@
    });
 
    asyncTest('#pushUpdates, empty', function() {
-      start();
+      var updates;
+      syncActivity({
+         criteria: {limit: 50},
+         model: {auto: false},
+         twoWaySync: false,
+         fx: function(x) {
+            return x.sync.pushUpdates().done(function(promises) {
+               updates = promises;
+            });
+         },
+         results: function(x) {
+            deepEqual(updates, [], 'pushed successfully and there were no changes');
+         }
+      });
    });
 
    asyncTest('#pushUpdates, failure', function() {
-      //todo-test
+      expect(1);
+      var model   = TD.model({auto: false}),
+          target  = {},
+          sync    = new ko.sync.SyncController(model, target);
+
+      sync.queue({action: 'delete', key: TD.rec(1).hashKey(), to: 'store', rec: TD.rec(1)});
+      model.store.failNextCall();
+      sync.pushUpdates()
+         .done(function() {
+            ok(false, 'should have been rejected');
+         })
+         .fail(function() {
+            ok(true, 'deferred object rejected');
+         })
+         .always(function() {
+            start();
+         });
    });
 
    asyncTest('#pushUpdates, success', function() {
-      //todo-test
+      expect(2);
+      var model   = TD.model({auto: false}),
+         target  = {},
+         sync    = new ko.sync.SyncController(model, target);
+      sync.queue({action: 'delete', key: TD.rec(1).hashKey(), to: 'store'});
+      sync.pushUpdates()
+         .done(function(promises) {
+            strictEqual(promises.length, 1, 'returns correct number of promises');
+            strictEqual(promises[0].state(), 'resolved', 'promise is resolved');
+         })
+         .fail(function() {
+            ok(false, 'should resolve');
+         })
+         .always(function() {
+            start();
+         });
    });
 
    test('#dispose', function() {
+      expect(2);
       syncActivity({
          criteria: null,
          model: {auto: false},
@@ -124,7 +169,15 @@
          fx: function(x) {
             x.sync.dispose();
             x.sync.queue({action: 'create', rec: TD.rec(1), data: TD.dat(1), prevId: null, to: 'store'});
-            x.sync.pushUpdates();
+            return $.Deferred(function(def) {
+               x.sync.pushUpdates()
+                  .then(function () {
+                     ok(false, 'should reject if disposed');
+                  }, function () {
+                     ok(true, 'should reject if disposed');
+                  })
+                  .always(def.resolve);
+            });
          },
          results: function(x) {
             deepEqual(x.events.store, []);
@@ -263,15 +316,56 @@
    });
 
    asyncTest('store: create', function() {
-      start();
+      var newRec = TD.rec(6), prevKey = TD.rec(5).hashKey();
+      syncActivity({
+         criteria: {limit: 2},
+         model: {auto: false},
+         recs: TD.recs(5),
+         fx: function(x) {
+            return x.store.create(x.model, newRec);
+         },
+         results: function(x) {
+            deepEqual(x.changes, [
+               _expectedChange({to: 'obs', key: newRec.hashKey(), prevId: prevKey, action: 'create'})
+            ])
+         }
+      })
    });
 
    asyncTest('store: update', function() {
-      start();
+      var updatedRec = TD.rec(4);
+      syncActivity({
+         criteria: {limit: 2},
+         model: {auto: false},
+         recs: TD.recs(5),
+         fx: function(x) {
+            updatedRec.set('intOptional', 991);
+            return x.store.update(x.model, updatedRec);
+         },
+         results: function(x) {
+            deepEqual(x.changes, [
+               _expectedChange({to: 'obs', key: updatedRec.hashKey(), action: 'update'})
+            ])
+         }
+      })
    });
 
    asyncTest('store: move', function() {
-      start();
+      var movedRec = TD.rec(4), afterKey = TD.rec(1).hashKey();
+      syncActivity({
+         criteria: {limit: 2},
+         model: {auto: false},
+         recs: TD.recs(5),
+         fx: function(x) {
+            movedRec.update('intRequired', 1);
+            return x.store.update(x.model, movedRec);
+         },
+         results: function(x) {
+            deepEqual(x.changes, [
+               _expectedChange({to: 'obs', key: movedRec.hashKey(), prevId: afterKey, action: 'move'})
+            ])
+         }
+      })
    });
 
    asyncTest('store: delete', function() {
@@ -324,6 +418,7 @@
          },
          target:  target,
          model:   model,
+         store:   model.store,
          sync:    sync,
          changes: changes
       };

@@ -50,10 +50,10 @@
       this.auto       = model.auto;
       /** @type ko.sync.ChangeController */
       this.con        = new ko.sync.ChangeController();
-      /** @type ko.sync.KeyFactory */
-      this.keyFactory = new ko.sync.KeyFactory(model, true);
       /** @type ko.sync.Store */
       this.model      = model;
+      /** @type ko.sync.KeyFactory */
+      this.keyFactory = new ko.sync.KeyFactory(model, true);
       /** @type ko.sync.RecordList */
       this.list       = null;
       /** @type ko.sync.Record */
@@ -89,12 +89,14 @@
    };
 
    ko.sync.SyncController.prototype.queue = function(props) {
-      var change = newChange(this.con, this.model, this.keyFactory, this.target, props, this.rec);
-      console.log('queue', change.key()); //debug
-      if( !this.disposed && !this.filter.clear(change) ) {
-         console.log('queued'); //debug
-         this.con.addChange(change);
-         this.auto && this.pushUpdates();
+      if( !this.disposed ) {
+         var change = newChange(this.con, this.model, this.keyFactory, this.target, props, this.rec);
+         console.log('queue', change.key()); //debug
+         if( !this.filter.clear(change) ) {
+            console.log('queued'); //debug
+            this.con.addChange(change);
+            this.auto && this.pushUpdates();
+         }
       }
    };
 

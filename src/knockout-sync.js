@@ -175,12 +175,21 @@
                // remove it from the index right now, even if we don't delete it yet
                // this will keep it from affecting sort order and before/after id calculations
                _.remove(ctx.keys, key);
-               ctx.deferred[key] = deferDelete(key, ctx.keys, ctx.deferred, ctx.callbacks.delete.bind(ctx.callbacks), ctx.disposables);
+               ctx.deferred[key] = {
+                  to: deferDelete(key, ctx.keys, ctx.deferred, ctx.callbacks.delete.bind(ctx.callbacks), ctx.disposables),
+                  updates: []
+               };
                break;
             case "updated":
                //todo-sort sort fields
                //todo handle key field changes
-               ctx.callbacks.update(key, data);
+               if( key in ctx.deferred ) {
+                  // store the update until we get a move event or the delete is completed
+                  ctx.deferred[key].updates.push({key: key, data: data});
+               }
+               else {
+                  ctx.callbacks.update(key, data);
+               }
                break;
             case "added":
                // add key back into the index wherever it exists now in list
@@ -195,9 +204,13 @@
 
                if( key in ctx.deferred ) {
                   // move operation
-                  clearTimeout(ctx.deferred);
+                  clearTimeout(ctx.deferred.to);
+                  var updates = ctx.deferred[key].updates;
                   delete ctx.deferred[key];
                   ctx.callbacks.move(key, data, prevKey(ctx.keys, key));
+                  _.each(updates, function(update) {
+                     ctx.callbacks.update(update.key, update.data);
+                  });
                }
                else {
                   // add operation

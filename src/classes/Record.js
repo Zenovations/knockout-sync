@@ -12,7 +12,7 @@
     */
    ko.sync.Record = function(model, data) {
       data || (data = {});
-      this.data      = _setFields(model.fields, data);
+      this.data      = setFields(model.fields, data);
       this.observed  = _observed(model.fields);
       this.fields    = _.keys(this.data);
       this.id        = new ko.sync.RecordId(model.key, data);
@@ -163,6 +163,11 @@
       }
    };
 
+   /**
+    *
+    * @param target
+    * @return {*}
+    */
    ko.sync.Record.prototype.applyData = function(target) {
       return ko.sync.Record.applyWithObservables(target||{}, this.getData(true), _.keys(this.observed));
    };
@@ -174,6 +179,7 @@
     * @param {Object|ko.observable} target
     * @param {Object} data updates to be applied
     * @param {Array}  observedFields
+    * @static
     */
    ko.sync.Record.applyWithObservables = function(target, data, observedFields) {
       var changes = false;
@@ -215,7 +221,32 @@
       return target;
    };
 
-   function _setFields(fields, data) {
+   /**
+    * @param {ko.sync.Record} a
+    * @param {ko.sync.Record} b
+    * @return {object}
+    * @static
+    */
+   ko.sync.Record.compare = function(a, b) {
+      var changedFields = fieldsChanged(a.getData(), b.getData());
+      return {
+         fields: changedFields,
+         sameKey: a.hashKey() === b.hashKey(),
+         moved: a.getPriority() !== b.getPriority()
+      };
+   };
+
+   function fieldsChanged(a, b) {
+      var out = [];
+      _.each(a, function(v, k) {
+         if( !k in b || b[k] !== v ) {
+            out.push(k);
+         }
+      });
+      return out;
+   }
+
+   function setFields(fields, data) {
       //todo validate the data before applying it
       var k, out = {}, keys = _.keys(fields), i = -1, len = keys.length;
       while(++i < len) {

@@ -311,6 +311,7 @@
             this.callbacks = [];
             this._testEvents = [];
             this._testInstance = testStoreCount++;
+            this.failNext = null; // see TestStore.failNextCall()
          },
 
          /**
@@ -354,10 +355,15 @@
             return $.Deferred(function(def) {
                var oldRec = this.find(rec);
                if( oldRec ) {
+                  var oldPos = indexOfRecord(this.records, oldRec);
                   oldRec && oldRec.updateAll(rec.getData());
+                  var newPos = sortRecords(this.records, model.getComparator(), oldRec);
                   //_.delay(thenResolve(def, rec.hashKey(), !!oldRec), 10);
                   this.fakeNotify('updated', hashKey)
                         .then(thenResolve(def, hashKey));
+                  if( newPos !== oldPos ) {
+                     this.fakeNotify('moved', hashKey, prevId(this.records, newPos));
+                  }
                }
                else {
                   def.reject('record not found');
@@ -491,16 +497,22 @@
             }
             var rec = this.find(id), data = $.extend({}, rec? rec.getData() : {}, changedData);
             return $.Deferred(function(def) {
-               if( this.hasTwoWaySync() ) {
-                  _.delay(function() { // simulate event returning from server
-                     _.each(this.callbacks, function(fx) {
-                        fx(action, id, data, prevId);
-                     });
-                     def.resolve(id);
-                  }.bind(this), 1);
+               if( this.failNext ) {
+                  // simulate a failure
+                  _fail(def, this, this.failNext);
                }
                else {
-                  def.resolve(id);
+                  if( this.hasTwoWaySync() ) {
+                     _.delay(function() { // simulate event returning from server
+                        _.each(this.callbacks, function(fx) {
+                           fx(action, id, data, prevId);
+                        });
+                        def.resolve(id);
+                     }.bind(this), 1);
+                  }
+                  else {
+                     def.resolve(id);
+                  }
                }
             }.bind(this));
          },
@@ -523,6 +535,14 @@
 
          events: function() {
             return this._testEvents.slice(0);
+         },
+
+         /**
+          * Make the next request to TestStore fail
+          * @param {string} [type] one of 'noresponse' or 'reject', defaults to 'reject'
+          */
+         failNextCall: function(type) {
+            this.failNext = type || 'reject';
          }
       });
 
@@ -624,10 +644,41 @@
       }
    }
 
+   function _fail(def, store, type) {
+      return function() {
+         if( store.twoWaySync ) {
+            _.delay(function() { def.reject(type); }, 50);
+         }
+         else {
+            def.reject(type);
+         }
+      }
+   }
+
    function _copyRecords(model, recs) {
       return _.map(recs||[], function(rec) {
          return model.newRecord(rec.getData());
       });
+   }
+
+   function indexOfRecord(recs, rec) {
+      var pos = -1, key = typeof(rec) === 'string'? rec : rec.hashKey();
+      _.find(recs, function(rec, i) {
+         if( rec.hashKey() === key ) {
+            pos = i;
+            return true;
+         }
+         return false;
+      });
+      return pos;
+   }
+
+   function sortRecords(recs, comparator) {
+      _.sortBy(recs, comparator);
+   }
+
+   function prevId(recs, pos) {
+      return pos === 0? null : recs[pos].hashKey();
    }
 
    //todo make these work with exports/et al
