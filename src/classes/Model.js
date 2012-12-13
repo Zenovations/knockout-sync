@@ -21,7 +21,6 @@
       this.inst       = modelInst++;
       this.fields     = processFields(defaults, props.fields);
       this.factory    = props.recordFactory || new RecordFactory(this);
-      this.comparator = comparator(this);
    };
 
    /**
@@ -73,7 +72,7 @@
    };
 
    ko.sync.Model.prototype.getComparator = function() {
-      return this.comparator;
+      return comparator;
    };
 
    ko.sync.Model.FIELD_DEFAULTS = {
@@ -137,47 +136,49 @@
     * Children with a priority that is parsable as a number come next. They are sorted numerically by priority first (small to large) and lexicographically by name second (A to z).
     * Children with non-numeric priorities come last. They are sorted lexicographically by priority first and lexicographically by name second.
     *
-    * @param {ko.sync.Model} model
-    * @return {Function}
+    * @param {ko.sync.Record} a
+    * @param {ko.sync.Record} b
+    * @return {int}
     */
-   function comparator(model) {
-      var field = model.sort;
-
-      function compareKeys(a, b) {
-         var ka = a.hashKey();
-         var kb = b.hashKey();
-         return ka === kb? 0 : (ka > kb? 1 : -1);
-      }
-
-      if( field ) {
-         return function(a, b) {
-            var va = a.get(field);
-            var vb = b.get(field);
-            if( va !== vb ) {
-               if( a === null ) { return -1; }
-               else if( b === null ) { return 1; }
-               var x = parseFloat(va);
-               var y = parseFloat(vb);
-               if( !isNaN(x) ) {
-                  if( isNaN(y) ) { return -1; }
-                  else if( x !== y ) {
-                     return x > y? 1 : -1;
-                  }
-                  // if they are equal falls through and runs compareKeys
-               }
-               else if( !isNaN(y) ) {
-                  return 1;
-               }
-               else {
-                  return va > vb? 1 : -1;
-               }
+   function comparator(a, b) {
+      var aPri = a.getSortPriority();
+      var bPri = b.getSortPriority();
+      if( aPri !== bPri ) {
+         // if a and b are the same,
+         if( aPri === null ) { return -1; }
+         else if( bPri === null ) { return 1; }
+         var aNum = parseFloat(aPri);
+         var bNum = parseFloat(bPri);
+         if( isNaN(aNum) ) {
+            if( !isNaN(bNum) ) {
+               // b is a number, a is not
+               return 1;
             }
-            return compareKeys(a, b);
+            else {
+               // both are non-numeric, make them strings
+               aPri = aPri + '';
+               bPri = bPri + '';
+               return aPri > bPri? 1 : -1;
+            }
+         }
+         else if( isNaN(bNum) ) {
+            // a is a number, b is not
+            return -1;
+         }
+         else {
+            // they are both numbers
+            return aNum === bNum? compareKeys(a, b) : (aNum > bNum? 1 : -1);
          }
       }
       else {
-         return compareKeys;
+         return compareKeys(a, b);
       }
+   }
+
+   function compareKeys(a, b) {
+      var aKey = a.hashKey();
+      var bKey = b.hashKey();
+      return aKey === bKey? 0 : (aKey > bKey? 1 : -1);
    }
 
 })(ko);

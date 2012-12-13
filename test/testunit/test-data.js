@@ -320,15 +320,12 @@
           * @return {jQuery.Deferred} resolves to the new record's ID or rejects if it could not be created
           */
          create: function(model, record) {
-            console.log('TestStore::create', record.hashKey()); //debug
             this.testCallback('create', record.hashKey());
-            return $.Deferred(function(def) {
-               this.records.push(record);
-               var newId = record.hasKey()? record.hashKey() : 'record-'+this.records.length;
-               var prevId = this.records.length > 1? this.records[this.records.length-2].hashKey() : null;
-               this.fakeNotify('added', newId, record.getData(), prevId)
-                  .then(thenResolve(def, newId));
-            }.bind(this));
+            var newPos = indexForNewRecord(this.records, record, model.getComparator());
+            var newId = record.hasKey()? record.hashKey() : 'record-'+this.records.length;
+            var prevId = getPrevId(this.records, newPos);
+            this.failNext || this.records.splice(newPos, 0, record);
+            return this.fakeNotify('added', newId, record.getData(), prevId);
          },
 
          /**
@@ -339,8 +336,10 @@
          read: function(model, recordId) {
             this.testCallback('read', recordId.hashKey());
             return $.Deferred(function(def) {
-               var rec = this.find(recordId);
-               _.delay(thenResolve(def, rec), 10);
+               if( !failThis(def, this.hasSync, this) ) {
+                  var rec = this.find(recordId);
+                  _.delay(thenResolve(def, rec), 10);
+               }
             }.bind(this));
          },
 
@@ -355,14 +354,20 @@
             return $.Deferred(function(def) {
                var oldRec = this.find(rec);
                if( oldRec ) {
-                  var oldPos = indexOfRecord(this.records, oldRec);
-                  oldRec && oldRec.updateAll(rec.getData());
-                  var newPos = sortRecords(this.records, model.getComparator(), oldRec);
-                  //_.delay(thenResolve(def, rec.hashKey(), !!oldRec), 10);
-                  this.fakeNotify('updated', hashKey)
-                        .then(thenResolve(def, hashKey));
-                  if( newPos !== oldPos ) {
-                     this.fakeNotify('moved', hashKey, prevId(this.records, newPos));
+                  if( !failThis(def, this.hasSync, this) ) {
+                     var oldPos = indexOfRecord(this.records, oldRec);
+                     oldRec && oldRec.updateAll(rec.getData());
+                     this.records.sort(model.getComparator());
+                     var newPos = indexOfRecord(this.records, oldRec);
+                     //_.delay(thenResolve(def, rec.hashKey(), !!oldRec), 10);
+                     if( newPos !== oldPos ) {
+                        this.fakeNotify('moved', hashKey, rec.getData(true), getPrevId(this.records, newPos))
+                           .then(def.resolve, def.reject);
+                     }
+                     else {
+                        this.fakeNotify('updated', hashKey)
+                           .then(def.resolve, def.reject);
+                     }
                   }
                }
                else {
@@ -379,16 +384,17 @@
          delete: function(model, recOrId) {
             var key = recOrId.hashKey(), rec = this.find(key);
             this.testCallback('delete', key);
-            if( rec ) {
-               _.remove(this.records, rec);
-               return $.Deferred(function(def) {
-                  this.fakeNotify('deleted', key)
-                        .then(thenResolve(def, key));
-               }.bind(this));
-            }
-            else {
-               return $.Deferred(function(def) { def.reject('could not find '+key); });
-            }
+            return $.Deferred(function(def) {
+               if( rec ) {
+                  if( !failThis(def, this.hasSync, this) ) {
+                     _.remove(this.records, rec);
+                     this.fakeNotify('deleted', key, rec.getData()).then(def.resolve, def.reject);
+                  }
+               }
+               else {
+                  def.reject('could not find '+key);
+               }
+            }.bind(this));
          },
 
          /**
@@ -401,7 +407,7 @@
             this.testCallback('query', filterCriteria);
             return $.Deferred(function(def) {
                _.delay(function() {
-                  def.resolve(_iterateRecords(this.records, filterCriteria, iterator));
+                  failThis(def, this.hasSync, this) || def.resolve(_iterateRecords(this.records, filterCriteria, iterator));
                }.bind(this), 10);
             }.bind(this));
          },
@@ -414,7 +420,7 @@
             this.testCallback('count', filterCriteria);
             return $.Deferred(function(def) {
                _.delay(function() {
-                  def.resolve(_iterateRecords(this.records, filterCriteria, function() {}));
+                  failThis(def, this.hasSync, this) || def.resolve(_iterateRecords(this.records, filterCriteria, function() {}));
                }.bind(this), 10);
             }.bind(this));
          },
@@ -497,12 +503,8 @@
             }
             var rec = this.find(id), data = $.extend({}, rec? rec.getData() : {}, changedData);
             return $.Deferred(function(def) {
-               if( this.failNext ) {
-                  // simulate a failure
-                  _fail(def, this, this.failNext);
-               }
-               else {
-                  if( this.hasTwoWaySync() ) {
+               if( !failThis(def, this.hasSync, this) ) {
+                  if( this.hasSync ) {
                      _.delay(function() { // simulate event returning from server
                         _.each(this.callbacks, function(fx) {
                            fx(action, id, data, prevId);
@@ -644,15 +646,26 @@
       }
    }
 
-   function _fail(def, store, type) {
-      return function() {
-         if( store.twoWaySync ) {
-            _.delay(function() { def.reject(type); }, 50);
-         }
-         else {
-            def.reject(type);
+   function failThis(def, twoWaySync, store) {
+      var failType = store.failNext;
+      store.failNext = null;
+      if( failType ) {
+         switch(failType) {
+            case 'reject':
+               if( twoWaySync ) {
+                  _.delay(function() { def.reject(failType); }, 50);
+               }
+               else {
+                  def.reject(failType);
+               }
+               break;
+            case 'timeout':
+               break;
+            default:
+               throw new Error('invalid fail type '+failType);
          }
       }
+      return failType? true : false;
    }
 
    function _copyRecords(model, recs) {
@@ -673,12 +686,20 @@
       return pos;
    }
 
-   function sortRecords(recs, comparator) {
-      _.sortBy(recs, comparator);
+   function indexForNewRecord(recs, recToInsert, comparator) {
+      var pos = recs.length;
+      _.find(recs, function(rec, i) {
+         if( comparator(recToInsert, rec) < 0 ) {
+            pos = i;
+            return true;
+         }
+         return false;
+      });
+      return pos;
    }
 
-   function prevId(recs, pos) {
-      return pos === 0? null : recs[pos].hashKey();
+   function getPrevId(recs, pos) {
+      return pos === 0? null : recs[pos-1].hashKey();
    }
 
    //todo make these work with exports/et al

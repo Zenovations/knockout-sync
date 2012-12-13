@@ -90,31 +90,30 @@
 
    ko.sync.SyncController.prototype.queue = function(props) {
       if( !this.disposed ) {
-         var change = newChange(this.con, this.model, this.keyFactory, this.target, props, this.rec);
-         console.log('queue', change.key()); //debug
+         var change = props instanceof ko.sync.Change? props : newChange(this.con, this.model, this.keyFactory, this.target, props, this.rec);
          if( !this.filter.clear(change) ) {
-            console.log('queued'); //debug
             this.con.addChange(change);
             this.auto && this.pushUpdates();
+         }
+         else if( change.to === 'obs' && change.action === 'create' && change.prevId ) {
+            // when we get records back from the store, the position may be altered, so sync it
+            //todo is this right? it feels... hokey
+            change.action = 'move';
+            if( !this.filter.clear(change) ) {
+               this.con.addChange(change);
+               this.auto && this.pushUpdates();
+            }
          }
       }
    };
 
    ko.sync.SyncController.prototype.pushUpdates = function() {
-      console.log('pushUpdates?'); //debug
       if( this.disposed ) {
          return $.Deferred().reject(new Error('SyncController has been disposed'));
       }
       else {
-         console.log('pushUpdates'); //debug
          return this.con.process()
-            .done(function() { console.log('pushUpdates completed'); })//debug
-            .fail(function(possiblyUnresolvedPromises) {
-               //todo what do we do about failures?
-               //todo
-               //todo
-               //todo
-            });
+               .fail(handlePushFailures(this));
       }
    };
 
@@ -125,13 +124,12 @@
    function syncList(sync, model, criteria) {
       var target = sync.target;
       if( criteria && !sync.twoway ) {
-      console.log('here'); //debug
          // a one time query to get the data down
          sync.deferred = sync.deferred.pipe(function() {
             console.log('_syncList', criteria);
             var prevId = 0;
             return model.store.query(model, function(data, key) {
-               sync.filter.expect({action: 'create', to: 'obs', key: key, prevId: prevId, data: data});
+               sync.filter.expect({action: 'create', to: 'store', key: key, prevId: prevId, data: data});
                prevId = key;
                target.push(model.newRecord(data).applyData());
                //todo-sort
@@ -150,7 +148,6 @@
       var model  = sync.model;
       if( typeof(criteria) === 'string' ) {
          // load a record from the server
-         console.log('sync record from id'); //debug
          if( sync.twoway ) {
             sync.rec = sync.model.newRecord(criteria);
          }
@@ -223,7 +220,6 @@
 
    function _watchStoreRecord(sync) {
       var model = sync.model, store = model.store, rec = sync.rec;
-      console.log('_watchStoreRecord', rec.hashKey()); //debug
       return store.watchRecord(model, rec, function(id, val, sortPriority) {
           sync.queue({action: 'update', rec: rec, data: val, priority: sortPriority, to: 'obs'});
       });
@@ -232,48 +228,43 @@
    function _watchObsArray(sync, target) {
       return target.watchChanges(sync.keyFactory, sync.model.observedFields(), {
          add: function(key, data, prevId) {
-            console.log('watchObsArray::add', key, prevId, data); //debug
             sync.queue({action: 'add', key: key, prevId: prevId, data: data, to: 'store'});
          },
          update: function(key, data) {
-            console.log('watchObsArray::update', key, data); //debug
             sync.queue({action: 'update', key: key, data: data, to: 'store'});
          },
          move: function(key, data, prevId) {
-            console.log('watchObsArray::move', key, prevId, data); //debug
             sync.queue({action: 'move', key: key, prevId: prevId, to: 'store'});
          },
          delete: function(key) {
-            console.log('watchObsArray::delete', key); //debug
             sync.queue({action: 'delete', key: key, to: 'store'});
          }
       });
    }
 
    function _watchObs(sync, target) {
-      console.log('_watchObs', sync.rec && sync.rec.hashKey()); //debug
       return target.watchChanges(sync.model.observedFields(), function(data) {
-         console.log('_watchObs::updated', data);//debug
          sync.queue({action: 'update', data: data, to: 'store'});
       });
    }
 
    function _watchData(sync, data) {
-      console.log('_watchData', data && data.id); //debug
       return ko.sync.watchFields(data, sync.model.observedFields(), function(data) {
-         console.log('_watchData::updated', data); //debug
          sync.queue({action: 'update', data: data, to: 'store'});
       });
    }
 
    function watchController(subs, filter, controller) {
-      subs.push(controller.observe(function(state, change) {
+      subs.push(controller.observe(function(state, change, msg) {
          switch(state) {
             case 'started':
                // adds the expected feedback loops at the time that the change is invoked
                filter.expect(change);
                break;
             case 'failed':
+               console.warn(change+' failed', msg);
+               filter.clear(change);
+               break;
             case 'completed':
                // nothing to do
                break;
@@ -306,19 +297,18 @@
          }
          else {
             data.rec = model.newRecord();
-            if( queueEntry.key ) {
+            if( queueEntry.key && ko.sync.isObservableArray(target) ) {
                var o = target()[ko.sync.findByKey(target, keyFactory, queueEntry.key)];
                if( o ) {
                   data.rec.updateAll(o);
-               }
-               if( data.action !== 'create' && !data.rec.hasKey() ) {
-                  data.rec.updateHashKey(queueEntry.key);
                }
             }
          }
       }
       queueEntry.data && data.rec.updateAll(queueEntry.data);
-
+      if( !data.rec.hasKey() && data.action === 'delete' && queueEntry.key ) {
+         data.rec.updateHashKey(queueEntry.key);
+      }
       var change = new ko.sync.Change(data);
 
       if( change.to === 'store' && ko.sync.RecordId.isTempId(change.key()) && !con.findChange(change.key()) ) {
@@ -335,5 +325,30 @@
       return change;
    }
 
+   function handlePushFailures(sync) {
+      var MAX_RETRIES = ko.sync.SyncController.MAX_RETRIES;
+      return function(changes) {
+         //todo should SyncController be retrying? should that be a higher level decision?
+         //todo the automation is nice but maybe SyncController doesn't have context for this?
+         var count = 0, givenUp = [];
+         _.each(changes, function(changeResult) {
+            var change = changeResult.change;
+            if(changeResult.state === 'rejected') {
+               count++;
+               change.retries++;
+               if( change.retries > MAX_RETRIES ) {
+                  givenUp.push(change.toString());
+               }
+               else {
+                  sync.queue(change);
+               }
+            }
+         });
+         var countGivenUp = givenUp.length;
+         console.warn('pushUpdates had '+(count)+' failures, requeueing '+(count-countGivenUp)+', giving up on '+countGivenUp);
+      }
+   }
+
+   ko.sync.SyncController.MAX_RETRIES = 3;
 
 })(jQuery);

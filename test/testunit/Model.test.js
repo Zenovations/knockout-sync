@@ -102,6 +102,36 @@
       deepEqual(fields, exp);
    });
 
+   test('#getComparator', function() {
+      var comp = TestData.model().getComparator();
+      var rec1a = _fakeComparable(1);
+      var rec1b = _fakeComparable(1);
+      var rec2 = _fakeComparable(2);
+      var recNulla = _fakeComparable(null);
+      var recNullb = _fakeComparable(null);
+      var recAlpha = _fakeComparable('Alpha');
+      var recBravo = _fakeComparable('Bravo');
+      var recalpha = _fakeComparable('alpha');
+      var recempty = _fakeComparable('');
+
+      strictEqual(comp(rec1a, rec1b), -1, rec1a+'/'+rec1b);
+      strictEqual(comp(rec1b, rec1a), 1, rec1b+'/'+rec1a);
+      strictEqual(comp(rec1b, rec2), -1, rec1b+'/'+rec2);
+      strictEqual(comp(rec2, rec1a), 1, rec2+'/'+rec1a);
+      strictEqual(comp(rec1a, recNulla), 1, rec1a+'/'+recNulla);
+      strictEqual(comp(recNulla, recNullb), -1, recNulla+'/'+recNullb);
+   });
+
+   var compKeysCount = 1;
+   function _fakeComparable(sort) {
+      var key = 'record-'+(compKeysCount++);
+      return {
+         getSortPriority: function() { return sort; },
+         hashKey: function() { return key; },
+         toString: function() { return key+'::'+(typeof(sort)==='string'? '"'+sort+'"' : sort); }
+      }
+   }
+
    //todo-test data sorting
 
 })(jQuery);

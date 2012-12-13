@@ -231,8 +231,8 @@
       var changedFields = fieldsChanged(a.getData(), b.getData());
       return {
          fields: changedFields,
-         sameKey: a.hashKey() === b.hashKey(),
-         moved: a.getPriority() !== b.getPriority()
+         haveSameKey: a.hashKey() === b.hashKey(),
+         moved: a.getSortPriority() !== b.getSortPriority()
       };
    };
 

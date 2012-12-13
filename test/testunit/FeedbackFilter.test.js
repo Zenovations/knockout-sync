@@ -51,16 +51,6 @@
       deepEqual(result(f.find(data2)), resultInvert(data2), 'data2 in list');
    });
 
-   test('#expectOrClear, in list', function() {
-      var f = makeFilterWithData(), data = eventData();
-      strictEqual(f.expectOrClear(data), false, 'data1 in list');
-   });
-
-   test('#expectOrClear, not in list', function() {
-      var f = makeFilterWithData(), data = eventData({key: 'abcd'});
-      strictEqual(f.expectOrClear(data), true, 'data1 in list');
-   });
-
    /**
     * Intended mainly for test units, this provides a method to retrieve all feedback entries for a given key
     * without accessing the internals of FeedbackFilter.

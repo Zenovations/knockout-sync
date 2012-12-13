@@ -3,6 +3,8 @@
    "use strict";
    var undef, S = ko.sync.RecordId.DEFAULT_SEPARATOR;
 
+   var Record = ko.sync.Record;
+
    var newData = {
       id:             'record456',
       stringOptional: 'string456',
@@ -25,7 +27,7 @@
 
    test("#getRecordId", function() {
       var model = TestData.model(),
-         rec = new ko.sync.Record(model, TestData.genericData()),
+         rec = new Record(model, TestData.genericData()),
          id  = new ko.sync.RecordId(model.key, TestData.genericData());
       ok(id.equals(rec.getRecordId()), 'id ('+id+')should equal what we put in record ('+rec.getRecordId()+')');
    });
@@ -33,11 +35,11 @@
    test("#getSortPriority", function() {
       var data  = TestData.genericData(true, {intRequired: 50}),
           model = TestData.model(),
-          rec   = new ko.sync.Record(model, data);
+          rec   = new Record(model, data);
       strictEqual(rec.getSortPriority(), 50, 'sortPriority set correctly');
 
       model = new ko.sync.Model(TestData.model({sort: null}));
-      rec   = new ko.sync.Record(model, data);
+      rec   = new Record(model, data);
       strictEqual(rec.getSortPriority(), false, 'sort priority not set');
    });
 
@@ -85,7 +87,7 @@
       var model = TestData.model(),
          defaults = TestData.defaults(model),
          genericData = TestData.fullData(),
-         emptyRec = new ko.sync.Record(model, {});
+         emptyRec = new Record(model, {});
 
       // make sure defaults are used
       // dates should be null in this case
@@ -216,7 +218,7 @@
 
    test('#applyWithObservables, creates observables appropriately', function() {
       expect(4);
-      var res = ko.sync.Record.applyWithObservables({}, {a: 1, b: 2, c: 3, d: 4}, ['b', 'c']);
+      var res = Record.applyWithObservables({}, {a: 1, b: 2, c: 3, d: 4}, ['b', 'c']);
       ok(ko.isObservable(res.b), 'b is observable');
       ok(ko.isObservable(res.c), 'c is observable');
       strictEqual(res.b(), 2, 'b value correct');
@@ -228,7 +230,7 @@
       var target = { one: 1, two: ko.observable(2), three: 3 };
       var data = { two: 22 };
       var observedFields = ['two'];
-      var res = ko.sync.Record.applyWithObservables(target, data, observedFields);
+      var res = Record.applyWithObservables(target, data, observedFields);
       ok(res === target, 'the object was not changed');
       deepEqual(ko.sync.unwrapAll(res), { one: 1, two: 22, three: 3 }, 'values set correctly');
    });
@@ -238,7 +240,7 @@
       var target = {};
       var data = { two: 22 };
       var observedFields = ['two'];
-      var res = ko.sync.Record.applyWithObservables(target, data, observedFields);
+      var res = Record.applyWithObservables(target, data, observedFields);
       ok(res === target, 'the object was not changed');
       deepEqual(ko.sync.unwrapAll(res), { two: 22 }, 'values set correctly');
    });
@@ -248,7 +250,7 @@
       var target = ko.observable({});
       var data = { two: 22, three: 33 };
       var observedFields = ['three'];
-      var res = ko.sync.Record.applyWithObservables(target, data, observedFields);
+      var res = Record.applyWithObservables(target, data, observedFields);
       ok(res === target, 'the object was not changed');
       deepEqual(ko.sync.unwrapAll(res), { two: 22, three: 33 }, 'values set correctly');
    });
@@ -258,7 +260,7 @@
       var target = ko.observable({ one: 1, two: 2, three: ko.observable(3) });
       var data = { two: 22, three: 33 };
       var observedFields = ['two', 'three'];
-      var res = ko.sync.Record.applyWithObservables(target, data, observedFields);
+      var res = Record.applyWithObservables(target, data, observedFields);
       ok(res === target, 'the object was not changed');
       deepEqual(ko.sync.unwrapAll(res), { one: 1, two: 22, three: 33 }, 'values set correctly');
    });
@@ -267,7 +269,18 @@
       expect(3);
       var rec1a = TestData.rec(1);
       var rec1b = TestData.rec(1);
-      var rec2 = TestData.rec(2);
+      rec1b.set('emailOptional', 'not@me.com');
+      var rec2a = TestData.rec(2);
+      var rec2b = TestData.rec(2);
+      rec2b.set('intRequired', 257);
+
+//      deepEqual(Record.compare(rec1a, rec1b), {
+//         haveSameKey: true,
+//         fields: ['emailOptional'],
+//         moved: false
+//      }, rec1a.hashKey()+'/'+rec1b.hashKey());
+//
+//
    });
 
    test("#isValid", function() {
@@ -284,7 +297,7 @@
    function _buildARecord(addData, withId, modelProps) {
       var args = _buildArgs(arguments), data = TestData.genericData(args.unkeyed, args.data);
       //console.log('_buildARecord', addData, withId, modelProps, args, data);
-      return new ko.sync.Record(TestData.model(args.model), data);
+      return new Record(TestData.model(args.model), data);
    }
 
    function _buildArgs(argList) {

@@ -10,20 +10,23 @@
    }
 
    /**
+    * Given an event, such as {to: store, action: delete}, this "expects" the feedback (i.e. the inverse event)
+    * of that event, which in this case would be {to: obs, action: delete}.
+    *
     * @param {Object} x
     * @return {FeedbackFilter} this
     */
    FeedbackFilter.prototype.expect = function(x) {
       //todo make all expected events expire after, say, a minute? two minutes?
+      //todo or maybe when they fail?
       var entry = FeedbackEntry.make(x);
       var set = _.findOrCreate(this.expecting, [], entry.to, entry.action, entry.key);
       var idx = _.findIndex(set, entry);
       if( idx === -1 ) {
-         console.log('expect', entry.to, entry.action, entry.key); //debug
          set.push(entry);
       }
       else {
-         console.warn('tried to add an element already in the expected list (did you mean to call expectOrClear?)', entry.to, entry.action, entry.key);
+         console.warn('tried to add an element already in the expected list (should you call clear() or find() first?)', entry.to, entry.action, entry.key);
       }
       return this;
    };
@@ -34,37 +37,20 @@
     */
    FeedbackFilter.prototype.find = function(x) {
       var entry = FeedbackEntry.make(x);
-      console.log('find', entry.to, entry.action, entry.key); //debug
       var set = _.deepFind(this.expecting, entry.to, entry.action, entry.key);
       var idx = set? _.findIndex(set, entry) : -1;
       return idx > -1? set[idx] : null;
    };
 
    /**
+    * Clears a feedback event from the list, if it exists, and returns true if it was found.
+    *
     * @param {Object} x
-    * @return {FeedbackFilter} this
+    * @return {boolean} true if event was found
     */
    FeedbackFilter.prototype.clear = function(x) {
       var e = FeedbackEntry.make(x);
-      console.log('clear', e.to, e.action, e.key); //debug
       return removeExpected(this.expecting, e);
-   };
-
-   /**
-    * @param {Object} x
-    * @return {boolean} true if the item was added, false if it was cleared
-    */
-   FeedbackFilter.prototype.expectOrClear = function(x) {
-      var e = FeedbackEntry.make(x);
-      console.log('expectOrClear', e.to, e.action, e.key); //debug
-      if( removeExpected(this.expecting, e) ) {
-         this.clear(x);
-         return false;
-      }
-      else {
-         this.expect(e);
-         return true;
-      }
    };
 
    FeedbackFilter.KEYS = ['action', 'to', 'key', 'prevId', 'data'];
@@ -72,18 +58,15 @@
    function removeExpected(expectedCache, entry) {
       var set = _.deepFind(expectedCache, [entry.to, entry.action, entry.key]);
       if( set ) {
-         console.log('set'); //debug
          var originalLength = set.length;
          _.remove(set, entry);
          if( set.length === 0 ) {
             // free memory
             _.deepRemove(expectedCache, entry.key, entry.to, entry.action);
          }
-         console.log('removeExpected', set.length < originalLength, entry); //debug
          return set.length < originalLength;
       }
       else {
-         console.log('notta', expectedCache); //debug
          return false;
       }
    }

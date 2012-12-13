@@ -48,6 +48,7 @@
       this.status  = 'pending';
       this.done    = $.Deferred();
       this.invalidated = false;
+      this.retries = 0; // used by SyncController (see SyncController.js::pushUpdates)
    };
 
    ko.sync.Change.prototype.equals = function(change) {
@@ -148,6 +149,10 @@
 
    ko.sync.Change.prototype.invalidate = function() {
       this.invalidated = true;
+   };
+
+   ko.sync.Change.prototype.toString = function() {
+      return this.key()+'['+this.action+' in '+this.to+']';
    };
 
    function sendToStore(change) {

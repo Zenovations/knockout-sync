@@ -285,7 +285,7 @@
     * @param {ko.observableArray|Array} obsArray
     * @param {ko.sync.KeyFactory} keyFactory
     * @param {string|Object|ko.sync.Record} keyOrData
-    * @param {boolean} ignoreIndex do not use the obsArray index (because we're modifying it right now)
+    * @param {boolean} [ignoreIndex] do not use the obsArray index (because we're modifying it right now)
     * @return {int}
     */
    ko.sync.findByKey = function(obsArray, keyFactory, keyOrData, ignoreIndex) {

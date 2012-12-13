@@ -146,14 +146,14 @@
       var model   = TD.model({auto: false}),
          target  = {},
          sync    = new ko.sync.SyncController(model, target);
-      sync.queue({action: 'delete', key: TD.rec(1).hashKey(), to: 'store'});
+      sync.queue({action: 'create', key: TD.rec(1).hashKey(), to: 'store'});
       sync.pushUpdates()
-         .done(function(promises) {
-            strictEqual(promises.length, 1, 'returns correct number of promises');
-            strictEqual(promises[0].state(), 'resolved', 'promise is resolved');
+         .done(function(changes) {
+            strictEqual(changes.length, 1, 'returns correct number of promises');
+            strictEqual(changes[0].state, 'resolved', 'promise is resolved');
          })
-         .fail(function() {
-            ok(false, 'should resolve');
+         .fail(function(e) {
+            ok(false, e);
          })
          .always(function() {
             start();
@@ -300,7 +300,6 @@
          fx: function(x) {
             key = x.target()[4]._hashKey;
             prevKey = x.target()[1]._hashKey;
-            console.log('starting move'); //debug
             _.move(x.target, 4, 2);
             // delete events are tricky, so give it a bit before we check
             return $.Deferred(function(def) {
@@ -357,7 +356,7 @@
          model: {auto: false},
          recs: TD.recs(5),
          fx: function(x) {
-            movedRec.update('intRequired', 1);
+            movedRec.set('intRequired', 1);
             return x.store.update(x.model, movedRec);
          },
          results: function(x) {
@@ -369,11 +368,87 @@
    });
 
    asyncTest('store: delete', function() {
-      start();
+      var deletedRec = TD.rec(1);
+      syncActivity({
+         criteria: {limit: 2},
+         model: {auto: false},
+         recs: TD.recs(5),
+         fx: function(x) {
+            deletedRec.set('intRequired', 1); // this shouldn't affect anything (merged into the delete)
+            return x.store.delete(x.model, deletedRec);
+         },
+         results: function(x) {
+            deepEqual(x.changes, [
+               _expectedChange({to: 'obs', key: deletedRec.hashKey(), action: 'delete'})
+            ])
+         }
+      })
    });
 
-   asyncTest('handles failures', function() {
-      start();
+   asyncTest('#pushUpdates, handles failures', function() {
+      expect(4);
+      var model   = TD.model({auto: false}),
+         target  = {},
+         sync    = new ko.sync.SyncController(model, target);
+      model.store.failNextCall();
+      sync.queue({action: 'delete', key: TD.rec(1).hashKey(), to: 'store'});
+      sync.pushUpdates()
+         .done(function(promises) {
+            ok(false, 'should reject');
+         })
+         .fail(function(list) {
+            strictEqual(list.length, 1, 'exactly one change reported');
+            var changeResult = list[0];
+            var change = changeResult.change;
+            var key = change.key();
+            strictEqual(changeResult.state, 'rejected', 'change has been rejected');
+            strictEqual(key, 'record-1', 'change has correct ID');
+            ok(change.equals(sync.con.findChange(key)), 'record was requeued');
+         })
+         .always(function() {
+            start();
+         });
+   });
+
+   asyncTest('#pushUpdates, max retries', function() {
+      expect(1);
+      var MAX = 3;
+      var model   = TD.model({auto: false}),
+         target  = {},
+         sync    = new ko.sync.SyncController(model, target);
+      var times = -1; // the first time is not a retry, so we start at -1
+      var def = $.Deferred(), key = TD.rec(2).hashKey();
+      TD.expires(def);
+      sync.queue({action: 'delete', to: 'store', key: key});
+
+      function nextRetry(list) {
+         if( sync.con.findChange(key) ) {
+            times++; // the first time is not a retry, so we start at -1
+            sync.pushUpdates()
+               .done(function() {
+                  def.reject('should not resolve');
+               })
+               .fail(nextRetry);
+         }
+         else if( def.state() === 'pending' ) {
+            def.resolve(times);
+         }
+      }
+      nextRetry();
+
+      def
+         .then(
+            function(x) {
+               strictEqual(times, MAX, 'attempted correct number of times');
+            },
+            function(e) {
+               if( e === 'expired' ) {
+                  e += ' after '+times+' tries';
+               }
+               ok(false, e);
+            }
+         )
+         .always(start);
    });
 
    /**

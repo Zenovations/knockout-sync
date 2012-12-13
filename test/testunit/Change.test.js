@@ -212,6 +212,10 @@
             .always(start);
    });
 
+   asyncTest('#run, timeout', function() {
+      start();
+   });
+
    test('#fromChangeList', function() {
       var rec = TestData.rec(1), afterKey = TestData.rec(4).hashKey(),
           change = ko.sync.Change.fromChangeList(
