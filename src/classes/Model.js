@@ -130,35 +130,53 @@
       return new ko.sync.Record(this.model, data);
    };
 
+   /**
+    * Creates an optimized comparator function based on the sort field's data type
+    *
+    * Children with no priority (a null priority) come first. They are ordered lexicographically by name.
+    * Children with a priority that is parsable as a number come next. They are sorted numerically by priority first (small to large) and lexicographically by name second (A to z).
+    * Children with non-numeric priorities come last. They are sorted lexicographically by priority first and lexicographically by name second.
+    *
+    * @param {ko.sync.Model} model
+    * @return {Function}
+    */
    function comparator(model) {
       var field = model.sort;
-      var type = field && model.fields.type;
+
+      function compareKeys(a, b) {
+         var ka = a.hashKey();
+         var kb = b.hashKey();
+         return ka === kb? 0 : (ka > kb? 1 : -1);
+      }
+
       if( field ) {
          return function(a, b) {
-            return _diff(type, a.get(field), b.get(field));
+            var va = a.get(field);
+            var vb = b.get(field);
+            if( va !== vb ) {
+               if( a === null ) { return -1; }
+               else if( b === null ) { return 1; }
+               var x = parseFloat(va);
+               var y = parseFloat(vb);
+               if( !isNaN(x) ) {
+                  if( isNaN(y) ) { return -1; }
+                  else if( x !== y ) {
+                     return x > y? 1 : -1;
+                  }
+                  // if they are equal falls through and runs compareKeys
+               }
+               else if( !isNaN(y) ) {
+                  return 1;
+               }
+               else {
+                  return va > vb? 1 : -1;
+               }
+            }
+            return compareKeys(a, b);
          }
       }
       else {
-         return function(a, b) {
-            return _diff('string', a.hashKey(), b.hashKey());
-         }
-      }
-   }
-
-   function _diff(type, a, b) {
-      var d;
-      switch(type) {
-         case 'string':
-         case 'email':
-         case 'url':
-            a = a+''.toLowerCase();
-            b = b+''.toLowerCase();
-            return a.localeCompare(b);
-         case 'date':
-            d = moment(a).diff(moment(b));
-            return d === 0? 0 : d > 0? 1 : -1;
-         default:
-            return a == b? 0 : a > b? 1 : -1;
+         return compareKeys;
       }
    }
 
