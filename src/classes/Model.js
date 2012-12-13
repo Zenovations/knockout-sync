@@ -21,6 +21,7 @@
       this.inst       = modelInst++;
       this.fields     = processFields(defaults, props.fields);
       this.factory    = props.recordFactory || new RecordFactory(this);
+      this.comparator = comparator(this);
    };
 
    /**
@@ -69,6 +70,10 @@
       return _.chain(this.fields).map(function(v, k) {
          return v.observe? k : null;
       }).compact().value();
+   };
+
+   ko.sync.Model.prototype.getComparator = function() {
+      return this.comparator;
    };
 
    ko.sync.Model.FIELD_DEFAULTS = {
@@ -124,5 +129,37 @@
       data instanceof ko.sync.Record && (data = data.getData());
       return new ko.sync.Record(this.model, data);
    };
+
+   function comparator(model) {
+      var field = model.sort;
+      var type = field && model.fields.type;
+      if( field ) {
+         return function(a, b) {
+            return _diff(type, a.get(field), b.get(field));
+         }
+      }
+      else {
+         return function(a, b) {
+            return _diff('string', a.hashKey(), b.hashKey());
+         }
+      }
+   }
+
+   function _diff(type, a, b) {
+      var d;
+      switch(type) {
+         case 'string':
+         case 'email':
+         case 'url':
+            a = a+''.toLowerCase();
+            b = b+''.toLowerCase();
+            return a.localeCompare(b);
+         case 'date':
+            d = moment(a).diff(moment(b));
+            return d === 0? 0 : d > 0? 1 : -1;
+         default:
+            return a == b? 0 : a > b? 1 : -1;
+      }
+   }
 
 })(ko);
