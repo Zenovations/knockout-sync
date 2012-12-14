@@ -230,11 +230,11 @@ with `destroy()` and `_destroy` as deleted items are automagically tracked and h
         .then(function(crud) { /* all operations completed and saved */ });
 ```
 
-# Limitations
+# Missing Stuff
 
  - conflicts are not resolved intelligently (yet); if client changes data and server changes same record, the later change wins
- - loading data locally is very tricky (for now); you should always start by using `read()` for lists (excluding simple create operations)
- - updating fields that are part of the record's ids doesn't affect the stored ID (try `updateHashKey()` to accomplish this)
+ - pre-loading data locally is very tricky (for now); you should just start by using `read()` for lists
+ - sorted records aren't handled well on the knockout side yet; needs to remove all the prevId stuff and use sort comparators
  - updating fields that are part of the sort order doesn't affect actual ordering on client until a save occurs (and server tells us the records moved)
  - composite keys are not thoroughly tested and surely have problems (will work on these soon)
  - validation isn't implemented yet (soon, soon)

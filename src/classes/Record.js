@@ -239,7 +239,8 @@
    function fieldsChanged(a, b) {
       var out = [];
       _.each(a, function(v, k) {
-         if( !k in b || b[k] !== v ) {
+         if( !k in b || !_.isEqual(v, b[k]) ) {
+            console.log('field changed', k, v, b[k]); //debug
             out.push(k);
          }
       });

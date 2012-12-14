@@ -266,21 +266,35 @@
    });
 
    test('#compare', function() {
-      expect(3);
-      var rec1a = TestData.rec(1);
-      var rec1b = TestData.rec(1);
-      rec1b.set('emailOptional', 'not@me.com');
-      var rec2a = TestData.rec(2);
-      var rec2b = TestData.rec(2);
+      expect(4);
+      var date = moment();
+      var rec1a = TestData.rec(1, {dateRequired: date});
+      var rec1b = TestData.rec(1, {dateRequired: date});
+      var rec2a = TestData.rec(2, {dateRequired: date});
+      var rec2b = TestData.rec(2, {dateRequired: date});
       rec2b.set('intRequired', 257);
 
-//      deepEqual(Record.compare(rec1a, rec1b), {
-//         haveSameKey: true,
-//         fields: ['emailOptional'],
-//         moved: false
-//      }, rec1a.hashKey()+'/'+rec1b.hashKey());
-//
-//
+      deepEqual(Record.compare(rec1a, rec1a), {
+         haveSameKey: true,
+         fields: [],
+         moved: false
+      });
+
+      rec1b.set('emailOptional', 'not@me.com');
+      deepEqual(Record.compare(rec1a, rec1b), {
+         haveSameKey: true,
+         fields: ['emailOptional'],
+         moved: false
+      }, rec1a.hashKey()+'/'+rec1b.hashKey());
+
+      deepEqual(Record.compare(rec2a, rec2b), {
+         haveSameKey: true,
+         fields: ['intRequired'],
+         moved: true
+      }, rec1a.hashKey()+'/'+rec1b.hashKey());
+
+      strictEqual(Record.compare(rec1a, rec2a).haveSameKey, false, 'diff records haveSameKey is false');
+
    });
 
    test("#isValid", function() {
