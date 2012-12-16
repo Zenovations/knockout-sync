@@ -74,7 +74,7 @@
          data = RecordId.parse(record, model.key);
       }
       else {
-         data = record instanceof ko.sync.Record? record.getData() : record;
+         data = record instanceof ko.sync.Record? record.getData() : ko.sync.unwrapAll(record);
       }
       return new RecordId(model.key, data);
    };

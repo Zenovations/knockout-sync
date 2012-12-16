@@ -8,12 +8,19 @@
    var undefined;
 
    /**
+    * The opts object can contain:
+    *    {ko.sync.Model} model (required)
+    *    {String|Object} criteria (optional)
+    *
     * @param {Object|ko.observable|ko.observableArray} target
-    * @param {ko.sync.Model} model
-    * @param {Object|String} [criteria]
+    * @param {ko.sync.Model|Array} opts
     */
-   ko.extenders.crud = function(target, model, criteria) {
-      model.sync(target, criteria);
+   ko.extenders.crud = function(target, opts) {
+      if( opts instanceof ko.sync.Model ) {
+         opts = [opts];
+      }
+      opts[0].sync(target, opts[1]);
+      return target;
    };
 
    /**
@@ -120,7 +127,7 @@
    function watchFields(data, observedFields, callback) {
       var disposables = [];
       _.each(observedFields, function(k) {
-         if( _.has(data, k) && ko.isObservable(data[k]) ) {
+         if( _.has(data, k) && data[k] && ko.isObservable(data[k]) ) {
             disposables.push(watchField(k, data[k], callback));
          }
       });

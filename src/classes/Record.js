@@ -165,7 +165,7 @@
 
    /**
     *
-    * @param target
+    * @param {ko.observable|Object} [target]
     * @return {*}
     */
    ko.sync.Record.prototype.applyData = function(target) {
@@ -322,10 +322,10 @@
    function applyUpdates(rec, newVals) {
       var changed = [], idFields = rec.id.fields, idChanged;
 
-      var data = (newVals instanceof ko.sync.Record)? newVals.getData(true) : newVals;
+      var data = (newVals instanceof ko.sync.Record)? newVals.getData(true) : ko.sync.unwrapAll(newVals);
       _.each(data, function(v,k) {
          if( _.has(rec.data, k) ) {
-            var newVal = ko.utils.unwrapObservable(data[k]);
+            var newVal = data[k];
             if( setWithoutNotice(rec, k, newVal) ) {
                if(_.contains(idFields, k)) { idChanged = true; }
                changed.push(k);

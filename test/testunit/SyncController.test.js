@@ -451,6 +451,22 @@
          .always(start);
    });
 
+   asyncTest('#read', function() {
+      start();
+   });
+
+   asyncTest('#read, bad id', function() {
+      start();
+   });
+
+   asyncTest('#read, list', function() {
+      start();
+   });
+
+   asyncTest('#read, emtpy list', function() {
+      start();
+   });
+
    /**
     * Create a SyncController and run some tests on it, then evaluate results. Sets a timeout for tests which are overdue.
     *

@@ -89,11 +89,14 @@
    };
 
    ko.sync.SyncController.prototype.queue = function(props) {
+      var def = this.ready(), auto = props.push || this.auto;
       if( !this.disposed ) {
          var change = props instanceof ko.sync.Change? props : newChange(this.con, this.model, this.keyFactory, this.target, props, this.rec);
          if( !this.filter.clear(change) ) {
             this.con.addChange(change);
-            this.auto && this.pushUpdates();
+            if( auto ) {
+               def = this.pushUpdates();
+            }
          }
          else if( change.to === 'obs' && change.action === 'create' && change.prevId ) {
             // when we get records back from the store, the position may be altered, so sync it
@@ -101,10 +104,13 @@
             change.action = 'move';
             if( !this.filter.clear(change) ) {
                this.con.addChange(change);
-               this.auto && this.pushUpdates();
+               if( auto ) {
+                  def = this.pushUpdates();
+               }
             }
          }
       }
+      return def;
    };
 
    ko.sync.SyncController.prototype.pushUpdates = function() {
@@ -117,6 +123,15 @@
       }
    };
 
+   ko.sync.SyncController.prototype.read  = function(criteria) {
+      if( this.isList ){
+         return readList(this, this.model, this.target, criteria);
+      }
+      else {
+         return readRecord(this, this.model, this.target, criteria);
+      }
+   };
+
    ko.sync.SyncController.prototype.ready = function() {
       return this.deferred.promise();
    };
@@ -124,20 +139,11 @@
    function syncList(sync, model, criteria) {
       var target = sync.target;
       if( criteria && !sync.twoway ) {
-         // a one time query to get the data down
-         sync.deferred = sync.deferred.pipe(function() {
-            console.log('_syncList', criteria);
-            var prevId = 0;
-            return model.store.query(model, function(data, key) {
-               sync.filter.expect({action: 'create', to: 'store', key: key, prevId: prevId, data: data});
-               prevId = key;
-               target.push(model.newRecord(data).applyData());
-               //todo-sort
-            }, criteria);
-         });
+         sync.deferred = readList(sync, model, target, criteria);
       }
 
-      sync.deferred.then(function() {
+      //todo always isn't really the best choice, need some error handling
+      sync.deferred.always(function() {
          sync.twoway && sync.subs.push(_watchStoreList(sync, criteria));
          sync.subs.push(_watchObsArray(sync, target));
       });
@@ -152,15 +158,7 @@
             sync.rec = sync.model.newRecord(criteria);
          }
          else {
-            // a static, one time read
-            sync.deferred = sync.deferred.pipe(function() {
-               return model.store
-                  .read(model, ko.sync.RecordId.for(model, criteria))
-                  .then(function(rec) {
-                     sync.rec = rec;
-                     rec.applyData(target);
-                  });
-            });
+            sync.deferred = readRecord(sync, model, target, criteria);
          }
       }
       else if( criteria instanceof ko.sync.Record ) {
@@ -177,10 +175,14 @@
       else {
          // create an empty record
          sync.rec = model.newRecord();
+         sync.rec.onKey(function(id) { //debug
+            console.log('id', id); //debug
+         }); //debug
          sync.rec.applyData(target);
       }
 
-      sync.deferred.then(function() {
+      //todo always isn't the best answer; need some error handling
+      sync.deferred.always(function() {
          // wait for any record loading as necessary
          if( sync.twoway ) {
             if( sync.rec.hasKey() ) {
@@ -220,6 +222,7 @@
 
    function _watchStoreRecord(sync) {
       var model = sync.model, store = model.store, rec = sync.rec;
+      console.log('_watchStoreRecord', rec.hashKey()); //debug
       return store.watchRecord(model, rec, function(id, val, sortPriority) {
           sync.queue({action: 'update', rec: rec, data: val, priority: sortPriority, to: 'obs'});
       });
@@ -290,6 +293,11 @@
 
    function newChange(con, model, keyFactory, target, queueEntry, rec) {
       //todo this is an unreadable mess :(
+      //todo and it doesn't work very well because it's too complex
+      //todo
+      //todo
+      //todo
+      //todo
       var data = _.extend(_.pick(queueEntry, ['to', 'action', 'prevId', 'data', 'rec']), {model: model, obs: target});
       if( !data.rec ) {
          if( rec ) {
@@ -347,6 +355,37 @@
          var countGivenUp = givenUp.length;
          console.warn('pushUpdates had '+(count)+' failures, requeueing '+(count-countGivenUp)+', giving up on '+countGivenUp);
       }
+   }
+
+   function readList(sync, model, target, criteria) {
+      // a one time query to get the data down
+      return sync.deferred.pipe(function() {
+         return $.Deferred(function(def) {
+            console.log('_syncList', criteria);
+            var prevId = 0;
+            model.store.query(model, function(data, key) {
+               sync.filter.expect({action: 'create', to: 'store', key: key, prevId: prevId, data: data});
+               prevId = key;
+               target.push(model.newRecord(data).applyData());
+               //todo-sort
+            }, criteria).always(def.resolve);
+         });
+      });
+   }
+
+   function readRecord(sync, model, target, criteria) {
+      // a static, one time read
+      return sync.deferred.pipe(function() {
+         return $.Deferred(function(def) {
+            model.store
+                  .read(model, ko.sync.RecordId.for(model, criteria))
+                  .then(function(rec) {
+                     sync.rec = rec;
+                     rec.applyData(target);
+                  })
+                  .always(def.resolve);
+         });
+      });
    }
 
    ko.sync.SyncController.MAX_RETRIES = 3;

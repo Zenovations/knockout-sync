@@ -1,46 +1,49 @@
 (function($) {
    "use strict";
 
-   var undef, Crud = ko.sync.Crud, TestData = ko.sync.TestData;
+   var Crud = ko.sync.Crud, TD = ko.sync.TestData;
 
    module('Crud');
 
-   test('#isDirty', function() {
-      expect(2);
-      var model = _model({auto: false});
-      var view = {data: TestData.genericData()};
-      model.sync(view);
-      view.data.intOptional(5);
-      strictEqual(view.crud.isDirty(), true, 'is dirty after update');
-      view.crud.record.isDirty(false);
-      strictEqual(view.crud.isDirty(), false, 'not dirty after record cleared');
-   });
-
    asyncTest('#create', function() {
-      expect(1);
-      var model = _model({auto: false}, _callback);
-      var view  = {data: TestData.rec(5).getData()};
-      var events = [];
+      expect(2);
+      var model = TD.model({auto: false});
+      var rec   = TD.tempRec();
+      var view  = {data: rec.getData(true)};
 
       model.sync(view);
       var def = view.crud.create().promise();
-      TestData.expires(def); // timeout
+      TD.expires(def); // timeout
 
       def.then(function() {
-            deepEqual(model.store.eventsFiltered(), [
-               ['create', view.data.id]
-            ]);
+            var events = model.store.eventsFiltered();
+            strictEqual(events.length, 1, 'created one event');
+            strictEqual(events[0][0], 'create', 'it was a create event');
          })
          .fail(function(e) { ok(false, e); })
          .always(start);
    });
 
-   test('#read', function() {
-      //todo-test
+   asyncTest('#read', function() {
+      var model = TD.model({}, true, TD.recs(5));
+      var obs = ko.observable().extend({crud: model});
+      obs.crud.read('record-2').promise().then(function() {
+         deepEqual(TD.forCompare(obs), TD.forCompare(2));
+         start();
+      })
    });
 
-   test('#update', function() {
-      //todo-test
+   asyncTest('#update', function() {
+      expect(2);
+      var model = TD.model({}, true, TD.recs(5));
+      var rec = TD.rec(2);
+      var obs = ko.observable().extend({crud: [model, 'record-2']});
+      deepEqual(TD.forCompare(obs), TD.forCompare(rec.getData()), 'begins with correct values');
+      obs.crud.update({intOptional: 11}).promise().then(function() {
+         var expData = TD.forCompare(_.extend(rec.getData(), {intOptional: 11}));
+         deepEqual(TD.forCompare(obs), expData, 'ends with correct values');
+         start();
+      })
    });
 
    test('#delete', function() {
@@ -63,19 +66,9 @@
       //todo-test
    });
 
-   /**
-    * @param {Function} [fx]
-    * @param {Object} [moreOpts]
-    * @return {ko.sync.Model}
-    * @private
-    */
-   function _model(moreOpts, fx) {
-      if(_.isFunction(moreOpts) ) {
-         fx = moreOpts;
-         moreOpts = {};
-      }
-      return TestData.model(moreOpts);
-   }
+   test('Store.LAST', function() {
+      //todo-test
+   });
 
 })(jQuery);
 

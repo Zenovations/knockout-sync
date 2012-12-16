@@ -84,12 +84,14 @@
 
    /**
     * Ensures dates are converted to compatible formats for comparison
-    * @param {object} data
+    * @param {Object|int} data
     * @param {ko.sync.Model} [model]
     * @return {object}
     */
    exports.forCompare = function(data, model) {
-      var out = $.extend({}, data), fields = _.keys((model||exports.model()).fields);
+      model || (model = exports.model());
+      if( typeof(data) === 'number' ) { data = exports.dat(data); }
+      var out = $.extend({}, exports.defaults(model), ko.sync.unwrapAll(data)), fields = _.keys(model.fields);
       if( 'dateOptional' in out && out.dateOptional ) {
          out.dateOptional = moment.utc(out.dateOptional).format();
       }
@@ -97,7 +99,7 @@
          out.dateRequired = moment.utc(out.dateRequired).format();
       }
       // using pick here essentially sorts the values and ensures ordering is consistent
-      return _.pick(ko.sync.unwrapAll(out), fields);
+      return _.pick(out, fields);
    };
 
    exports.defaults = function(model) {
@@ -322,7 +324,7 @@
          create: function(model, record) {
             this.testCallback('create', record.hashKey());
             var newPos = indexForNewRecord(this.records, record, model.getComparator());
-            var newId = record.hasKey()? record.hashKey() : 'record-'+this.records.length;
+            var newId = record.hasKey()? record.hashKey() : 'record-'+(this.records.length+1);
             var prevId = getPrevId(this.records, newPos);
             this.failNext || this.records.splice(newPos, 0, record);
             return this.fakeNotify('added', newId, record.getData(), prevId);

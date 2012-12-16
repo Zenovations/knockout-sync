@@ -25,7 +25,7 @@
 
    /**
     * @param {ko.observableArray|object} target an observable array we'll store a list of records in or an object to sync to a single record
-    * @param {object} [criteria] only used for observableArray to tell it which table records to monitor/sync
+    * @param {Object|string} [criteria] for a record this is a (string)id, for a list this is (object)criteria
     * @return {ko.sync.Model} this
     */
    ko.sync.Model.prototype.sync = function(target, criteria) {
@@ -33,28 +33,23 @@
          target.crud = new ko.sync.CrudArray(target, this, criteria);
       }
       else {
-         target.crud = new ko.sync.Crud(target, this);
+         target.crud = new ko.sync.Crud(target, this, criteria);
       }
-      return this;
+      return target;
    };
 
    /**
+    * This is not intended for use outside of the knockout-sync module.
+    *
     * @param {Object|String} [data]
     * @return {ko.sync.Record}
+    * @protected
     */
    ko.sync.Model.prototype.newRecord = function(data) {
       if( typeof(data) === 'string' ) {
          data = ko.sync.RecordId.parse(data, this.key);
       }
       return this.factory.create(data);
-   };
-
-   /**
-    * @param {Array} [recs]
-    * @return {ko.sync.RecordList}
-    */
-   ko.sync.Model.prototype.newList = function( recs ) {
-      return new ko.sync.RecordList(this, recs);
    };
 
    ko.sync.Model.prototype.toString = function() {

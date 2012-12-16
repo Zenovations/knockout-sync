@@ -17,14 +17,6 @@
    var CrudArray = ko.sync.CrudArray;
 
    /**
-    * @param {boolean} [b] set the isDirty value (use with care!)
-    * @return {boolean}
-    */
-   CrudArray.prototype.isDirty = function(b) {
-      return this.list.isDirty(b); //todo this boolean does nothing for RecordList
-   };
-
-   /**
     * Add a new record to the local list and sync it to the data layer (during the next call
     * to `update()` if auto-update is false)
     *

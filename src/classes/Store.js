@@ -71,8 +71,8 @@
        *
        * - limit:   {int=100}         number of records to return, use 0 for all
        * - offset:  {int=0}           exclusive starting point in records, e.g.: {limit: 100, offset: 100} would return records 101-200 (the first record is 1 not 0)
-       * - start:   {int=0}           using the sort's integer values, this will start us at record matching this sort value
-       * - end:     {int=-1}          using the sort's integer values, this will end us at record matching this sort value
+       * - start:   {int}             using the sort's integer values, this will start us at record matching this sort value, use null for first record
+       * - end:     {int}             using the sort's integer values, this will end us at record matching this sort value, use null for last record
        * - where:   {function|object} filter rows using this function or value map
        *
        * Start/end are more useful with sorted records (and faster). Limit/offset are slower but can be used with
@@ -81,8 +81,9 @@
        *
        * USE OF WHERE
        * -------------
-       * If `where` is a function, it is always applied after the results are returned. Thus, when used in conjunction
-       * with `limit`, the server may still need to retrieve all records before applying limit.
+       * If `where` is a function, it is ALWAYS applied after the results are returned. Thus, when used in conjunction
+       * with `limit`, the server may still need to retrieve all records before applying limit. The function
+       * has the signature: function( {Object}data, {String}hashKey )
        *
        * If `where` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
        * the store. For SQL-like databases, it may be part of the query. For data stores like Firebase, or
@@ -109,6 +110,21 @@
        *
        * Alternately, very sophisticated queries could be done external to the knockout-sync module and then
        * injected into the synced data after.
+       *
+       * EXAMPLES:
+       * ---------
+       *
+       * Fetch users where sort field is a lower-cased name. Start with Fred and end with Wilma. Retrieve 200 at max:
+       * <code>store.query(model, fx, { start: 'fred', end: 'wilma', limit: 100 });</code>
+       *
+       * Retrieve page 3 of user records in groups of 25:
+       * <code>store.query(model, fx, { offset: 75, limit: 25 });</code>
+       *
+       * Retrieve all records with first name 'Fred' and last name 'Smith':
+       * <code>store.query(model, fx, {where: {first: 'Fred', last: 'Smith'}});
+       *
+       * Retrieve all records with an even "widget" value:
+       * <code>store.query(model, fx, {where: function(data, key) { return data.widget % 2 === 0; }});
        *
        * @param {Function} iterator
        * @param {ko.sync.Model}  model
