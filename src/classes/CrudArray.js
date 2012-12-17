@@ -8,7 +8,7 @@
     */
    ko.sync.CrudArray = function(target, model, criteria) {
       //todo what do we do with lists that are already populated? SyncController will expect the sync op to populate data
-      this.list = model.newList(target());
+      this.list = new ko.sync.RecordList(model, target());
       this.parent = target;
       this.def = $.Deferred().resolve().promise();
       this.controller = new ko.sync.SyncController(model, target, this.list, criteria);
@@ -25,11 +25,11 @@
     * @return {ko.sync.CrudArray} this
     */
    CrudArray.prototype.create = function( recordOrData, afterRecordId ) {
-      this.def = this.def.pipe(_.bind(function() {
+      this.def = this.def.pipe(function() {
          var rec = (recordOrData instanceof ko.sync.Record)? recordOrData : this.model.newRecord(recordOrData);
          this.list.add(rec, afterRecordId);
          return this;
-      }, this));
+      }.bind(this));
       return this;
    };
 
@@ -40,13 +40,13 @@
     * @return {ko.sync.CrudArray} this
     */
    CrudArray.prototype.read = function( criteria ) {
-      this.def = this.def.pipe(_.bind(function() {
+      this.def = this.def.pipe(function() {
 
          //todo
          //todo
          //todo
 
-      }, this));
+      }.bind(this));
       return this;
    };
 
@@ -73,10 +73,10 @@
     * @return {ko.sync.CrudArray} this
     */
    CrudArray.prototype.delete = function( hashKey ) {
-      this.def = this.def.pipe(_.bind(function() {
+      this.def = this.def.pipe(function() {
          this.list.remove(hashKey);
          return this;
-      }, this));
+      }.bind(this));
       return this;
    };
 

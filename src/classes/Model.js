@@ -119,7 +119,7 @@
       this.model = model;
    }
    RecordFactory.prototype.create = function(data) {
-      data = ko.utils.unwrapObservable(data);
+      data = ko.sync.unwrapAll(data);
       data instanceof ko.sync.Record && (data = data.getData());
       return new ko.sync.Record(this.model, data);
    };

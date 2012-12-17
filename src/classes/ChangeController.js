@@ -102,6 +102,14 @@
       };
    };
 
+   /**
+    * True if there are any changes waiting for process() to be called
+    * @return {boolean}
+    */
+   ko.sync.ChangeController.prototype.hasChanges = function() {
+      return this.changes.length > 0;
+   };
+
    var INVERT_ACTIONS = {
       'create': 'added',
       'update': 'updated',

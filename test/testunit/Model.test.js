@@ -25,29 +25,6 @@
       deepEqual(rec.getData(), data, 'record has proper defaults');
    });
 
-   test("#newList (with loaded data)", function() {
-      expect(2);
-      var model         = TestData.model(),
-            baseData    = TestData.recs(5, {astring: 'hello world'}),
-            list        = model.newList(baseData),
-            compareData = [], actualData = [];
-      _.each(baseData, function(v) {
-         var data = v.getData();
-         actualData.push(TestData.forCompare(data));
-         compareData.push(TestData.forCompare(TestData.fullData(data)));
-      });
-      ok(list instanceof ko.sync.RecordList, 'is a RecordList object');
-      deepEqual(actualData, compareData, 'create record has all fields set');
-   });
-
-   test("#newList (empty)", function() {
-      expect(2);
-      var model         = TestData.model(),
-            list        = model.newList();
-      ok(list instanceof ko.sync.RecordList, 'is a RecordList object');
-      strictEqual(ko.sync.RecordList.ids(list).length, 0, 'list has no data');
-   });
-
    test("#sync, observable (empty)", function() {
       expect(2);
       var obs = ko.observable();

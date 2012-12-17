@@ -8,6 +8,7 @@
    var genericModelProps = {
       table: 'TableKeyed',
       key: 'id',
+      auto: true,
       fields: {
          id:             { required: true,  observe: false, type: 'string' },
          stringOptional: { required: false, observe: true,  type: 'string' },
@@ -84,13 +85,15 @@
 
    /**
     * Ensures dates are converted to compatible formats for comparison
-    * @param {Object|int} data
+    * @param {Object|int|ko.sync.Record} data
     * @param {ko.sync.Model} [model]
     * @return {object}
     */
    exports.forCompare = function(data, model) {
+      if( !data ) { return data; }
       model || (model = exports.model());
       if( typeof(data) === 'number' ) { data = exports.dat(data); }
+      else if( data instanceof ko.sync.Record ) { data = data.getData(true); }
       var out = $.extend({}, exports.defaults(model), ko.sync.unwrapAll(data)), fields = _.keys(model.fields);
       if( 'dateOptional' in out && out.dateOptional ) {
          out.dateOptional = moment.utc(out.dateOptional).format();
@@ -284,6 +287,29 @@
       return $.Deferred(function(def) {
          _.delay(def.resolve, timeout);
       });
+   };
+
+   /**
+    * @param {Array|ko.observableArray|ko.sync.RecordList} list
+    * @param {ko.sync.Model} [model]
+    * @return {Array}
+    */
+   exports.keys = function(list, model) {
+      var keyGen = new ko.sync.KeyFactory(model || exports.model(), true);
+      list = ko.utils.unwrapObservable(list); // in case it's an observableArray
+      if( list instanceof ko.sync.RecordList ) {
+         var keys = [];
+         var it = list.iterator();
+         while(it.next()) {
+            keys.push(it.hash());
+         }
+         return keys;
+      }
+      else  {
+         return _.map(list, function(rec) {
+            return rec instanceof ko.sync.Record? rec.hashKey() : keyGen.make(rec);
+         })
+      }
    };
 
 

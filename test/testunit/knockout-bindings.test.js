@@ -5,6 +5,40 @@
 
    module("knockout bindings");
 
+   test('ko.extenders.crud, observable', function() {
+      var obs = ko.observable().extend({crud: TD.model()});
+      ok(ko.isObservable(obs), 'is an observable');
+      ok(obs.crud instanceof ko.sync.Crud, 'adds a Crud instance');
+   });
+
+   asyncTest('ko.extenders.crud, observable with id', function() {
+      var obs = ko.observable().extend({crud: [TD.model({}, true, TD.recs(5)), 'record-1']});
+      TD.expires(obs.crud.def);
+      obs.crud.promise()
+            .done(function() {
+               strictEqual(obs().id, 'record-1', 'loaded record-1');
+            })
+            .fail(function(e) { ok(false, e); })
+            .always(start);
+   });
+
+   test('ko.extenders.crud, observableArray', function() {
+      var obs = ko.observableArray().extend({crud: TD.model()});
+      ok(ko.sync.isObservableArray(obs), 'is an observableArray');
+      ok(obs.crud instanceof ko.sync.CrudArray, 'adds a CrudArray instance');
+   });
+
+   asyncTest('ko.extenders.crud, observableArray with criteria', function() {
+      var obs = ko.observableArray().extend({crud: [TD.model({}, true, TD.recs(5)), {limit: 3}]});
+      TD.expires(obs.crud.def);
+      obs.crud.promise()
+            .done(function() {
+               deepEqual(_.map(ko.sync.unwrapAll(obs), function(v) { return v.id; }), ['record-1', 'record-2', 'record-3'], 'loads correct records');
+            })
+            .fail(function(e) { ok(false, e); })
+            .always(start);
+   });
+
    asyncTest('observableArray.watchChanges, add', function() {
       var obs = ko.observableArray();
       var events = [];

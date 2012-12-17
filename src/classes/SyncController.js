@@ -34,6 +34,7 @@
    ko.sync.SyncController = function(model, target, criteria) {
       this.subs       = [];   // subscriptions to everything SyncController is monitoring
       this.deferred   = $.Deferred().resolve(); // used to determine when record(s) completely loaded
+      this.pushQueue  = {current: null, next: null}; // used when pushUpdates() is called multiple times; ensures all updates occur in order
       this.disposed   = false; // set to true if dispose() is called to prevent anything from trying to queue/process
 
       /** @type {ko.sync.FeedbackFilter} */
@@ -89,13 +90,14 @@
    };
 
    ko.sync.SyncController.prototype.queue = function(props) {
-      var def = this.ready(), auto = props.push || this.auto;
+      var def = this.ready();
       if( !this.disposed ) {
          var change = props instanceof ko.sync.Change? props : newChange(this.con, this.model, this.keyFactory, this.target, props, this.rec);
          if( !this.filter.clear(change) ) {
+            console.log('queued', change.key(), change.to, change.action); //debug
             this.con.addChange(change);
-            if( auto ) {
-               def = this.pushUpdates();
+            if( this.auto ) {
+               this.pushUpdates();
             }
          }
          else if( change.to === 'obs' && change.action === 'create' && change.prevId ) {
@@ -104,23 +106,59 @@
             change.action = 'move';
             if( !this.filter.clear(change) ) {
                this.con.addChange(change);
-               if( auto ) {
-                  def = this.pushUpdates();
+               if( this.auto ) {
+                  this.pushUpdates();
                }
             }
          }
       }
-      return def;
+      return this;
    };
 
    ko.sync.SyncController.prototype.pushUpdates = function() {
+      // to ensure all records are processed in order, only one pushUpdate may occur at a time
+      var pushQueue = this.pushQueue;
+      var controller = this.con;
+      var self = this;
+      var promise;
       if( this.disposed ) {
-         return $.Deferred().reject(new Error('SyncController has been disposed'));
+         promise = $.Deferred().reject(new Error('SyncController has been disposed')).promise();
+      }
+      else if( pushQueue.next ) {
+         // a push has already been queued so our changes will just be added to that queue to be pushed when pushQueue.current resolves
+         promise = pushQueue.next;
+      }
+      else if( pushQueue.current ) {
+         if( controller.hasChanges() ) {
+            // since changes could come in while one is processing, it's possible to queue exactly one additional push
+            // (all scheduled changes will get shoved out during the second call, so only one queued push is necessary)
+            promise = pushQueue.next = $.Deferred(function(def) {
+               pushQueue.current.always(function() {
+                  controller.process().then(def.resolve,
+                           function(promises) {
+                              handlePushFailures(self);
+                              def.reject(promises);
+                           });
+               });
+            }).promise();
+         }
+         else {
+            // however, if there is nothing queued for processing, then there is no need to queue the additional push
+            // and we can simply return the current promise, as all processing changes will be done then
+            // this will be a common scenario since sync.queue(...).pushUpdates(...) may be a common usage pattern
+            promise = pushQueue.current;
+         }
       }
       else {
-         return this.con.process()
-               .fail(handlePushFailures(this));
+         // no pushes have been scheduled, so create one right now
+         promise = pushQueue.current = controller.process().fail(handlePushFailures(self)).always(function() {
+               // a push could be queued while this one is running, always advance `next` to become the current push
+               // before it is invoked
+               pushQueue.current = pushQueue.next? pushQueue.next : null;
+               pushQueue.next = null;
+            });
       }
+      return promise;
    };
 
    ko.sync.SyncController.prototype.read  = function(criteria) {
@@ -143,23 +181,57 @@
       }
 
       //todo always isn't really the best choice, need some error handling
-      sync.deferred.always(function() {
-         sync.twoway && sync.subs.push(_watchStoreList(sync, criteria));
-         sync.subs.push(_watchObsArray(sync, target));
+      sync.deferred.then(function() {
+         sync.twoway && sync.subs.push(watchStoreList(sync, criteria));
+         sync.subs.push(watchObsArray(sync, target));
       });
    }
 
    function syncRecord(sync, criteria) {
       var target = sync.target;
+      loadRecordCriteria(sync, criteria);
+
+      //todo isn't the best answer; need some error handling
+      sync.deferred.then(function() {
+         // wait for any record loading as necessary
+         if( sync.twoway ) {
+            if( sync.rec.hasKey() ) {
+               // if the record is valid, sync it up now
+               watchStoreRecord(sync);
+            }
+            else {
+               // otherwise, wait until it has an ID to sync it
+               sync.rec.onKey(function(id, oldKey, fields, data) {
+                  sync.rec.updateAll(data);
+                  sync.filter.expect({
+                     to: 'obs',
+                     action: 'update',
+                     key: id,
+                     data: sync.rec.getData()
+                  });
+                  sync.rec.applyData(target);
+//                  var props = {action: 'update', key: id, data: data, to: 'store', rec: sync.rec};
+//                  newChange(sync.con, model, sync.keyFactory, target, props, sync.rec).run();
+                  watchStoreRecord(sync);
+               });
+            }
+         }
+
+         if( sync.observed ) {
+            sync.subs.push(watchObs(sync, target));
+         }
+         else {
+            sync.subs.push(watchData(sync, target));
+         }
+      });
+   }
+
+   function loadRecordCriteria(sync, criteria) {
+      var target = sync.target;
       var model  = sync.model;
       if( typeof(criteria) === 'string' ) {
          // load a record from the server
-         if( sync.twoway ) {
-            sync.rec = sync.model.newRecord(criteria);
-         }
-         else {
-            sync.deferred = readRecord(sync, model, target, criteria);
-         }
+         sync.deferred = readRecord(sync, model, target, criteria);
       }
       else if( criteria instanceof ko.sync.Record ) {
          // use the record provided
@@ -168,70 +240,36 @@
       }
       else if( criteria ) {
          // create a record using a data object
-         //todo decide if we need to create or update
          sync.rec = model.newRecord(criteria);
          sync.rec.applyData(target);
       }
       else {
          // create an empty record
-         sync.rec = model.newRecord();
-         sync.rec.onKey(function(id) { //debug
-            console.log('id', id); //debug
-         }); //debug
+         sync.rec = model.newRecord(ko.sync.unwrapAll(target));
          sync.rec.applyData(target);
       }
-
-      //todo always isn't the best answer; need some error handling
-      sync.deferred.always(function() {
-         // wait for any record loading as necessary
-         if( sync.twoway ) {
-            if( sync.rec.hasKey() ) {
-               // if the record is valid, sync it up now
-               _watchStoreRecord(sync);
-            }
-            else {
-               // otherwise, wait until it has an ID to sync it
-               sync.rec.onKey(function(id, oldKey, fields, data) {
-//                  var props = {action: 'update', key: id, data: data, to: 'store', rec: sync.rec};
-//                  newChange(sync.con, model, sync.keyFactory, target, props, sync.rec).run();
-                  _watchStoreRecord(sync);
-               });
-            }
-         }
-
-         if( sync.observed ) {
-            sync.subs.push(_watchObs(sync, target));
-         }
-         else {
-            sync.subs.push(_watchData(sync, target));
-         }
-      });
    }
 
-   //todo there is currently no way to tell a client a record moved on the server
-   //todo somehow, we should account for this in updates to obs!
-   //todo probably, we should be using sort values and not prevId to do this stuff
-
-   function _watchStoreList(sync, criteria) {
+   function watchStoreList(sync, criteria) {
       var model = sync.model;
-      //todo-sort make store.watch return sortPriority?
+      //todo-sort make store.watch return sortPriority? ues comparator?
       return model.store.watch(model, function(action, name, value, prevSibling) {
-               sync.queue({action: _translateToAction(action), rec: model.newRecord(value), data: value, prevId: prevSibling, to: 'obs'});
-            }, criteria);
+         sync.queue({action: _translateToAction(action), rec: model.newRecord(value), data: value, prevId: prevSibling, to: 'obs'});
+      }, criteria);
    }
 
-   function _watchStoreRecord(sync) {
+   function watchStoreRecord(sync) {
       var model = sync.model, store = model.store, rec = sync.rec;
-      console.log('_watchStoreRecord', rec.hashKey()); //debug
       return store.watchRecord(model, rec, function(id, val, sortPriority) {
-          sync.queue({action: 'update', rec: rec, data: val, priority: sortPriority, to: 'obs'});
+          rec.updateAll(val);
+          sync.queue({action: 'update', rec: rec, data: rec.getData(true), priority: sortPriority, to: 'obs'});
       });
    }
 
-   function _watchObsArray(sync, target) {
+   function watchObsArray(sync, target) {
       return target.watchChanges(sync.keyFactory, sync.model.observedFields(), {
          add: function(key, data, prevId) {
-            sync.queue({action: 'add', key: key, prevId: prevId, data: data, to: 'store'});
+            sync.queue({action: 'create', key: key, prevId: prevId, data: data, to: 'store'});
          },
          update: function(key, data) {
             sync.queue({action: 'update', key: key, data: data, to: 'store'});
@@ -245,13 +283,13 @@
       });
    }
 
-   function _watchObs(sync, target) {
+   function watchObs(sync, target) {
       return target.watchChanges(sync.model.observedFields(), function(data) {
          sync.queue({action: 'update', data: data, to: 'store'});
       });
    }
 
-   function _watchData(sync, data) {
+   function watchData(sync, data) {
       return ko.sync.watchFields(data, sync.model.observedFields(), function(data) {
          sync.queue({action: 'update', data: data, to: 'store'});
       });
@@ -292,12 +330,7 @@
    }
 
    function newChange(con, model, keyFactory, target, queueEntry, rec) {
-      //todo this is an unreadable mess :(
-      //todo and it doesn't work very well because it's too complex
-      //todo
-      //todo
-      //todo
-      //todo
+      //todo this is hard to read and a bit coupled : (
       var data = _.extend(_.pick(queueEntry, ['to', 'action', 'prevId', 'data', 'rec']), {model: model, obs: target});
       if( !data.rec ) {
          if( rec ) {
@@ -361,14 +394,15 @@
       // a one time query to get the data down
       return sync.deferred.pipe(function() {
          return $.Deferred(function(def) {
-            console.log('_syncList', criteria);
             var prevId = 0;
+            target([]);
             model.store.query(model, function(data, key) {
-               sync.filter.expect({action: 'create', to: 'store', key: key, prevId: prevId, data: data});
+               var rec = model.newRecord(data);
+               sync.filter.expect({action: 'create', to: 'obs', key: key, prevId: prevId, data: rec.getData(true)});
                prevId = key;
-               target.push(model.newRecord(data).applyData());
+               target.push(rec.applyData());
                //todo-sort
-            }, criteria).always(def.resolve);
+            }, criteria).always(function(matches) { def.resolve(matches)});
          });
       });
    }
@@ -376,15 +410,14 @@
    function readRecord(sync, model, target, criteria) {
       // a static, one time read
       return sync.deferred.pipe(function() {
-         return $.Deferred(function(def) {
-            model.store
+         return model.store
                   .read(model, ko.sync.RecordId.for(model, criteria))
                   .then(function(rec) {
-                     sync.rec = rec;
-                     rec.applyData(target);
-                  })
-                  .always(def.resolve);
-         });
+                     if( rec ) {
+                        sync.rec = rec;
+                        rec.applyData(target);
+                     }
+                  });
       });
    }
 

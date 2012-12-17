@@ -96,18 +96,13 @@
     * @return {jQuery.Deferred}
     */
    ko.sync.Change.prototype.run = function() {
+      console.log('Change.run', this.key(), this.to, this.action); //debug
       var self = this, def;
       if( this.invalidated ) {
          def = $.Deferred().resolve(self.key());
       }
       else {
          switch(self.to) {
-            case 'omni':
-               def = $.when(
-                  sendToStore(self),
-                  sendToObs(self)
-               );
-               break;
             case 'store':
                def = sendToStore(self);
                break;

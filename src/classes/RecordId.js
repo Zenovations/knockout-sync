@@ -19,6 +19,13 @@
       this.fields    = fields;
       this.hash      = _createHash(this.separator, fields, data);
       this.tmpId     = RecordId.isTempId(this.hash);
+      if( this.tmpId ) {
+         // if a temporary ID has already been assigned, try to preserve it
+         var KF = ko.sync.KeyFactory.HASHKEY_FIELD;
+         if( data && KF in data && RecordId.isTempId(data[KF]) ) {
+            this.hash = data[KF];
+         }
+      }
    };
    var RecordId = ko.sync.RecordId;
 

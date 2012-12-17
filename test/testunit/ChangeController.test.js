@@ -152,7 +152,7 @@
       var expected = [];
       var events   = [];
       var recs     = TD.recs(6);
-      var list     = con._testModel.newList(recs.slice(0,4));
+      var list     = new ko.sync.RecordList(con._testModel, recs.slice(0,4));
       TD.pushRecsToObservableArray(obs, recs.slice(0,4));
       _watch(obs, events, con._testModel, con._testModel.observedFields());
 
@@ -173,7 +173,7 @@
       var obs      = ko.observableArray([TD.rec(1).applyData()]);
       var expected = [];
       var events   = [];
-      var list     = con._testModel.newList(TD.rec(1));
+      var list     = new ko.sync.RecordList(con._testModel, TD.rec(1));
       _watch(obs, events, con._testModel, con._testModel.observedFields());
 
       _do('update', expected, list, TD.rec(1), {'stringOptional': 'hai bai'});
@@ -192,7 +192,7 @@
       var obs      = TD.pushRecsToObservableArray(ko.observableArray(), TD.recs(5));
       var expected = [];
       var events   = [];
-      var list     = con._testModel.newList(TD.recs(5));
+      var list     = new ko.sync.RecordList(con._testModel, TD.recs(5));
 
       _watch(obs, events, con._testModel, con._testModel.observedFields());
       _do('move', expected, list, TD.rec(1), 'record-2');
@@ -210,7 +210,7 @@
       var obs      = TD.pushRecsToObservableArray(ko.observableArray(), TD.recs(5));
       var expected = [];
       var events   = [];
-      var list     = con._testModel.newList(TD.recs(5));
+      var list     = new ko.sync.RecordList(con._testModel, TD.recs(5));
 
       _watch(obs, events, con._testModel, con._testModel.observedFields());
       _do('delete', expected, list, TD.rec(2));
@@ -230,7 +230,7 @@
       var obs      = ko.observableArray();
       var expected = [];
       var events   = [];
-      var list     = model.newList(recs.slice(0,10));
+      var list     = new ko.sync.RecordList(con._testModel, recs.slice(0,10));
       TD.pushRecsToObservableArray(obs, recs.slice(0,10));
       _watch(obs, events, model, model.observedFields());
 
@@ -257,7 +257,7 @@
       var con      = _controller();
       var model    = con._testModel;
       var obs      = ko.observableArray();
-      var list     = model.newList(recs.slice(0,4));
+      var list     = new ko.sync.RecordList(con._testModel, recs.slice(0,4));
       TD.pushRecsToObservableArray(obs, recs.slice(0,4));
 
       list.remove(recs[3]);

@@ -186,7 +186,7 @@
    });
 
    asyncTest('obs: create', function() {
-      expect(2);
+      expect(4);
       var model = TD.model(), tempRec = TD.tempRec(6, model), key;
       syncActivity({
          criteria: null,
@@ -206,6 +206,8 @@
             deepEqual(x.events.store, [
                ['create', key]
             ]);
+            strictEqual(x.target().id, x.sync.rec.hashKey(), 'record id synchronized');
+            strictEqual(x.target()._hashKey, x.sync.rec.hashKey(), 'record _hashKey synchronized');
          }
       })
    });
@@ -452,19 +454,71 @@
    });
 
    asyncTest('#read', function() {
-      start();
+      expect(1);
+      var model   = TD.model({auto: false}, true, TD.recs(5));
+      var target  = {};
+      var sync    = new ko.sync.SyncController(model, target);
+      var key     = TD.rec(2).hashKey();
+
+      sync.read(key)
+            .then(function(rec) {
+               strictEqual(rec && rec.hashKey(), key);
+            },
+            function(e) {
+               ok(false, e);
+            })
+            .always(start);
    });
 
    asyncTest('#read, bad id', function() {
-      start();
+      expect(1);
+      var model   = TD.model({auto: false}, false, TD.recs(5));
+      var target  = {};
+      var sync    = new ko.sync.SyncController(model, target);
+      var key     = 'notarecordid';
+
+      sync.read(key)
+            .then(function(rec) {
+               strictEqual(rec, undefined);
+            },
+            function(e) {
+               ok(false, e);
+            })
+            .always(start);
    });
 
    asyncTest('#read, list', function() {
-      start();
+      expect(2);
+      var model   = TD.model({auto: false}, false, TD.recs(5));
+      var target  = ko.observableArray();
+      var sync    = new ko.sync.SyncController(model, target);
+      var recs    = TD.recs(4).slice(1);
+
+      sync.read({limit: 3, offset: 1})
+            .then(function(count) {
+               deepEqual(TD.keys(target, model), TD.keys(recs, model), 'has correct record ids');
+               strictEqual(count, recs.length, 'correct number of records returned');
+            },
+            function(e) {
+               ok(false, e);
+            })
+            .always(start);
    });
 
-   asyncTest('#read, emtpy list', function() {
-      start();
+   asyncTest('#read, empty list', function() {
+      expect(1);
+      var model   = TD.model({auto: false}, false, TD.recs(5));
+      var target  = ko.observableArray();
+      var sync    = new ko.sync.SyncController(model, target);
+
+      sync.read({where: function() { return false; }})
+            .then(function(count) {
+               strictEqual(count, 0, 'no records returned');
+            },
+            function(e) {
+               ok(false, e);
+            })
+            .always(start);
    });
 
    /**

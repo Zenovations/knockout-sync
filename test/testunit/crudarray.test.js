@@ -3,10 +3,6 @@
 
    module('CrudArray');
 
-   test('#isDirty', function() {
-      //todo-test
-   });
-
    test('#create', function() {
       //todo-test
    });
@@ -27,15 +23,7 @@
       //todo-test
    });
 
-   test('remote update', function() {
-      //todo-test
-   });
-
-   test('local update', function() {
-      //todo-test
-   });
-
-   test('chained commands', function() {
+   test('Store.LAST', function() {
       //todo-test
    });
 
