@@ -15,37 +15,35 @@ module.exports = function(grunt) {
             ' Licensed <%= _.pluck(pkg.licenses, "type").join(", ") %> */\n\n'
       },
       concat: {
-         base: {
-            src: [
-               '<banner:meta.banner>',
-               'lib/*.js',
-               'lib/deplibs/*.js',
-               'src/*.js',
-               'src/classes/*.js'
-            ],
-            dest: 'dist/<%= pkg.name %>.base.js'
-         },
+//         base: {
+//            src: [
+//               '<banner:meta.banner>',
+//               'lib/*.js',
+//               'lib/deps/*.js',
+//               'src/*.js',
+//               'src/classes/*.js'
+//            ],
+//            dest: 'dist/<%= pkg.name %>..js'
+//         },
          all: {
             src: [
-               '<banner:meta.banner>',
                'lib/*.js',
-               'lib/deplibs/*.js',
+               'lib/deps/*.js',
                'src/*.js',
                'src/classes/*.js',
-               'src/validators/*.js',
-               'src/stores/*.js'
+               'plugins/*.js'
             ],
-            dest: 'dist/<%= pkg.name %>.js'
+            dest: 'dist/<%= pkg.name %>.dev.js'
          }
       },
       min: {
-         base: {
-            src: ['<banner:meta.banner>', '<config:concat.base.dest>'],
-            dest: 'dist/<%= pkg.name %>.base.min.js'
-         },
+//         base: {
+//            src: ['<banner:meta.banner>', '<config:concat.base.dest>'],
+//            dest: 'dist/<%= pkg.name %>.base.min.js'
+//         },
          all: {
             src: ['<banner:meta.banner>', '<config:concat.all.dest>'],
-            dest: 'dist/<%= pkg.name %>.min.js'
+            dest: 'dist/<%= pkg.name %>.js'
          }
       },
 //      qunit: {
@@ -55,7 +53,7 @@ module.exports = function(grunt) {
 //         files: ['grunt.js', 'src/**/*.js', 'test/**/*.js', 'lib/**/*.js']
 //      },
       watch: {
-         files: ['grunt.js*', 'src/**/*.js', 'lib/**/*.js'],
+         files: ['grunt.js*', 'src/**/*.js', 'lib/**/*.js', 'plugins/**/*.js'],
          tasks: 'make'
       },
 //      mocha: {
@@ -83,7 +81,7 @@ module.exports = function(grunt) {
    });
 
    // Default task.
-   grunt.registerTask('default', 'watch');
+   grunt.registerTask('default', 'make watch');
    grunt.registerTask('make',    'concat min');
 //   grunt.registerTask('test', 'mocha');
 //   grunt.registerTask('default', 'concat min');

@@ -27,7 +27,7 @@
          });
          $select.empty().append(opts);
          //if( v ) { $select.val(v); } // records added after dom ready might disrupt selection
-          _origModule.apply(null, arguments);
+         _origModule.apply(null, arguments);
       };
    })();
 

@@ -1,206 +1,145 @@
-/*******************************************
- * Store interface for knockout-sync
- *******************************************/
-(function(ko) {
+/*! Store.js
+ *************************************/
+(function (ko) {
    "use strict";
 
-   //ko.sync || (ko.sync = {});
-
    /**
-    * Store interface describing how Store implementations should work and providing instanceof and extensibility
+    * A Store is any place that the data referenced in knockout can be retrieved from and saved back into.
+    * This can be a database connection, localStorage, a third party library, or even an array that you
+    * push and pull from. Knockout-sync doesn't care.
     *
+    * To create a Store, simply extend ko.sync.Store and implement all the methods below. We're using John Resig's
+    * Class inheritance () so put your constructor in the `init` method.
+    *
+    * For a quick example of a Store, see plugins/LocalStore.js
+    *
+    * All the CRUD methods in Store have the option of returning a value, returning an Error, or returning
+    * a Promise (a Deferred object for async lookups). Knockout-sync does all the dirty work, so that if
+    * you have the data available you may simply return it immediately without the pretense of wrapping
+    * everything in a Promise first.
+    *
+    * @constructor
     * @interface
     */
    ko.sync.Store = Class.extend({
-      init: function(properties) { throw new Error('Interface not implemented'); },
-
-      //todo-mass add a way to mass update at once (Firebase can use ref.update() on the base with .priority)
 
       /**
-       * Create a record in the database.
+       * The key (record id) must somehow be retrievable based on the data in the object that is given to
+       * Knockout. The simplest answer is to store the id in the record. However, you could also generate
+       * ids by combining values in some meaningful way or looking up the matching record--that's entirely
+       * up to you.
        *
-       * The store guarantees that values will be converted to valid entries. For instance, the model stores dates as
-       * a JavaScript Date object, but each Store will convert these to an appropriate storage type (e.g. ISO 8601 string,
-       * unix timestamp, etc).
-       *
-       * No guarantees are made that existing records will not be overwritten, although some stores may enforce this and
-       * return an error if the record is found.
-       *
-       * @param {ko.sync.Model} model
-       * @param {ko.sync.Record} record
-       * @return {Promise} resolves to the new record's ID or rejects if it could not be created
+       * @param {Object} data  the data record
+       * @returns {String}
        */
-      create: function(model, record) { throw new Error('Interface not implemented'); },
+      getKey: function(data) {
+         throw new Error('Implementations must declare getKey method');
+      },
 
       /**
-       * Retrieves a record from the database by its unique ID. If a record does not exist, all Stores should return
-       * a null value (not an error).
+       * Returns a list of fields that are stored in the data record. This is to help with observables that have
+       * their own properties attached.
        *
-       * Temporary connectivity or database errors should be handled internally by the Store and the queries retried until
-       * they are successful.
-       *
-       * Rejecting the promise should be reserved for non-recoverable errors and permanent connectivity issues.
-       *
-       * @param {ko.sync.Model}     model
-       * @param {ko.sync.RecordId}  recordId
-       * @return {Promise}  resolves to the Record object or null if it is not found
+       * @returns {Array}
        */
-      read: function(model, recordId) { throw new Error('Interface not implemented'); },
+      getFieldNames: function() {
+         throw new Error('Implementations must declare getFieldNames method');
+      },
 
       /**
-       * Given a record id, update that record in the database. If the record does not exist, the promise is rejected.
+       * Create a new record in the data Store. In the case that the record already exists, it is up to the Store's
+       * discretion on how it should be handled; updating the record or ignoring the create operation are both valid
+       * and should work fine, but it should not reject or return an Error.
        *
-       * @param {ko.sync.Model}  model
-       * @param {ko.sync.Record} rec
-       * @return {Promise} resolves to callback({string}id, {boolean}changed) where changed is false if data was not dirty, rejected if record does not exist
+       * Return an Error or reject the Deferred for failed operations or invalid data.
+       *
+       * @param {Object} data  the new data record
+       * @returns {Deferred|String} returns or resolves to the new record id (key)
        */
-      update: function(model, rec) { throw new Error('Interface not implemented'); },
+      create: function(data) {
+         throw new Error('Implementations must declare create method');
+      },
 
       /**
-       * Delete a record from the database. If the record does not exist, then it is considered already deleted (no
-       * error is generated)
+       * Fetch a record from the Store. If it doesn't exist, return null.
        *
-       * @param {ko.sync.Model}           model
-       * @param {ko.sync.Record|ko.sync.RecordId} recOrId
-       * @return {Promise} resolves to callback({string}id, {boolean)success, rejected if record does not exist
+       * Reject or return Error for operational errors.
+       *
+       * @param {String} key
+       * @returns {Deferred|Object|null} returns or resolves to the record data
        */
-      delete: function(model, recOrId) { throw new Error('Interface not implemented'); },
+      read: function(key) {
+         throw new Error('Implementations must declare read method');
+      },
 
       /**
-       * Perform a query against the database. The `filterCriteria` options are fairly limited:
+       * Save changes to the Store. Reject or return an Error if the operation fails. If the record does not exist,
+       * the Store may return/resolve false or create the record at its discretion. Reject or return an Error if the
+       * data is invalid.
        *
-       * - limit:   {int=100}         number of records to return, use 0 for all
-       * - offset:  {int=0}           exclusive starting point in records, e.g.: {limit: 100, offset: 100} would return records 101-200 (the first record is 1 not 0)
-       * - start:   {int}             using the sort's integer values, this will start us at record matching this sort value, use null for first record
-       * - end:     {int}             using the sort's integer values, this will end us at record matching this sort value, use null for last record
-       * - where:   {function|object} filter rows using this function or value map
-       *
-       * Start/end are more useful with sorted records (and faster). Limit/offset are slower but can be used with
-       * unsorted records. Additionally, limit/offset will work with where conditions. Obviously, `start`/`end` are hard
-       * limits and only records within this range, matching `where`, up to a maximum of `limit` could be returned.
-       *
-       * USE OF WHERE
-       * -------------
-       * If `where` is a function, it is ALWAYS applied after the results are returned. Thus, when used in conjunction
-       * with `limit`, the server may still need to retrieve all records before applying limit. The function
-       * has the signature: function( {Object}data, {String}hashKey )
-       *
-       * If `where` is a hash (key/value pairs), the application of the parameters is left up to the discretion of
-       * the store. For SQL-like databases, it may be part of the query. For data stores like Firebase, or
-       * other No-SQL types, it could require fetching all results from the table and filtering them on return. So
-       * use this with discretion.
-       *
-       * THE ITERATOR
-       * ---------------------
-       * Each record received is handled by `iterator`. If iterator returns true, then the iteration is stopped. The
-       * iterator should be in the format `function(data, id, index)` where data is the record and index is the count
-       * of the record starting from 0
-       *
-       * In the case of a failure, the fail() method on the promise will always be notified immediately,
-       * and the load operation will end immediately. It is acceptable for `iterator` to throw an error or string
-       * in order to invoke a failure event and implementations should handle this gracefully.
-       *
-       * PERFORMANCE
-       * -----------
-       * There are no guarantees on how a store will optimize a query. It may apply the constraints before or after
-       * retrieving data, depending on the capabilities and structure of the data layer. To ensure high performance
-       * for very large data sets, and maintain store-agnostic design, implementations should use some sort of
-       * pre-built query data in an index instead of directly querying records (think NoSQL databases like
-       * DynamoDB and Firebase, not MySQL queries)
-       *
-       * Alternately, very sophisticated queries could be done external to the knockout-sync module and then
-       * injected into the synced data after.
-       *
-       * EXAMPLES:
-       * ---------
-       *
-       * Fetch users where sort field is a lower-cased name. Start with Fred and end with Wilma. Retrieve 200 at max:
-       * <code>store.query(model, fx, { start: 'fred', end: 'wilma', limit: 100 });</code>
-       *
-       * Retrieve page 3 of user records in groups of 25:
-       * <code>store.query(model, fx, { offset: 75, limit: 25 });</code>
-       *
-       * Retrieve all records with first name 'Fred' and last name 'Smith':
-       * <code>store.query(model, fx, {where: {first: 'Fred', last: 'Smith'}});
-       *
-       * Retrieve all records with an even "widget" value:
-       * <code>store.query(model, fx, {where: function(data, key) { return data.widget % 2 === 0; }});
-       *
-       * @param {Function} iterator
-       * @param {ko.sync.Model}  model
-       * @param {object} [filterCriteria]
-       * @return {Promise}
+       * @param {String} key
+       * @param {Object} data
+       * @returns {Deferred|String|Error|boolean} returns or resolves to the key (record id)
        */
-      query: function(model, iterator, filterCriteria) { throw new Error('Interface not implemented'); },
+      update: function(key, data) {
+         throw new Error('Implementations must declare update method');
+      },
 
       /**
-       * Given a particular data model, get a count of all records in the database matching
-       * the parms provided. The `filterCriteria` object is the same as query() method, in the format `function(data, id, index)`.
+       * Removes a record from the store. If the record doesn't exist, simply returns the key (behaves exactly
+       * as if it was deleted).
        *
-       * This could be a very high-cost operation depending on the data size and the data source (it could require
-       * iterating every record in the table) for some data layers.
+       * Reject or return Error if there is a problem with the operation.
        *
-       * @param {ko.sync.Model} model
-       * @param {object}        [filterCriteria]
-       * @return {Promise} promise resolving to total number of records matched
+       * @param {String} key
+       * @returns {Deferred|String} returns or resolves to the key (record id)
        */
-      count: function(model, filterCriteria) { throw new Error('Interface not implemented'); },
+      'delete': function(key) {
+         throw new Error('Implementations must declare delete method');
+      },
 
       /**
-       * True if this data layer provides push updates that can be monitored by the client.
-       * @return {boolean}
+       * Listens for push events from the Store. The possible events are create, update, and delete. The callback
+       * will always be passed {String}key, {Object}data, and {String}event for every event.
+       *
+       * Example:
+       * <pre><code>
+       *    // monitor both create and delete ops
+       *    store.on('create delete', function(key, data, event) {
+       *       alert('record ' + key + ' was deleted');
+       *    });
+       * </code></pre>
+       *
+       * It is also possible to monitor events for a specific record by passing a key as the second argument:
+       * Example:
+       * <pre><code>
+       *    // listen to one record only
+       *    store.on('update delete', 'record123', function(key, data) {
+       *       // note that the key is still passed to the callback
+       *       alert('this record changed');
+       *    });
+       * </code></pre>
+       *
+       * Note that when a listener is attached to the 'create' event for the first time, it should immediately receive
+       * all records (or in the case that key was passed exactly one record) from the data Store.
+       *
+       * @param {String} event  space delimited list of events to monitor
+       * @param {String} [key]
+       * @param {Function} callback
        */
-      hasTwoWaySync: function() { throw new Error('Interface not implemented'); },
+      on: function(event, key, callback) {
+         //todo prevId
+         throw new Error('Implementations must declare on events for add, remove, and change');
+      },
 
       /**
-       * Given a particular data model, notify `callback` once with the entire list of matching results and then
-       * any time any record is added, updated, deleted, or moved on the server. Calling the create/update/read/delete
-       * methods locally will indirectly trigger notifications once they are applied at the server.
-       *
-       * The signature of the callback is as follows:
-       *     added:    callback( 'added',   record_id, record_data, sortPriority, prevRecordId )
-       *     updated:  callback( 'updated', record_id, record_data  sortPriority )
-       *     deleted:  callback( 'deleted', record_id, record_data  sortPriority )
-       *     moved:    callback( 'moved',   record_id, record_data, sortPriority, prevRecordId )
-       *
-       * For added/moved events, a prevRecordId of null means it is the first record in the list. Generally, it would
-       * be preferable to use a compare function based on the sort priority rather than relying on prevRecordId (which
-       * should really only be used as an optimization tip for the sort algorithm)
-       *
-       * The return value is an Object which contains a dispose() method to stop observing the data layer's
-       * changes.
-       *
-       * @param  {ko.sync.Model} model
-       * @param  {Function}     callback
-       * @param  {object}       [filterCriteria] see query() method for details about filterCriteria
-       * @return {Object}
+       * Close any opened sockets, connections, and notifications. Perform any cleanup needed in prep
+       * for discarding the store and avoiding memory leaks.
        */
-      watch: function(model, callback, filterCriteria) { throw new Error('Interface not implemented'); },
-
-      /**
-       * Given a particular record, invoke `callback` once with the current server value (same as read()) and then
-       * any time the data record changes on the server. This would be indirectly invoked by local
-       * create/read/update/delete operations, because after the server applies the update, that should trigger
-       * an update event (watch for feedback loops in your event handlers).
-       *
-       * The signature of the callback is as follows: callback( record_id, data_object, sort_priority )
-       *
-       * The return value is an Object which contains a dispose() method to stop observing the data layer's
-       * changes. Nothing needs to be passed into dispose:
-       * <code>
-       *    var sub = store.watchRecord( model, recordId, callback );
-       *    function callback(id, data, sortPriority) {
-       *       sub.dispose(); // stop watching after the first notification
-       *    }
-       * </code>
-       *
-       * @param {ko.sync.Model}  model
-       * @param {ko.sync.RecordId|ko.sync.Record} recordId
-       * @param  {Function}      callback
-       * @return {Object}
-       */
-      watchRecord: function(model, recordId, callback) { throw new Error('Interface not implemented'); }
+      dispose: function() {
+         throw new Error('Implementations must declare dispose method');
+      }
 
    });
 
-})(ko);
+})(window.ko);

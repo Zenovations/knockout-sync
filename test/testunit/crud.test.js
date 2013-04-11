@@ -1,100 +1,112 @@
-(function($) {
+(function() {
    "use strict";
 
-   var Crud = ko.sync.Crud, TD = ko.sync.TestData;
+   var Crud = ko.sync.Crud;
+   var storeTester = new ko.sync.stores.TestStore.Tester();
 
    module('Crud');
 
-   asyncTest('#create', function() {
+   test('#create', function() {
       expect(3);
-      var model = TD.model({auto: false});
-      var rec   = TD.tempRec();
-      var view  = {data: rec.getData(true)};
-
-      model.sync(view);
-      // invoke the create operation
-      var crud = view.crud.create();
-      // cheat and get the deferred object directly, which we can reject with a timeout
-      TD.expires(crud.def);
-
-      crud.promise()
-            .then(function() {
-               var events = model.store.eventsFiltered();
-               strictEqual(events.length, 1, 'created one event');
-               strictEqual(events[0][0], 'create', 'it was a create event');
-               var key = new ko.sync.KeyFactory(model, true).make(view.data);
-               rec.updateHashKey(key);
-               deepEqual(TD.forCompare(model.store.find(key)), TD.forCompare(rec), 'store has correct data');
-            })
-            .fail(function(e) { ok(false, e); })
-            .always(start);
+      ko.sync.test.disposable(storeTester);
+      _.when(storeTester.rebuild()).then(function(store) {
+         var obs = ko.observable({ _key: 'five', name: 'Fiver'});
+         var crud = new Crud(obs, store);
+         return crud.create({email: 'fiver@five.com' }).ready.done(function() {
+            var obsData = ko.sync.unwrapAll(obs), dataKey = obsData._key;
+            strictEqual(crud.key, dataKey, 'crud has correct key');
+            deepEqual(store.data['five'], obsData, 'store and obs data matches');
+            strictEqual(obsData.email, 'fiver@five.com', 'has both observable and argument values');
+         })
+      })
+         .fail(ok.bind(null, false))
+         .always(ko.sync.test.done);
    });
 
    asyncTest('#read', function() {
-      var model = TD.model({}, true, TD.recs(5));
-      var obs = ko.observable().extend({crud: model});
-      obs.crud.read('record-2').promise()
-            .then(function() {
-               deepEqual(TD.forCompare(obs), TD.forCompare(2));
-            })
-            .fail(function(e) {ok(false, e)})
-            .always(start);
+      expect(2);
+      ko.sync.test.disposable(storeTester);
+      _.when(storeTester.rebuild()).then(function(store) {
+         var obs = ko.observable();
+         var crud = new Crud(obs, store);
+         return crud.read('four').ready.done(function() {
+            deepEqual(ko.sync.unwrapAll(obs), store.data['four'], 'observable receives correct data');
+            strictEqual(crud.key, 'four', 'crud.key updated appropriately');
+         });
+      })
+      .fail(ok.bind(null, false)).always(ko.sync.test.done);
    });
 
    asyncTest('#update', function() {
-      expect(4);
-      var model = TD.model({}, true, TD.recs(5));
-      var rec = TD.rec(2);
-      var obs = ko.observable().extend({crud: [model, 'record-2']});
-      obs.crud.update({intOptional: 11}).promise()
-            .then(function() {
-               var expected = TD.forCompare(_.extend(rec.getData(), {intOptional: 11}));
-               var storeRec = model.store.find(rec.hashKey());
-               var events   = model.store.eventsFiltered();
-               strictEqual(events.length, 2, 'found two events');
-               deepEqual(_.map(events, function(v) { return v[0]; }), ['read', 'update'], 'a read and an update event');
-               deepEqual(TD.forCompare(obs), expected, 'obs has correct values');
-               deepEqual(TD.forCompare(storeRec), expected, 'store has correct values');
-            })
-            .fail(function(e) {ok(false, e)})
-            .always(start);
+      expect(2);
+      ko.sync.test.disposable(storeTester);
+      _.when(storeTester.rebuild()).then(function(store) {
+         var obs = ko.observable();
+         var newData = _.extend({}, store.data['two'], { name: 'Wayne' });
+         var crud = new Crud(obs, store);
+         return crud.read('two').update({ name: 'Wayne' }).ready.done(function() {
+            var obsData = ko.sync.unwrapAll(obs);
+            deepEqual(store.data['two'], newData, 'store received data');
+            deepEqual(obsData, newData, 'obs received argument data');
+         });
+      })
+      .fail(ok.bind(null, false)).always(ko.sync.test.done);
    });
 
-   asyncTest('#delete', function() {
-      expect(3);
-      var model = TD.model({auto: false}, true, TD.recs(5));
-      var rec   = TD.tempRec();
-      var view  = {data: rec.getData(true)};
-
-      model.sync(view);
-      // invoke the create operation
-      var crud = view.crud.read('record-2').delete();
-      // cheat and get the deferred object directly, which we can reject with a timeout
-      TD.expires(crud.def);
-
-      crud.promise()
-            .then(function() {
-               var events = model.store.eventsFiltered();
-               strictEqual(events.length, 2, 'found two events');
-               deepEqual(_.map(events, function(v) { return v[0]; }), ['read', 'delete'], 'a read and delete event');
-               var key = new ko.sync.KeyFactory(model, true).make(view.data);
-               rec.updateHashKey(key);
-               deepEqual(model.store.find(key), undefined, 'record not in store anymore');
-            })
-            .fail(function(e) {ok(false, e)})
-            .always(start);
+   test('#delete', function() {
+      expect(1);
+      ko.sync.test.disposable(storeTester);
+      _.when(storeTester.rebuild()).then(function(store) {
+         var obs = ko.observable();
+         var crud = new Crud(obs, store);
+         return crud.read('one').delete('one').ready.done(function() {
+            ok(_.has(store.data, 'two'), 'record removed from store');
+         });
+      })
+      .fail(ok.bind(null, false)).always(ko.sync.test.done);
    });
 
-   asyncTest('#promise', function() {
-      expect(3);
-      var model = TD.model({}, true, TD.recs(5));
-      var crud = ko.observable().extend({crud: model}).crud;
-      strictEqual(crud.promise().state(), 'resolved', 'initially promise is resolved');
-      var promise = crud.read('record-4').promise();
-      TD.expires(crud.def); // reject if it doesn't resolve
-      strictEqual(promise.state(), 'pending', 'is pending after store update');
-      promise.then(function() { ok(true, 'resolved'); }).always(start);
+   asyncTest('synchronization: local change', function() {
+      expect(2);
+      ko.sync.test.disposable(storeTester);
+      _.when(storeTester.rebuild()).then(function(store) {
+         var obs = ko.observable();
+         obs.watchChanges(store, function(v) { console.log('watcher', v)});
+         var crud = new Crud(obs, store);
+         var def = ko.sync.test.def();
+         crud.read('one').ready.done(function() {
+            ko.sync.test.disposable(store.on('update', 'one', function(key, data) {
+               strictEqual(key, 'one', 'update completed with correct key');
+               deepEqual(data, ko.sync.unwrapAll(obs), 'update completed with correct data');
+               def.resolve();
+            }));
+            ko.sync.test.update(obs, {name: 'Pinky'});
+         });
+         return def;
+      })
+      .fail(ok.bind(null, false)).always(ko.sync.test.done);
    });
 
-})(jQuery);
+   asyncTest('synchronization: remote change', function() {
+      expect(2);
+      ko.sync.test.disposable(storeTester);
+      _.when(storeTester.rebuild()).then(function(store) {
+         var obs = ko.observable();
+         var crud = new Crud(obs, store).read('one');
+         var def = ko.sync.test.def();
+         // wait for the read to take effect
+         _.defer(function() {
+            ko.sync.test.disposable(obs.subscribe(function(newData) {
+               deepEqual(newData, store.data['one'], 'update completed with correct data');
+               strictEqual(newData.name, 'Buffy', 'name was updated');
+               def.resolve();
+            }));
+            store.update('one', _.extend({}, store.data['one'], {name: 'Buffy'}));
+         });
+         return def;
+      })
+      .fail(ok.bind(null, false)).always(ko.sync.test.done);
+   });
+
+})();
 

@@ -1,0 +1,1696 @@
+/* Simple JavaScript Inheritance
+ * By John Resig http://ejohn.org/
+ * MIT Licensed.
+ */
+// Inspired by base2 and Prototype
+(function(){
+   var initializing = false, fnTest = /xyz/.test(function(){xyz;}) ? /\b_super\b/ : /.*/;
+   // The base Class implementation (does nothing)
+   this.Class = function(){};
+
+   // Create a new Class that inherits from this class
+   Class.extend = function(prop) {
+      var _super = this.prototype;
+
+      // Instantiate a base class (but only create the instance,
+      // don't run the init constructor)
+      initializing = true;
+      var prototype = new this();
+      initializing = false;
+
+      // Copy the properties over onto the new prototype
+      for (var name in prop) {
+         // Check if we're overwriting an existing function
+         prototype[name] = typeof prop[name] == "function" &&
+            typeof _super[name] == "function" && fnTest.test(prop[name]) ?
+            (function(name, fn){
+               return function() {
+                  var tmp = this._super;
+
+                  // Add a new ._super() method that is the same method
+                  // but on the super-class
+                  this._super = _super[name];
+
+                  // The method only need to be bound temporarily, so we
+                  // remove it when we're done executing
+                  var ret = fn.apply(this, arguments);
+                  this._super = tmp;
+
+                  return ret;
+               };
+            })(name, prop[name]) :
+            prop[name];
+      }
+
+      // The dummy class constructor
+      function Class() {
+         // All construction is actually done in the init method
+         if ( !initializing && this.init )
+            this.init.apply(this, arguments);
+      }
+
+      // Populate our constructed prototype object
+      Class.prototype = prototype;
+
+      // Enforce the constructor to be what we expect
+      Class.prototype.constructor = Class;
+
+      // And make this class extendable
+      Class.extend = arguments.callee;
+
+      return Class;
+   };
+})();
+
+
+(function(console) {
+   /*********************************************************************************************
+    * Make sure console exists because IE blows up if it's not open and you attempt to access it
+    * Create some dummy functions if we need to, so we don't have to if/else everything
+    *********************************************************************************************/
+   console||(console = window.console = {
+      // all this "a, b, c, d, e" garbage is to make the IDEs happy, since they can't do variable argument lists
+      /**
+       * @param a
+       * @param [b]
+       * @param [c]
+       * @param [d]
+       * @param [e]
+       */
+      log: function(a, b, c, d, e) {},
+      /**
+       * @param a
+       * @param [b]
+       * @param [c]
+       * @param [d]
+       * @param [e]
+       */
+      info: function(a, b, c, d, e) {},
+      /**
+       * @param a
+       * @param [b]
+       * @param [c]
+       * @param [d]
+       * @param [e]
+       */
+      warn: function(a, b, c, d, e) {},
+      /**
+       * @param a
+       * @param [b]
+       * @param [c]
+       * @param [d]
+       * @param [e]
+       */
+      error: function(a, b, c, d, e) {}
+   });
+
+   // le sigh, IE, oh IE, how we fight... fix Function.prototype.bind as needed
+   if (!Function.prototype.bind) {
+      //credits: taken from bind_even_never in this discussion: https://prototype.lighthouseapp.com/projects/8886/tickets/215-optimize-bind-bindaseventlistener#ticket-215-9
+      Function.prototype.bind = function(context) {
+         var fn = this, args = Array.prototype.slice.call(arguments, 1);
+         return function(){
+            return fn.apply(context, Array.prototype.concat.apply(args, arguments));
+         };
+      };
+   }
+
+   // IE 9 won't allow us to call console.log.apply (WTF IE!) It also reports typeof(console.log) as 'object' (UNH!)
+   // but together, those two errors can be useful in allowing us to fix stuff so it works right
+   if( typeof(console.log) === 'object' ) {
+      // Array.forEach doesn't work in IE 8 so don't try that :(
+      console.log = Function.prototype.call.bind(console.log, console);
+      console.info = Function.prototype.call.bind(console.info, console);
+      console.warn = Function.prototype.call.bind(console.warn, console);
+      console.error = Function.prototype.call.bind(console.error, console);
+   }
+
+   /**
+    * Support group and groupEnd functions
+    */
+   ('group' in console) ||
+   (console.group = function(msg) {
+      console.info("\n------------\n"+msg+"\n------------");
+   });
+   ('groupEnd' in console) ||
+   (console.groupEnd = function() {
+      //console.log("\n\n");
+   });
+
+   /**
+    * Support time and timeEnd functions
+    */
+   ('time' in console) ||
+   (function() {
+      var trackedTimes = {};
+      console.time = function(msg) {
+         trackedTimes[msg] = new Date().getTime();
+      };
+      console.timeEnd = function(msg) {
+         var end = new Date().getTime(), time = (msg in trackedTimes)? end - trackedTimes[msg] : 0;
+         console.info(msg+': '+time+'ms')
+      }
+   }());
+
+})(window.console); 
+/*! underscore_minimal.js
+ *
+ * If underscore doesn't already exist, include a minimal set of functions for manipulating
+ * objects and arrays.
+ *************************************/
+(function (root) {
+   "use strict";
+   if( !root._ ) {
+      var ArrayProto = Array.prototype;
+
+      var breaker = {},
+         push           = ArrayProto.push,
+         hasOwnProperty = Object.prototype.hasOwnProperty,
+         nativeForEach  = ArrayProto.forEach,
+         nativeIsArray  = Array.isArray,
+         toString       = Object.prototype.toString,
+         nativeMap      = ArrayProto.map,
+         concat         = ArrayProto.concat;
+
+      var _ = root._ = {};
+
+      // The cornerstone, an `each` implementation, aka `forEach`.
+      // Handles objects with the built-in `forEach`, arrays, and raw objects.
+      // Delegates to **ECMAScript 5**'s native `forEach` if available.
+      var each = _.each = function(obj, iterator, context) {
+         if (obj == null) return;
+         if (nativeForEach && obj.forEach === nativeForEach) {
+            obj.forEach(iterator, context);
+         } else if (obj.length === +obj.length) {
+            for (var i = 0, l = obj.length; i < l; i++) {
+               if (iterator.call(context, obj[i], i, obj) === breaker) return;
+            }
+         } else {
+            for (var key in obj) {
+               if (obj.hasOwnProperty(key)) {
+                  if (iterator.call(context, obj[key], key, obj) === breaker) return;
+               }
+            }
+         }
+      };
+
+      // Internal recursive comparison function for `isEqual`.
+      var eq = function(a, b, aStack, bStack) {
+         // Identical objects are equal. `0 === -0`, but they aren't identical.
+         // See the Harmony `egal` proposal: http://wiki.ecmascript.org/doku.php?id=harmony:egal.
+         if (a === b) return a !== 0 || 1 / a == 1 / b;
+         // A strict comparison is necessary because `null == undefined`.
+         if (a == null || b == null) return a === b;
+         // Unwrap any wrapped objects.
+         // Compare `[[Class]]` names.
+         var className = toString.call(a);
+         if (className != toString.call(b)) return false;
+         switch (className) {
+            // Strings, numbers, dates, and booleans are compared by value.
+            case '[object String]':
+               // Primitives and their corresponding object wrappers are equivalent; thus, `"5"` is
+               // equivalent to `new String("5")`.
+               return a == String(b);
+            case '[object Number]':
+               // `NaN`s are equivalent, but non-reflexive. An `egal` comparison is performed for
+               // other numeric values.
+               return a != +a ? b != +b : (a == 0 ? 1 / a == 1 / b : a == +b);
+            case '[object Date]':
+            case '[object Boolean]':
+               // Coerce dates and booleans to numeric primitive values. Dates are compared by their
+               // millisecond representations. Note that invalid dates with millisecond representations
+               // of `NaN` are not equivalent.
+               return +a == +b;
+            // RegExps are compared by their source patterns and flags.
+            case '[object RegExp]':
+               return a.source == b.source &&
+                  a.global == b.global &&
+                  a.multiline == b.multiline &&
+                  a.ignoreCase == b.ignoreCase;
+         }
+         if (typeof a != 'object' || typeof b != 'object') return false;
+         // Assume equality for cyclic structures. The algorithm for detecting cyclic
+         // structures is adapted from ES 5.1 section 15.12.3, abstract operation `JO`.
+         var length = aStack.length;
+         while (length--) {
+            // Linear search. Performance is inversely proportional to the number of
+            // unique nested structures.
+            if (aStack[length] == a) return bStack[length] == b;
+         }
+         // Add the first object to the stack of traversed objects.
+         aStack.push(a);
+         bStack.push(b);
+         var size = 0, result = true;
+         // Recursively compare objects and arrays.
+         if (className == '[object Array]') {
+            // Compare array lengths to determine if a deep comparison is necessary.
+            size = a.length;
+            result = size == b.length;
+            if (result) {
+               // Deep compare the contents, ignoring non-numeric properties.
+               while (size--) {
+                  if (!(result = eq(a[size], b[size], aStack, bStack))) break;
+               }
+            }
+         } else {
+            // Objects with different constructors are not equivalent, but `Object`s
+            // from different frames are.
+            var aCtor = a.constructor, bCtor = b.constructor;
+            if (aCtor !== bCtor && !(_.isFunction(aCtor) && (aCtor instanceof aCtor) &&
+               _.isFunction(bCtor) && (bCtor instanceof bCtor))) {
+               return false;
+            }
+            // Deep compare objects.
+            for (var key in a) {
+               if (_.has(a, key)) {
+                  // Count the expected number of properties.
+                  size++;
+                  // Deep compare each member.
+                  if (!(result = _.has(b, key) && eq(a[key], b[key], aStack, bStack))) break;
+               }
+            }
+            // Ensure that both objects contain the same number of properties.
+            if (result) {
+               for (key in b) {
+                  if (_.has(b, key) && !(size--)) break;
+               }
+               result = !size;
+            }
+         }
+         // Remove the first object from the stack of traversed objects.
+         aStack.pop();
+         bStack.pop();
+         return result;
+      };
+
+      // Perform a deep comparison to check if two objects are equal.
+      _.isEqual = function(a, b) {
+         return eq(a, b, [], []);
+      };
+
+      // Is a given array, string, or object empty?
+      // An "empty" object has no enumerable own-properties.
+      _.isEmpty = function(obj) {
+         if (obj == null) return true;
+         if (_.isArray(obj) || _.isString(obj)) return obj.length === 0;
+         for (var key in obj) if (_.has(obj, key)) return false;
+         return true;
+      };
+
+      // Is a given value an array?
+      // Delegates to ECMA5's native Array.isArray
+      _.isArray = nativeIsArray || function(obj) {
+         return toString.call(obj) == '[object Array]';
+      };
+
+      // Is a given variable an object?
+      _.isObject = function(obj) {
+         return obj === Object(obj);
+      };
+
+      // Add some isType methods: isArguments, isFunction, isString, isNumber, isDate, isRegExp.
+      each(['Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp'], function(name) {
+         _['is' + name] = function(obj) {
+            return toString.call(obj) == '[object ' + name + ']';
+         };
+      });
+
+      // Define a fallback version of the method in browsers (ahem, IE), where
+      // there isn't any inspectable "Arguments" type.
+      if (!_.isArguments(arguments)) {
+         _.isArguments = function(obj) {
+            return !!(obj && _.has(obj, 'callee'));
+         };
+      }
+
+      // Optimize `isFunction` if appropriate.
+      if (typeof (/./) !== 'function') {
+         _.isFunction = function(obj) {
+            return typeof obj === 'function';
+         };
+      }
+
+      // Is a given object a finite number?
+      _.isFinite = function(obj) {
+         return isFinite(obj) && !isNaN(parseFloat(obj));
+      };
+
+      // Is the given value `NaN`? (NaN is the only number which does not equal itself).
+      _.isNaN = function(obj) {
+         return _.isNumber(obj) && obj != +obj;
+      };
+
+      // Is a given value a boolean?
+      _.isBoolean = function(obj) {
+         return obj === true || obj === false || toString.call(obj) == '[object Boolean]';
+      };
+
+      // Is a given value equal to null?
+      _.isNull = function(obj) {
+         return obj === null;
+      };
+
+      // Is a given variable undefined?
+      _.isUndefined = function(obj) {
+         return obj === void 0;
+      };
+
+      // Shortcut function for checking if an object has a given property directly
+      // on itself (in other words, not on a prototype).
+      _.has = function(obj, key) {
+         return hasOwnProperty.call(obj, key);
+      };
+
+      // Add your own custom functions to the Underscore object.
+      _.mixin = function(obj) {
+         each(obj, function(func, name){
+            _[name] = func;
+         });
+      };
+
+      // Safely convert anything iterable into a real, live array.
+      _.toArray = function(obj) {
+         if (!obj) return [];
+         if (_.isArray(obj)) return slice.call(obj);
+         if (obj.length === +obj.length) return _.map(obj, _.identity);
+         return _.values(obj);
+      };
+
+      // Return the results of applying the iterator to each element.
+      // Delegates to **ECMAScript 5**'s native `map` if available.
+      _.map = _.collect = function(obj, iterator, context) {
+         var results = [];
+         if (obj == null) return results;
+         if (nativeMap && obj.map === nativeMap) return obj.map(iterator, context);
+         each(obj, function(value, index, list) {
+            results[results.length] = iterator.call(context, value, index, list);
+         });
+         return results;
+      };
+
+      // Return a copy of the object only containing the whitelisted properties.
+      _.pick = function(obj) {
+         var copy = {};
+         var keys = concat.apply(ArrayProto, slice.call(arguments, 1));
+         each(keys, function(key) {
+            if (key in obj) copy[key] = obj[key];
+         });
+         return copy;
+      };
+
+      // Returns a function, that, as long as it continues to be invoked, will not
+      // be triggered. The function will be called after it stops being called for
+      // N milliseconds. If `immediate` is passed, trigger the function on the
+      // leading edge, instead of the trailing.
+      _.debounce = function(func, wait, immediate) {
+         var timeout, result;
+         return function() {
+            var context = this, args = arguments;
+            var later = function() {
+               timeout = null;
+               if (!immediate) result = func.apply(context, args);
+            };
+            var callNow = immediate && !timeout;
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+            if (callNow) result = func.apply(context, args);
+            return result;
+         };
+      };
+
+   }
+})(window);
+
+(function(root) {
+
+   root._.mixin({
+      move: function(list, old_index, new_index) {
+         if( old_index === new_index ) { return; }
+         list.splice(new_index, 0, list.splice(old_index, 1)[0]);
+      },
+
+      // inspired by @InfinitiesLoop comment here:
+      // http://stackoverflow.com/questions/5573165/raising-jquery-deferred-then-once-all-deferred-objects-have-been-resolved
+      /**
+       * @return {_.Deferred}
+       */
+      whenAll: function() {
+         return whenAllFx(0, _.toArray(arguments));
+      },
+
+      /**
+       * @param {int} expires
+       * @return {_.Deferred}
+       */
+      whenAllExpires: function(expires) {
+         return whenAllFx(expires, _.toArray(arguments).slice(1));
+      }
+   });
+
+   /**
+    * @param {int} expires
+    * @param {Array} args
+    * @return {_.Deferred}
+    */
+   function whenAllFx(expires, args) {
+      var def = _.Deferred();
+      var numberCompleted = 0;
+      var totalExpected = args.length;
+      var isExpired = false;
+      var results = [];
+      var numberFailed = 0;
+      var to;
+
+      if (expires) {
+         to = setTimeout(function() {
+            isExpired = true;
+            // find any pending promises and mark them expired
+            _.each(args, function(o, i) {
+               if( o && typeof(o) === 'object' && o.promise && o.state ) {
+                  if( o.state() === 'pending' ) {
+                     next(i, 'expired');
+                  }
+               }
+            })
+         }, expires);
+      }
+
+      function next(pos, status, values) {
+         var res = [pos, status];
+         if( values ) { Array.prototype.push.apply(res, values); }
+         numberCompleted++;
+         if( status !== 'resolved' ) { numberFailed++; }
+         def.notify.apply(def, res);
+         results[pos] = res.slice(1);
+         if( numberCompleted === totalExpected ) {
+            // all promises resolved or rejected
+            to && clearTimeout(to);
+            if( numberFailed ) {
+               def.reject(results);
+            }
+            else {
+               def.resolve(results);
+            }
+         }
+      }
+
+      if( !totalExpected ) {
+         // deal with empty args objects
+         def.resolve(results);
+      }
+      else {
+         // iterate the objects and wait for them to fulfill
+         // these may get called after we expire the data, so make sure
+         // than anything after that point doesn't result in a change to the data
+         _.each(args, function(arg, i) {
+            setTimeout(function() {
+               _.when(arg).then(
+                  function() {
+                     isExpired || next(i, 'resolved', _.toArray(arguments));
+                  },
+                  function() {
+                     isExpired || next(i, 'rejected', _.toArray(arguments));
+                  }
+               );
+            }, 0);
+         });
+      }
+
+      return def.promise();
+   }
+
+})(window);
+(function(root){
+
+   // Let's borrow a couple of things from Underscore that we'll need
+
+   // _.each
+   var breaker = {},
+      AP = Array.prototype,
+      OP = Object.prototype,
+
+      hasOwn = OP.hasOwnProperty,
+      toString = OP.toString,
+      forEach = AP.forEach,
+      indexOf = AP.indexOf,
+      slice = AP.slice;
+
+   var _each = function( obj, iterator, context ) {
+      var key, i, l;
+
+      if ( !obj ) {
+         return;
+      }
+      if ( forEach && obj.forEach === forEach ) {
+         obj.forEach( iterator, context );
+      } else if ( obj.length === +obj.length ) {
+         for ( i = 0, l = obj.length; i < l; i++ ) {
+            if ( i in obj && iterator.call( context, obj[i], i, obj ) === breaker ) {
+               return;
+            }
+         }
+      } else {
+         for ( key in obj ) {
+            if ( hasOwn.call( obj, key ) ) {
+               if ( iterator.call( context, obj[key], key, obj) === breaker ) {
+                  return;
+               }
+            }
+         }
+      }
+   };
+
+   // _.isFunction
+   var _isFunction = function( obj ) {
+      return !!(obj && obj.constructor && obj.call && obj.apply);
+   };
+
+   // _.extend
+   var _extend = function( obj ) {
+
+      _each( slice.call( arguments, 1), function( source ) {
+         var prop;
+
+         for ( prop in source ) {
+            if ( source[prop] !== void 0 ) {
+               obj[ prop ] = source[ prop ];
+            }
+         }
+      });
+      return obj;
+   };
+
+   // $.inArray
+   var _inArray = function( elem, arr, i ) {
+      var len;
+
+      if ( arr ) {
+         if ( indexOf ) {
+            return indexOf.call( arr, elem, i );
+         }
+
+         len = arr.length;
+         i = i ? i < 0 ? Math.max( 0, len + i ) : i : 0;
+
+         for ( ; i < len; i++ ) {
+            // Skip accessing in sparse arrays
+            if ( i in arr && arr[ i ] === elem ) {
+               return i;
+            }
+         }
+      }
+
+      return -1;
+   };
+
+   // And some jQuery specific helpers
+
+   var class2type = {};
+
+   // Populate the class2type map
+   _each("Boolean Number String Function Array Date RegExp Object".split(" "), function(name, i) {
+      class2type[ "[object " + name + "]" ] = name.toLowerCase();
+   });
+
+   var _type = function( obj ) {
+      return obj == null ?
+         String( obj ) :
+         class2type[ toString.call(obj) ] || "object";
+   };
+
+   // Now start the jQuery-cum-Underscore implementation. Some very
+   // minor changes to the jQuery source to get this working.
+
+   // Internal Deferred namespace
+   var _d = {};
+   // String to Object options format cache
+   var optionsCache = {};
+
+   // Convert String-formatted options into Object-formatted ones and store in cache
+   function createOptions( options ) {
+      var object = optionsCache[ options ] = {};
+      _each( options.split( /\s+/ ), function( flag ) {
+         object[ flag ] = true;
+      });
+      return object;
+   }
+
+   _d.Callbacks = function( options ) {
+
+      // Convert options from String-formatted to Object-formatted if needed
+      // (we check in cache first)
+      options = typeof options === "string" ?
+         ( optionsCache[ options ] || createOptions( options ) ) :
+         _extend( {}, options );
+
+      var // Last fire value (for non-forgettable lists)
+         memory,
+      // Flag to know if list was already fired
+         fired,
+      // Flag to know if list is currently firing
+         firing,
+      // First callback to fire (used internally by add and fireWith)
+         firingStart,
+      // End of the loop when firing
+         firingLength,
+      // Index of currently firing callback (modified by remove if needed)
+         firingIndex,
+      // Actual callback list
+         list = [],
+      // Stack of fire calls for repeatable lists
+         stack = !options.once && [],
+      // Fire callbacks
+         fire = function( data ) {
+            memory = options.memory && data;
+            fired = true;
+            firingIndex = firingStart || 0;
+            firingStart = 0;
+            firingLength = list.length;
+            firing = true;
+            for ( ; list && firingIndex < firingLength; firingIndex++ ) {
+               if ( list[ firingIndex ].apply( data[ 0 ], data[ 1 ] ) === false && options.stopOnFalse ) {
+                  memory = false; // To prevent further calls using add
+                  break;
+               }
+            }
+            firing = false;
+            if ( list ) {
+               if ( stack ) {
+                  if ( stack.length ) {
+                     fire( stack.shift() );
+                  }
+               } else if ( memory ) {
+                  list = [];
+               } else {
+                  self.disable();
+               }
+            }
+         },
+      // Actual Callbacks object
+         self = {
+            // Add a callback or a collection of callbacks to the list
+            add: function() {
+               if ( list ) {
+                  // First, we save the current length
+                  var start = list.length;
+                  (function add( args ) {
+                     _each( args, function( arg ) {
+                        var type = _type( arg );
+                        if ( type === "function" ) {
+                           if ( !options.unique || !self.has( arg ) ) {
+                              list.push( arg );
+                           }
+                        } else if ( arg && arg.length && type !== "string" ) {
+                           // Inspect recursively
+                           add( arg );
+                        }
+                     });
+                  })( arguments );
+                  // Do we need to add the callbacks to the
+                  // current firing batch?
+                  if ( firing ) {
+                     firingLength = list.length;
+                     // With memory, if we're not firing then
+                     // we should call right away
+                  } else if ( memory ) {
+                     firingStart = start;
+                     fire( memory );
+                  }
+               }
+               return this;
+            },
+            // Remove a callback from the list
+            remove: function() {
+               if ( list ) {
+                  _each( arguments, function( arg ) {
+                     var index;
+                     while( ( index = _inArray( arg, list, index ) ) > -1 ) {
+                        list.splice( index, 1 );
+                        // Handle firing indexes
+                        if ( firing ) {
+                           if ( index <= firingLength ) {
+                              firingLength--;
+                           }
+                           if ( index <= firingIndex ) {
+                              firingIndex--;
+                           }
+                        }
+                     }
+                  });
+               }
+               return this;
+            },
+            // Control if a given callback is in the list
+            has: function( fn ) {
+               return _inArray( fn, list ) > -1;
+            },
+            // Remove all callbacks from the list
+            empty: function() {
+               list = [];
+               return this;
+            },
+            // Have the list do nothing anymore
+            disable: function() {
+               list = stack = memory = undefined;
+               return this;
+            },
+            // Is it disabled?
+            disabled: function() {
+               return !list;
+            },
+            // Lock the list in its current state
+            lock: function() {
+               stack = undefined;
+               if ( !memory ) {
+                  self.disable();
+               }
+               return this;
+            },
+            // Is it locked?
+            locked: function() {
+               return !stack;
+            },
+            // Call all callbacks with the given context and arguments
+            fireWith: function( context, args ) {
+               args = args || [];
+               args = [ context, args.slice ? args.slice() : args ];
+               if ( list && ( !fired || stack ) ) {
+                  if ( firing ) {
+                     stack.push( args );
+                  } else {
+                     fire( args );
+                  }
+               }
+               return this;
+            },
+            // Call all the callbacks with the given arguments
+            fire: function() {
+               self.fireWith( this, arguments );
+               return this;
+            },
+            // To know if the callbacks have already been called at least once
+            fired: function() {
+               return !!fired;
+            }
+         };
+
+      return self;
+   };
+
+   _d.Deferred = function( func ) {
+
+      var tuples = [
+            // action, add listener, listener list, final state
+            [ "resolve", "done", _d.Callbacks("once memory"), "resolved" ],
+            [ "reject", "fail", _d.Callbacks("once memory"), "rejected" ],
+            [ "notify", "progress", _d.Callbacks("memory") ]
+         ],
+         state = "pending",
+         promise = {
+            state: function() {
+               return state;
+            },
+            always: function() {
+               deferred.done( arguments ).fail( arguments );
+               return this;
+            },
+            then: function( /* fnDone, fnFail, fnProgress */ ) {
+               var fns = arguments;
+
+               return _d.Deferred(function( newDefer ) {
+
+                  _each( tuples, function( tuple, i ) {
+                     var action = tuple[ 0 ],
+                        fn = fns[ i ];
+
+                     // deferred[ done | fail | progress ] for forwarding actions to newDefer
+                     deferred[ tuple[1] ]( _isFunction( fn ) ?
+
+                        function() {
+                           var returned;
+                           try { returned = fn.apply( this, arguments ); } catch(e){
+                              newDefer.reject(e);
+                              return;
+                           }
+
+                           if ( returned && _isFunction( returned.promise ) ) {
+                              returned.promise()
+                                 .done( newDefer.resolve )
+                                 .fail( newDefer.reject )
+                                 .progress( newDefer.notify );
+                           } else {
+                              newDefer[ action !== "notify" ? 'resolveWith' : action + 'With']( this === deferred ? newDefer : this, [ returned ] );
+                           }
+                        } :
+
+                        newDefer[ action ]
+                     );
+                  });
+
+                  fns = null;
+
+               }).promise();
+
+            },
+            // Get a promise for this deferred
+            // If obj is provided, the promise aspect is added to the object
+            promise: function( obj ) {
+               return obj != null ? _extend( obj, promise ) : promise;
+            }
+         },
+         deferred = {};
+
+      // Keep pipe for back-compat
+      promise.pipe = promise.then;
+
+      // Add list-specific methods
+      _each( tuples, function( tuple, i ) {
+         var list = tuple[ 2 ],
+            stateString = tuple[ 3 ];
+
+         // promise[ done | fail | progress ] = list.add
+         promise[ tuple[1] ] = list.add;
+
+         // Handle state
+         if ( stateString ) {
+            list.add(function() {
+               // state = [ resolved | rejected ]
+               state = stateString;
+
+               // [ reject_list | resolve_list ].disable; progress_list.lock
+            }, tuples[ i ^ 1 ][ 2 ].disable, tuples[ 2 ][ 2 ].lock );
+         }
+
+         // deferred[ resolve | reject | notify ] = list.fire
+         deferred[ tuple[0] ] = list.fire;
+         deferred[ tuple[0] + "With" ] = list.fireWith;
+      });
+
+      // Make the deferred a promise
+      promise.promise( deferred );
+
+      // Call given func if any
+      if ( func ) {
+         func.call( deferred, deferred );
+      }
+
+      // All done!
+      return deferred;
+   };
+
+   // Deferred helper
+   _d.when = function( subordinate /* , ..., subordinateN */ ) {
+
+      var i = 0,
+         resolveValues = ( _type(subordinate) === 'array' && arguments.length === 1 ) ? subordinate : slice.call( arguments ),
+         length = resolveValues.length;
+
+      if ( _type(subordinate) === 'array' && subordinate.length === 1 ) {
+         subordinate = subordinate[ 0 ];
+      }
+
+      // the count of uncompleted subordinates
+      var remaining = length !== 1 || ( subordinate && _isFunction( subordinate.promise ) ) ? length : 0,
+
+      // the master Deferred. If resolveValues consist of only a single Deferred, just use that.
+         deferred = remaining === 1 ? subordinate : _d.Deferred(),
+
+      // Update function for both resolve and progress values
+         updateFunc = function( i, contexts, values ) {
+            return function( value ) {
+               contexts[ i ] = this;
+               values[ i ] = arguments.length > 1 ? slice.call( arguments ) : value;
+               if( values === progressValues ) {
+                  deferred.notifyWith( contexts, values );
+               } else if ( !( --remaining ) ) {
+                  deferred.resolveWith( contexts, values );
+               }
+            };
+         },
+
+         progressValues, progressContexts, resolveContexts;
+
+      // add listeners to Deferred subordinates; treat others as resolved
+      if ( length > 1 ) {
+         progressValues = new Array( length );
+         progressContexts = new Array( length );
+         resolveContexts = new Array( length );
+         for ( ; i < length; i++ ) {
+            if ( resolveValues[ i ] && _isFunction( resolveValues[ i ].promise ) ) {
+               resolveValues[ i ].promise()
+                  .done( updateFunc( i, resolveContexts, resolveValues ) )
+                  .fail( deferred.reject )
+                  .progress( updateFunc( i, progressContexts, progressValues ) );
+            } else {
+               --remaining;
+            }
+         }
+      }
+
+      // if we're not waiting on anything, resolve the master
+      if ( !remaining ) {
+         deferred.resolveWith( resolveContexts, resolveValues );
+      }
+
+      return deferred.promise();
+   };
+
+   // Try exporting as a Common.js Module
+   if ( typeof module !== "undefined" && module.exports ) {
+      module.exports = _d;
+
+      // Or mixin to Underscore.js
+   } else if ( typeof root._ !== "undefined" ) {
+      root._.mixin(_d);
+
+      // Or assign it to window._
+   } else {
+      root._ = _d;
+   }
+
+})(this);
+/*******************************************
+ * Knockout Sync - v0.1.0 - 2012-07-02
+ * https://github.com/katowulf/knockout-sync
+ * Copyright (c) 2012 Michael "Kato" Wulf; Licensed MIT, GPL
+ *******************************************/
+(function(ko) {
+   "use strict";
+   var undefined;
+
+   // namespace
+   ko.sync = {
+      stores: {},
+
+      isObservableArray: function(o) {
+         return typeof(o) === 'function' && !!ko.isObservable(o) && !!o.splice && _.isArray(o());
+      },
+
+      /**
+       * Creates a copy of the data with all observables unwrapped to their value
+       *
+       * @param {Object|Array} data
+       * @return {Object}
+       */
+      unwrapAll: function(data) {
+         var unwrap = ko.utils.unwrapObservable;
+         data = unwrap(data);
+         var out = _.isArray(data)? [] : {};
+         _.each(data, function(v, key) {
+            v = unwrap(v);
+            out[key] = _.isObject(v)? ko.sync.unwrapAll(v) : v;
+         });
+         return out;
+      },
+
+      /**
+       * Create a copy of the data suitable for sending to the store
+       * @param {Object} data
+       * @param {ko.sync.Store} store
+       * @return {Object}
+       */
+      prepStoreData: function(data, store) {
+         return data? _.pick(ko.sync.unwrapAll(data), store.getFieldNames()) : data;
+      },
+
+      /**
+       * Apply updates to observable without destroying any properties on the object which aren't in our purview;
+       * maintain any observables as such.
+       *
+       * @param {ko.observable} observable
+       * @param {Object} data
+       */
+      applyUpdates: function(observable, data) {
+         if( data ) {
+            var isObs = ko.isObservable(observable), out = ko.utils.unwrapObservable(observable)||{};
+            _.each(data, function(v, k) {
+               if( ko.isObservable(out[k]) ) {
+                  out[k](v);
+               }
+               else {
+                  out[k] = v;
+               }
+            });
+            if( isObs ) {
+               observable(out);
+            }
+         }
+         console.log('applyUpdates', observable); //debug
+         return observable;
+      }
+   };
+
+   /**
+    * Synchronize knockout observable or observableArray to the data store.
+    *
+    * An observable is always immediately synchronized to the Store when this method is called. For an
+    * observable object, an optional key can be passed to load the record from the Store by key. Otherwise,
+    * the observable is assumed to contain new data and a create is called using the data in the observable.
+    *
+    * An observableArray should not contain data when sync is called.
+    *
+    * The opts object:
+    *   {ko.sync.Store} store - required
+    *   {String} key - optional (observable only) immediately fetches record from Store and synchronizes
+    *
+    * @param {ko.observable|ko.observableArray} target
+    * @param {Object} opts
+    */
+   ko.extenders.sync = function(target, opts) {
+      opts = ko.utils.extend({}, opts);
+      var store = opts.store;
+      if( !(store instanceof ko.sync.Store) ) {
+         throw new Error('Must declare a store to sync any observable');
+      }
+
+      if( ko.sync.isObservableArray(target) ) {
+         target.crud = new ko.sync.CrudArray(target, store, opts.factory);
+         target.crud.read();
+      }
+      else {
+         target.crud = new ko.sync.Crud(target, store);
+         if( opts.key ) { target.crud.read(opts.key); }
+         else if(_.isObject(ko.utils.unwrapObservable(target))) {
+            target.crud.create();
+         }
+      }
+
+      return target;
+   };
+
+   /**
+    * Notifies callback method whenever data within an observable array is changed. Only called if the data actually
+    * changes and not just because observable(...some value...) is invoked.
+    *
+    * @param {ko.sync.Store} store
+    * @param {Function} callback
+    * @returns {{dispose: Function}}
+    */
+   ko.observable.fn.watchChanges = function(store, callback) {
+      var rootSub, preSub, oldValue = null;
+
+      preSub = this.subscribe(function(prevValue) {
+         oldValue = ko.sync.unwrapAll(prevValue);
+      }, undefined, 'beforeChange');
+
+      // watch for replacement of the entire object
+      rootSub = this.subscribe(function(newValue) {
+         newValue = ko.sync.unwrapAll(newValue);
+         if( !_.isEqual(newValue, oldValue) ) {
+            // invoke the callback
+            callback(newValue);
+         }
+//         oldValue = newValue;
+      });
+
+      return {
+         dispose: function() {
+            rootSub && rootSub.dispose();
+            preSub && preSub.dispose();
+         }
+      };
+   };
+
+   /**
+    * Notifies callback method whenever data within an observable array is changed. The callback is given an object
+    * keyed by the record ids, and an object containing:
+    *    {String} status: create, delete, or update
+    *    {Object} value:  the data
+    *
+    * @param {ko.sync.Store} store
+    * @param {Function} callback
+    * @returns {{dispose: Function}}
+    */
+   ko.observableArray.fn.watchChanges = function(store, callback) {
+      if( this.watcher ) {
+         this.watcher.add(callback);
+      }
+      else {
+         this.watcher = new ko.sync.ArrayWatcher(this, store);
+         this.watcher.add(callback);
+      }
+      return this;
+   }
+
+})(window.ko);
+/*! ArrayWatcher.js
+ *************************************/
+(function ($) {
+   "use strict";
+   ko.sync.ArrayWatcher = function(obsArray, store) {
+      var rootSub, preSub, oldValue, subs = [];
+
+      preSub = obsArray.subscribe(function(prevValue) {
+         oldValue = ko.sync.unwrapAll(prevValue);
+      }, undefined, 'beforeChange');
+
+      // watch for replacement of the entire object
+      rootSub = obsArray.subscribe(function(newValue) {
+         var changes = findChanges(store, oldValue, newValue);
+         // invoke the callback
+         _.each(subs, function(fn) {
+            fn(changes);
+         });
+      });
+
+      this.dispose = function() {
+         rootSub && rootSub.dispose();
+         preSub && preSub.dispose();
+      };
+
+      this.add = function(fn) {
+         subs.push(fn);
+      }
+   };
+
+/**
+ * Assumptions:
+ *   - fields in b not in a are added
+ *   - fields in a not in b are deleted
+ *   - object literals are compared using _.isEqual
+ *   - objects with a .equals method are compared using .equals
+ *   - other fields are compared with ===
+ *
+ * @param {ko.sync.Store} store
+ * @param {Array} a the original
+ * @param {Array} b the new
+ * @return {object}
+ */
+function findChanges(store, a, b) {
+   var out = {};
+   compareArrays(store, a, b, function(key, aVal, bVal, aPrev, bPrev, i) {
+      if( !_.isEqual(aVal, bVal) ) {
+         if( aVal === undefined ) {
+            out[key] = { status: 'create', data: bVal, prevId: bPrev, idx: i };
+         }
+         else if( bVal === undefined ) {
+            out[key] = { status: 'delete' };
+         }
+         else {
+            out[key] = { status: 'update', data: bVal, prevId: bPrev, idx: i };
+         }
+      }
+      else if( !_.isEqual(aPrev, bPrev) ) {
+         out[key] = { status: 'move', prevId: bPrev, idx: i };
+      }
+   });
+   return out;
+}
+
+/**
+ * @param {ko.sync.Store} store
+ * @param data
+ * @param {Array} otherData
+ * @param {Function} fn
+ */
+function compareArrays(store, data, otherData, fn) {
+   // we index otherData but not the original data, this means we only iterate
+   // each set exactly once (plus one iteration of all the added elmeents in otherData)
+   var prevKey = null, bSet = indexArray(store, otherData), ct = 0;
+   _.each(data||[], function(av) {
+      var k = store.getKey(av), bv = bSet[k];
+      fn(k, av, bv && bv.value, prevKey, bv && bv.prevKey, ct++);
+      prevKey = k;
+      delete bSet[k];
+   });
+   _.each(bSet, function(v,k) {
+      fn(k, undefined, v.value, undefined, v.prevKey, ct++);
+   });
+}
+
+function indexArray(store, data) {
+   var out = {}, prevKey = null;
+   ko.utils.arrayForEach(data||[], function(v) {
+      var k = store.getKey(v);
+      out[k] = {value: v, prevKey: prevKey};
+      prevKey = k;
+   });
+   return out;
+}
+})(jQuery);
+/*! Crud.js
+ *************************************/
+(function (ko) {
+   "use strict";
+
+   ko.sync.Crud = function(observable, store) {
+      this.observable = observable;
+      this.store = store;
+      this.ready = _.Deferred().resolve();
+   };
+
+   ko.utils.extend(ko.sync.Crud.prototype, {
+      'create': function(newData) {
+         return this._then(function() {
+            if( newData ) {
+               ko.sync.applyUpdates(this.observable, newData);
+            }
+            var data = ko.sync.prepStoreData(this.observable, this.store);
+            return _.when(this.store.create(data))
+               .done(function(key) {
+                  this.key = key;
+                  this._sync();
+               }.bind(this));
+         });
+      },
+
+      'read': function(key) {
+         return this._then(function() {
+            this.key = key;
+            return _.when(this.store.read(key)).done(function(data) {
+               this._change(this.observable, data);
+               this._sync();
+            }.bind(this));
+         });
+      },
+
+      'update': function(updates) {
+         return this._then(function() {
+            if( updates ) {
+               this.observable(ko.utils.extend(this.observable(), updates));
+            }
+            var data = ko.sync.prepStoreData(this.observable, this.store);
+            return _.when(this.store.update(this.key, data));
+         });
+      },
+
+      'delete': function() {
+         return this._then(function() {
+            return _.when(this.store.delete(this.key));
+         });
+      },
+
+      _sync: function() {
+         this.store.on('create update delete', this.key, this._change.bind(this));
+         this.observable.watchChanges(this.store, this._local.bind(this));
+      },
+
+//      _add: function(k, v) {
+//         if( k === this.key ) {
+//            // key can change if the data it depends on changed
+//            this.key = this.store.getKey(v);
+//            this.observable(v);
+//         }
+//      },
+//
+//      _remove: function(k, v) {
+//         if( k === this.key ) {
+//            this.observable(null);
+//         }
+//      },
+
+      _change: function(k, v) {
+         ko.sync.applyUpdates(this.observable, v);
+      },
+
+      _local: function(v) {
+         this.store.update(this.key, ko.sync.prepStoreData(v, this.store));
+      },
+
+      _then: function(fn) {
+         fn = fn.bind(this);
+         this.ready = this.ready.then(function() {
+            var d = _.Deferred();
+            _.when(fn()).always(d.resolve);
+            return d;
+         });
+         return this;
+      }
+   });
+
+})(window.ko);
+/*! CrudArray.js
+ *************************************/
+(function (ko) {
+   "use strict";
+
+   ko.sync.CrudArray = function(observableArray, store, factory) {
+      this.obs = observableArray;
+      this.store = store;
+      this._map = new ko.sync.KeyMap(store, observableArray);
+      this.factory = factory || new ko.sync.Factory(store);
+      this.ready = _.Deferred().resolve();
+   };
+
+   ko.utils.extend(ko.sync.CrudArray.prototype, {
+      create: function(recs) {
+         return this._then(function() {
+            var ct = 0;
+            if( !_.isArray(recs) ) { recs = recs? [recs] : []; }
+            _.each(recs, function(rec) {
+               if( this._create(this.store.getKey(rec), rec) >= 0 ) { ct++; }
+            }.bind(this));
+            return ct;
+         });
+      },
+
+      read: function() {
+         return this._then(function() {
+            var def = _.Deferred(), loading = whenLoaded(def);
+
+            // watch remote changes
+            this.store.on('create', function() {
+               this._create.apply(this, ko.utils.makeArray(arguments));
+               loading();
+            }.bind(this));
+
+            this.store.on('update', this._update.bind(this));
+            this.store.on('delete', this._delete.bind(this));
+
+            // watch local changes
+            this.obs.watchChanges(this.store, this._local.bind(this));
+
+            return def;
+         });
+      },
+
+      update: function(key, data) {
+         return this._then(function() {
+            if( this._update(key, data) ) {
+               console.log('CrudArray:update', key); //debug
+               return key;
+            }
+            else {
+               console.warn('CrudArray::update - invalid key (not in local data)', key);
+               return false;
+            }
+         });
+      },
+
+      delete: function(key) {
+         return this._then(function() {
+            var i = this._map.indexOf(key);
+            if( i > -1 ) {
+               return this.obs.splice(i, 1);
+            }
+            else {
+               return false;
+            }
+         });
+      },
+
+      _create: function(key, data) {
+         //todo prevId
+         var i = this._map.indexOf(key);
+         if( i < 0 ) {
+            return this.obs.push(this.factory.make(key, data));
+         }
+         else {
+            this._update(key, data);
+            return -1;
+         }
+      },
+
+      _update: function(key, data) {
+         var i = this._map.indexOf(key), rec;
+         if( i >= 0 ) {
+            rec = this.obs()[i];
+            console.log('_update', i, hasChanges(rec, data), key, ko.sync.applyUpdates(rec, data)); //debug
+            hasChanges(rec, data) && this.obs.splice(i, 1, ko.sync.applyUpdates(rec, data));
+         }
+         return i;
+      },
+
+      _delete: function(key) {
+         var i = this._map.indexOf(key);
+         if( i >= 0 ) {
+            this.obs.splice(i, 1);
+         }
+      },
+
+      _local: function(changes) {
+         _.each(changes, function(change, key) {
+            switch(change.status) {
+               case 'create':
+                  this.store.create(ko.sync.prepStoreData(change.data, this.store));
+                  break;
+               case 'update':
+                  console.log('store update', key); //debug
+                  this.store.update(key, ko.sync.prepStoreData(change.data, this.store));
+                  break;
+               case 'delete':
+                  this.store.delete(key);
+                  break;
+               case 'move': // nothing to do here
+                  break;
+               default:
+                  throw new Error('Invalid change status: '+change.status);
+            }
+         }.bind(this));
+      },
+
+      _then: function(fn) {
+         fn = fn.bind(this);
+         this.ready = this.ready.then(function() {
+            var d = _.Deferred();
+            _.when(fn()).always(d.resolve);
+            return d;
+         });
+         return this;
+      }
+
+   });
+
+   function hasChanges(orig, newData) {
+      if( !newData ) { return false; }
+      orig = ko.sync.unwrapAll(orig);
+      var key;
+      for (key in newData) {
+         if (newData.hasOwnProperty(key) && !_.isEqual(orig[key], newData[key])) {
+            console.log('change found', key, orig[key], newData[key]); //debug
+            return true;
+         }
+      }
+      return false;
+   }
+
+   function whenLoaded(def) {
+      var to = setTimeout(def.resolve, 1000);
+      var fn = _.debounce(def.resolve, 100);
+      var unresolved = true;
+      def.always(function() {
+         console.log('resolved'); //debug
+      });
+      return function() {
+         if( to ) {
+            clearTimeout(to);
+            to = null;
+         }
+         if( unresolved ) {
+            console.log('unresolved'); //debug
+            fn();
+            unresolved = def.state() === 'pending';
+         }
+      };
+   }
+
+})(window.ko);
+/*! Factory.js
+ *************************************/
+(function ($) {
+   "use strict";
+   ko.sync.Factory = Class.extend({
+      init: function(store) {
+         this.store = store;
+      },
+      make: function(key, data) {
+         return _.pick(data, this.store.getFieldNames());
+      }
+   });
+})(jQuery);
+/*! Index.js
+ *************************************/
+(function ($) {
+   "use strict";
+   ko.sync.KeyMap = function(store, observableArray) {
+      this._subs = [];
+      this._idx = {};
+      this._init(store, observableArray);
+   };
+
+   ko.utils.extend(ko.sync.KeyMap.prototype, {
+      indexOf: function(key) {
+         return this.hasKey(key)? this._idx[key] : -1;
+      },
+
+      hasKey: function(key) {
+         return _.has(this._idx, key);
+      },
+
+      _changed: function(changes) {
+         var idx = this._idx;
+         _.each(changes, function(c, k) {
+            switch(c.status) {
+               case 'delete':
+                  delete idx[k];
+                  break;
+               case 'create':
+               case 'update':
+               case 'move':
+                  idx[k] = c.idx;
+                  break;
+               default:
+                  throw new Error('Invalid change status: '+ c.status);
+            }
+         });
+      },
+
+      _init: function(store, obsArray) {
+         _.each(ko.sync.unwrapAll(obsArray), function(rec, i) {
+            this._idx[ store.getKey(rec) ] = i;
+         });
+         this._subs.push(obsArray.watchChanges(store, this._changed.bind(this)));
+      },
+
+      dispose: function() {
+         _.each(this._subs, function(s) {s.dispose()});
+         this._idx = null;
+         this._subs = null;
+      }
+   });
+})(jQuery);
+/*! Store.js
+ *************************************/
+(function (ko) {
+   "use strict";
+
+   /**
+    * A Store is any place that the data referenced in knockout can be retrieved from and saved back into.
+    * This can be a database connection, localStorage, a third party library, or even an array that you
+    * push and pull from. Knockout-sync doesn't care.
+    *
+    * To create a Store, simply extend ko.sync.Store and implement all the methods below. We're using John Resig's
+    * Class inheritance () so put your constructor in the `init` method.
+    *
+    * For a quick example of a Store, see plugins/LocalStore.js
+    *
+    * All the CRUD methods in Store have the option of returning a value, returning an Error, or returning
+    * a Promise (a Deferred object for async lookups). Knockout-sync does all the dirty work, so that if
+    * you have the data available you may simply return it immediately without the pretense of wrapping
+    * everything in a Promise first.
+    *
+    * @constructor
+    * @interface
+    */
+   ko.sync.Store = Class.extend({
+
+      /**
+       * The key (record id) must somehow be retrievable based on the data in the object that is given to
+       * Knockout. The simplest answer is to store the id in the record. However, you could also generate
+       * ids by combining values in some meaningful way or looking up the matching record--that's entirely
+       * up to you.
+       *
+       * @param {Object} data  the data record
+       * @returns {String}
+       */
+      getKey: function(data) {
+         throw new Error('Implementations must declare getKey method');
+      },
+
+      /**
+       * Returns a list of fields that are stored in the data record. This is to help with observables that have
+       * their own properties attached.
+       *
+       * @returns {Array}
+       */
+      getFieldNames: function() {
+         throw new Error('Implementations must declare getFieldNames method');
+      },
+
+      /**
+       * Create a new record in the data Store. In the case that the record already exists, it is up to the Store's
+       * discretion on how it should be handled; updating the record or ignoring the create operation are both valid
+       * and should work fine, but it should not reject or return an Error.
+       *
+       * Return an Error or reject the Deferred for failed operations or invalid data.
+       *
+       * @param {Object} data  the new data record
+       * @returns {Deferred|String} returns or resolves to the new record id (key)
+       */
+      create: function(data) {
+         throw new Error('Implementations must declare create method');
+      },
+
+      /**
+       * Fetch a record from the Store. If it doesn't exist, return null.
+       *
+       * Reject or return Error for operational errors.
+       *
+       * @param {String} key
+       * @returns {Deferred|Object|null} returns or resolves to the record data
+       */
+      read: function(key) {
+         throw new Error('Implementations must declare read method');
+      },
+
+      /**
+       * Save changes to the Store. Reject or return an Error if the operation fails. If the record does not exist,
+       * the Store may return/resolve false or create the record at its discretion. Reject or return an Error if the
+       * data is invalid.
+       *
+       * @param {String} key
+       * @param {Object} data
+       * @returns {Deferred|String|Error|boolean} returns or resolves to the key (record id)
+       */
+      update: function(key, data) {
+         throw new Error('Implementations must declare update method');
+      },
+
+      /**
+       * Removes a record from the store. If the record doesn't exist, simply returns the key (behaves exactly
+       * as if it was deleted).
+       *
+       * Reject or return Error if there is a problem with the operation.
+       *
+       * @param {String} key
+       * @returns {Deferred|String} returns or resolves to the key (record id)
+       */
+      'delete': function(key) {
+         throw new Error('Implementations must declare delete method');
+      },
+
+      /**
+       * Listens for push events from the Store. The possible events are create, update, and delete. The callback
+       * will always be passed {String}key, {Object}data, and {String}event for every event.
+       *
+       * Example:
+       * <pre><code>
+       *    // monitor both create and delete ops
+       *    store.on('create delete', function(key, data, event) {
+       *       alert('record ' + key + ' was deleted');
+       *    });
+       * </code></pre>
+       *
+       * It is also possible to monitor events for a specific record by passing a key as the second argument:
+       * Example:
+       * <pre><code>
+       *    // listen to one record only
+       *    store.on('update delete', 'record123', function(key, data) {
+       *       // note that the key is still passed to the callback
+       *       alert('this record changed');
+       *    });
+       * </code></pre>
+       *
+       * Note that when a listener is attached to the 'create' event for the first time, it should immediately receive
+       * all records (or in the case that key was passed exactly one record) from the data Store.
+       *
+       * @param {String} event  space delimited list of events to monitor
+       * @param {String} [key]
+       * @param {Function} callback
+       */
+      on: function(event, key, callback) {
+         //todo prevId
+         throw new Error('Implementations must declare on events for add, remove, and change');
+      },
+
+      /**
+       * Close any opened sockets, connections, and notifications. Perform any cleanup needed in prep
+       * for discarding the store and avoiding memory leaks.
+       */
+      dispose: function() {
+         throw new Error('Implementations must declare dispose method');
+      }
+
+   });
+
+})(window.ko);
