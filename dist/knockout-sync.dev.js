@@ -164,13 +164,15 @@
       var ArrayProto = Array.prototype;
 
       var breaker = {},
+         slice          = ArrayProto.slice,
          push           = ArrayProto.push,
          hasOwnProperty = Object.prototype.hasOwnProperty,
          nativeForEach  = ArrayProto.forEach,
          nativeIsArray  = Array.isArray,
          toString       = Object.prototype.toString,
          nativeMap      = ArrayProto.map,
-         concat         = ArrayProto.concat;
+         concat         = ArrayProto.concat,
+         nativeIndexOf  = ArrayProto.indexOf;
 
       var _ = root._ = {};
 
@@ -416,6 +418,83 @@
             if (callNow) result = func.apply(context, args);
             return result;
          };
+      };
+
+      // Extend a given object with all the properties in passed-in object(s).
+      _.extend = function(obj) {
+         each(slice.call(arguments, 1), function(source) {
+            if (source) {
+               for (var prop in source) {
+                  obj[prop] = source[prop];
+               }
+            }
+         });
+         return obj;
+      };
+
+
+      // If the browser doesn't supply us with indexOf (I'm looking at you, **MSIE**),
+      // we need this function. Return the position of the first occurrence of an
+      // item in an array, or -1 if the item is not included in the array.
+      // Delegates to **ECMAScript 5**'s native `indexOf` if available.
+      // If the array is large and already in sort order, pass `true`
+      // for **isSorted** to use binary search.
+      _.indexOf = function(array, item, isSorted) {
+         if (array == null) return -1;
+         var i = 0, l = array.length;
+         if (isSorted) {
+            if (typeof isSorted == 'number') {
+               i = (isSorted < 0 ? Math.max(0, l + isSorted) : isSorted);
+            } else {
+               i = _.sortedIndex(array, item);
+               return array[i] === item ? i : -1;
+            }
+         }
+         if (nativeIndexOf && array.indexOf === nativeIndexOf) return array.indexOf(item, isSorted);
+         for (; i < l; i++) if (array[i] === item) return i;
+         return -1;
+      };
+
+      // Sort the object's values by a criterion produced by an iterator.
+      _.sortBy = function(obj, value, context) {
+         var iterator = lookupIterator(value);
+         return _.pluck(_.map(obj, function(value, index, list) {
+            return {
+               value : value,
+               index : index,
+               criteria : iterator.call(context, value, index, list)
+            };
+         }).sort(function(left, right) {
+               var a = left.criteria;
+               var b = right.criteria;
+               if (a !== b) {
+                  if (a > b || a === void 0) return 1;
+                  if (a < b || b === void 0) return -1;
+               }
+               return left.index < right.index ? -1 : 1;
+            }), 'value');
+      };
+
+      // An internal function to generate lookup iterators.
+      var lookupIterator = function(value) {
+         return _.isFunction(value) ? value : function(obj){ return obj[value]; };
+      };
+
+      // Return the results of applying the iterator to each element.
+      // Delegates to **ECMAScript 5**'s native `map` if available.
+      _.map = _.collect = function(obj, iterator, context) {
+         var results = [];
+         if (obj == null) return results;
+         if (nativeMap && obj.map === nativeMap) return obj.map(iterator, context);
+         each(obj, function(value, index, list) {
+            results[results.length] = iterator.call(context, value, index, list);
+         });
+         return results;
+      };
+
+      // Convenience version of a common use case of `map`: fetching a property.
+      _.pluck = function(obj, key) {
+         return _.map(obj, function(value){ return value[key]; });
       };
 
    }
@@ -1040,6 +1119,44 @@
             }
          }
          return observable;
+      },
+
+      /**
+       * If the object contains any observable fields, then they are monitored. If the object itself is an observable,
+       * it is also monitored.
+       */
+      watchRecord: function(store, rec, callback) {
+         if( ko.isObservable(rec) ) {
+            return rec.watchChanges(store, callback);
+         }
+         else {
+            return ko.sync.watchFields(store, rec, callback);
+         }
+      },
+
+      watchFields: function(store, rec, callback) {
+         var subs = [], unwrappedRec = ko.utils.unwrapObservable(rec)||{};
+         _.each(store.getFieldNames(), function(f) {
+            var v = unwrappedRec[f];
+            if( v && ko.isObservable(v) ) {
+               if( ko.sync.isObservableArray(v) ) {
+                  subs.push(v.subscribe(callback.bind(null, rec)));
+               }
+               else {
+                  subs.push(v.subscribe(callback.bind(null, rec)));
+               }
+            }
+         });
+         return {
+            dispose: function() {
+               _.each(subs, function(s) {s.dispose()});
+            }
+         }
+      },
+
+      isEqual: function(fields, recA, recB) {
+         if( !recA || !recB ) { return recA === recB; }
+         return recA === recB || _.isEqual(_.pick(ko.sync.unwrapAll(recA), fields), _.pick(ko.sync.unwrapAll(recB), fields));
       }
    };
 
@@ -1091,7 +1208,7 @@
     * @returns {{dispose: Function}}
     */
    ko.observable.fn.watchChanges = function(store, callback) {
-      var rootSub, preSub, oldValue = null;
+      var rootSub, preSub, oldValue = null, fieldSubs;
 
       preSub = this.subscribe(function(prevValue) {
          oldValue = ko.sync.unwrapAll(prevValue);
@@ -1099,18 +1216,20 @@
 
       // watch for replacement of the entire object
       rootSub = this.subscribe(function(newValue) {
-         newValue = ko.sync.unwrapAll(newValue);
-         if( !_.isEqual(newValue, oldValue) ) {
+         var newUnwrapped = ko.sync.unwrapAll(newValue);
+         if( !ko.sync.isEqual(store.getFieldNames(), newUnwrapped, oldValue) ) {
             // invoke the callback
             callback(newValue);
          }
-//         oldValue = newValue;
       });
+
+      fieldSubs = ko.sync.watchFields(store, this, callback);
 
       return {
          dispose: function() {
             rootSub && rootSub.dispose();
             preSub && preSub.dispose();
+            fieldSubs && fieldSubs.dispose();
          }
       };
    };
@@ -1133,7 +1252,7 @@
          this.watcher = new ko.sync.ArrayWatcher(this, store);
          this.watcher.add(callback);
       }
-      return this;
+      return this.watcher;
    }
 
 })(window.ko);
@@ -1142,29 +1261,63 @@
 (function () {
    "use strict";
    ko.sync.ArrayWatcher = function(obsArray, store) {
-      var rootSub, preSub, oldValue, subs = [];
+      var rootSub, preSub, oldValue, subs = [], recSubs = {};
 
       preSub = obsArray.subscribe(function(prevValue) {
          oldValue = ko.sync.unwrapAll(prevValue);
       }, undefined, 'beforeChange');
 
-      // watch for replacement of the entire object
-      rootSub = obsArray.subscribe(function(newValue) {
-         var changes = findChanges(store, oldValue, newValue);
-         // invoke the callback
+      var notify = function(changes) {
          _.each(subs, function(fn) {
             fn(changes);
          });
+      };
+
+      var watch = function(rec) {
+         recSubs[store.getKey(rec)] = ko.sync.watchRecord(store, rec, function(changedRec) {
+            var out = {};
+            out[store.getKey(changedRec)] = {status: 'update', data: changedRec};
+            notify(out);
+         });
+      };
+
+      // watch for replacement of the entire object
+      rootSub = obsArray.subscribe(function(newValue) {
+         var changes = findChanges(store, oldValue, newValue);
+         // update listeners for any nested callbacks
+         _.each(changes, function(c, k) {
+            switch(c.status) {
+               case 'create':
+                  // watch for changes to this record
+                  watch(c.data);
+                  break;
+               case 'delete':
+                  // stop watching this record
+                  if( recSubs[k] ) {
+                     recSubs[k].dispose();
+                     delete recSubs[k];
+                  }
+                  break;
+               default: // leave it alone
+            }
+         });
+         // invoke the callbacks
+         !_.isEmpty(changes) && notify(changes);
       });
+
+      // watch pre-existing elements of the array
+      _.each(obsArray()||[], watch);
 
       this.dispose = function() {
          rootSub && rootSub.dispose();
          preSub && preSub.dispose();
+         _.each(recSubs, function(s) {s.dispose()});
       };
 
       this.add = function(fn) {
          subs.push(fn);
-      }
+         return this;
+      }.bind(this);
    };
 
 /**
@@ -1181,9 +1334,9 @@
  * @return {object}
  */
 function findChanges(store, a, b) {
-   var out = {}, prevKey = null, i = 0;
+   var out = {}, prevKey = null, i = 0, fieldNames = store.getFieldNames();
    compareArrays(store, a, b, function(key, newVal, oldVal, oldIdx) {
-      if( !_.isEqual(oldVal, newVal) ) {
+      if( !ko.sync.isEqual(fieldNames, oldVal, newVal) ) {
          if( oldVal === undefined ) {
             out[key] = { status: 'create', data: newVal, prevId: prevKey, idx: i };
          }
@@ -1201,7 +1354,7 @@ function findChanges(store, a, b) {
          i++;
          prevKey = key;
       }
-      if( out[key] ) { console.log('changed', key, out[key].status, out[key].idx); }//debug
+//      if( out[key] ) { console.log('changed', key, out[key].status, out[key].idx); }//debug
    });
    return out;
 }
@@ -1309,7 +1462,9 @@ function indexArray(store, data) {
 //      },
 
       _change: function(k, v) {
-         ko.sync.applyUpdates(this.observable, v);
+         if( !ko.sync.isEqual(this.store.getFieldNames(), this.observable, v) ) {
+            ko.sync.applyUpdates(this.observable, v);
+         }
       },
 
       _local: function(v) {
@@ -1332,13 +1487,22 @@ function indexArray(store, data) {
  *************************************/
 (function (ko) {
    "use strict";
+   var undefined;
 
+   /**
+    * @param {ko.observableArray} observableArray
+    * @param {ko.sync.Store} store
+    * @param {ko.sync.Factory} [factory]
+    * @constructor
+    */
    ko.sync.CrudArray = function(observableArray, store, factory) {
       this.obs = observableArray;
       this.store = store;
       this._map = new ko.sync.KeyMap(store, observableArray);
       this.factory = factory || new ko.sync.Factory(store);
       this.ready = _.Deferred().resolve();
+      this._synced = false;
+      this.subs = [];
    };
 
    ko.utils.extend(ko.sync.CrudArray.prototype, {
@@ -1354,29 +1518,33 @@ function indexArray(store, data) {
       },
 
       read: function() {
-         return this._then(function() {
-            var def = _.Deferred(), loading = whenLoaded(def);
+         if( this._synced ) {
+            return this.ready;
+         }
+         else {
+            return this._then(function() {
+               var def = _.Deferred(), loading = whenLoaded(def);
 
-            // watch remote changes
-            this.store.on('create', function() {
-               this._create.apply(this, ko.utils.makeArray(arguments));
-               loading();
-            }.bind(this));
+               // watch remote changes
+               this.store.on('create', function(key, val, evt, prevId) {
+                  this._create(key, val, prevId);
+                  loading();
+               }.bind(this));
 
-            this.store.on('update', this._update.bind(this));
-            this.store.on('delete', this._delete.bind(this));
+               this.store.on('update', this._update.bind(this));
+               this.store.on('delete', this._delete.bind(this));
 
-            // watch local changes
-            this.obs.watchChanges(this.store, this._local.bind(this));
+               // watch local changes
+               this.obs.watchChanges(this.store, this._local.bind(this));
 
-            return def;
-         });
+               return def;
+            });
+         }
       },
 
       update: function(key, data) {
          return this._then(function() {
             if( this._update(key, data) >= 0 ) {
-               console.log('CrudArray:update', key); //debug
                return key;
             }
             else {
@@ -1398,11 +1566,21 @@ function indexArray(store, data) {
          });
       },
 
-      _create: function(key, data) {
-         //todo prevId
-         var i = this._map.indexOf(key);
+      dispose: function() {
+         _.each(this.subs, function(s) {s.dispose()});
+      },
+
+      _create: function(key, data, prevId) {
+         var i = this._map.indexOf(key), prev = this._map.indexOf(prevId);
          if( i < 0 ) {
-            return this.obs.push(this.factory.make(key, data));
+            var rec = this.factory.make(key, data);
+            if( prevId === null || prev >= 0 ){
+               this.obs.splice(prev + 1, 0, rec);
+               return prev+1;
+            }
+            else {
+               return this.obs.push(rec);
+            }
          }
          else {
             this._update(key, data);
@@ -1414,12 +1592,13 @@ function indexArray(store, data) {
          var i = this._map.indexOf(key), rec;
          if( i >= 0 ) {
             rec = this.obs()[i];
-            if( hasChanges(rec, data) ){
+            if( hasChanges(this.store.getFieldNames(), rec, data) ){
                // must make a copy otherwise observableArray.fn.watchChanges will fail to find
                // the change, since we will be modifying the original data (causing it to appear
-               // to be the same after the update; fortunately, applyUpdates takes care of this
+               // to be the same after the update), fortunately, applyUpdates takes care of this
                var updatedRec = ko.sync.applyUpdates(rec, data);
-               this.obs.splice(i, 1, updatedRec);
+               // if the record isn't itself an observable, then we force an update by calling splice
+               ko.isObservable(updatedRec) || this.obs.splice(i, 1, updatedRec);
             }
          }
          return i;
@@ -1464,33 +1643,25 @@ function indexArray(store, data) {
 
    });
 
-   function hasChanges(orig, newData) {
+   function hasChanges(fields, orig, newData) {
       if( !newData ) { return false; }
-      orig = ko.sync.unwrapAll(orig);
-      var key;
-      for (key in newData) {
-         if (newData.hasOwnProperty(key) && !_.isEqual(orig[key], newData[key])) {
-            console.log('change found', key, orig[key], newData[key]); //debug
-            return true;
-         }
-      }
-      return false;
+      return !ko.sync.isEqual(fields, orig, newData);
    }
 
    function whenLoaded(def) {
       var to = setTimeout(def.resolve, 1000);
       var fn = _.debounce(def.resolve, 100);
       var unresolved = true;
-      def.always(function() {
-         console.log('resolved'); //debug
-      });
+//      def.always(function() {
+//         console.log('resolved'); //debug
+//      });
+
       return function() {
          if( to ) {
             clearTimeout(to);
             to = null;
          }
          if( unresolved ) {
-            console.log('unresolved'); //debug
             fn();
             unresolved = def.state() === 'pending';
          }
@@ -1500,7 +1671,7 @@ function indexArray(store, data) {
 })(window.ko);
 /*! Factory.js
  *************************************/
-(function ($) {
+(function () {
    "use strict";
    ko.sync.Factory = Class.extend({
       init: function(store, opts) {
@@ -1509,12 +1680,12 @@ function indexArray(store, data) {
       },
       make: function(key, data) {
          var dat = _.pick(data, this.store.getFieldNames());
-         if( this.opts.observedFields ) {
-            ko.utils.arrayForEach(this.opts.observedFields, function(f) {
-               dat[f] = _.isArray(dat[f]? ko.observableArray(f) : ko.observable(f));
+         if( this.opts.observeFields ) {
+            ko.utils.arrayForEach(this.opts.observeFields, function(f) {
+               dat[f] = _.isArray(dat[f])? ko.observableArray(dat[f]) : ko.observable(dat[f]);
             });
          }
-         if( this.opts.isObservable ) {
+         if( this.opts.observe ) {
             return ko.observable(dat);
          }
          else {
@@ -1522,10 +1693,10 @@ function indexArray(store, data) {
          }
       }
    });
-})(jQuery);
+})();
 /*! Index.js
  *************************************/
-(function ($) {
+(function () {
    "use strict";
    ko.sync.KeyMap = function(store, observableArray) {
       this._subs = [];
@@ -1535,7 +1706,7 @@ function indexArray(store, data) {
 
    ko.utils.extend(ko.sync.KeyMap.prototype, {
       indexOf: function(key) {
-         return this.hasKey(key)? this._idx[key] : -1;
+         return key && this.hasKey(key)? this._idx[key] : -1;
       },
 
       hasKey: function(key) {
@@ -1573,7 +1744,7 @@ function indexArray(store, data) {
          this._subs = null;
       }
    });
-})(jQuery);
+})();
 /*! Store.js
  *************************************/
 (function (ko) {
@@ -1587,7 +1758,7 @@ function indexArray(store, data) {
     * To create a Store, simply extend ko.sync.Store and implement all the methods below. We're using John Resig's
     * Class inheritance () so put your constructor in the `init` method.
     *
-    * For a quick example of a Store, see plugins/LocalStore.js
+    * For a quick example of a Store, see stores/LocalStore.js
     *
     * All the CRUD methods in Store have the option of returning a value, returning an Error, or returning
     * a Promise (a Deferred object for async lookups). Knockout-sync does all the dirty work, so that if
@@ -1637,11 +1808,12 @@ function indexArray(store, data) {
       },
 
       /**
-       * Fetch a record from the Store. If it doesn't exist, return null.
+       * Fetch a record from the Store. If it doesn't exist, return null. If this method is called without a key,
+       * then the store should load all records and invoke child_added events for them.
        *
        * Reject or return Error for operational errors.
        *
-       * @param {String} key
+       * @param {String} [key]
        * @returns {Deferred|Object|null} returns or resolves to the record data
        */
       read: function(key) {
@@ -1676,21 +1848,24 @@ function indexArray(store, data) {
 
       /**
        * Listens for push events from the Store. The possible events are create, update, delete. The callback
-       * will always be passed {String}key, {Object}data, and {String}event for every event.
+       * will always be passed {String}key, {Object}data, and {String}event for every event. An optional
+       * {String}prevId may be included with create events.
        *
        * Example:
        * <pre><code>
        *    // monitor both create and delete ops
-       *    store.on('create delete', function(key, data, event) {
-       *       alert('record ' + key + ' was deleted');
+       *    store.on('create delete', function(key, data, event, prevId) {
+       *       alert('record ' + key);
        *    });
        * </code></pre>
        *
-       * It is also possible to monitor events for a specific record by passing a key as the second argument:
+       * It is also possible to monitor events for a specific record by passing a key as the second argument. The only
+       * valid event for monitoring a record is "update"
+       *
        * Example:
        * <pre><code>
        *    // listen to one record only
-       *    store.on('update delete', 'record123', function(key, data) {
+       *    store.on('update', 'record123', function(key, data) {
        *       // note that the key is still passed to the callback
        *       alert('this record changed');
        *    });
@@ -1700,11 +1875,11 @@ function indexArray(store, data) {
        * all records (or in the case that key was passed exactly one record) from the data Store.
        *
        * @param {String} event  space delimited list of events to monitor
-       * @param {String} [key]
+       * @param {String} [key] if provided, event defaults to "update"
        * @param {Function} callback
+       * @return {Object} with a dispose function that can be invoked to cancel the listener
        */
       on: function(event, key, callback) {
-         //todo prevId
          throw new Error('Implementations must declare on events for add, remove, and change');
       },
 
@@ -1719,3 +1894,202 @@ function indexArray(store, data) {
    });
 
 })(window.ko);
+/*! FirebaseStore.js
+ *************************************/
+(function () {
+   "use strict";
+   var undefined;
+
+   ko.sync.stores.FirebaseStore = ko.sync.Store.extend({
+      init: function(firebaseRef, fieldNames, opts) {
+         opts = _.extend({keyField: '_id', sortField: '.priority'}, opts);
+         this.fieldNames = fieldNames;
+         this.ref  = firebaseRef;
+         this.pull = firebaseRef;
+         this.kf = opts.keyField;
+         this.sf = opts.sortField;
+         this.subs = [];
+         opts && this._applyOpts(opts);
+         this._initRef();
+      },
+
+      /**
+       * @param {Object} data  the data record
+       * @returns {String}
+       */
+      getKey: function(data) {
+         return data && data[this.kf]? data[this.kf] : null;
+      },
+
+      /**
+       * @returns {Array}
+       */
+      getFieldNames: function() {
+         return this.fieldNames;
+      },
+
+      /**
+       * @param {Object} data  the new data record
+       * @returns {Deferred|String} returns or resolves to the new record id (key)
+       */
+      create: function(data) {
+         return _.Deferred(function(def) {
+            if( data === undefined ) {
+               def.reject('invalid data (undefined)');
+            }
+            else {
+               var id = this.ref.push(pushData(this.kf, this.sf, data), function(error) {
+                  if( error ) { def.reject(error); }
+                  else { def.resolve(id, data); }
+               }).name();
+            }
+         }.bind(this));
+      },
+
+      /**
+       * @param {String} key
+       * @returns {Deferred|Object|null} returns or resolves to the record data
+       */
+      read: function(key) {
+         return _.Deferred(function(def) {
+            this.ref.child(key).once('value', function(ss) {
+               def.resolve(pullData(this.kf, this.sf, ss.name(), ss.val(), ss.getPriority()));
+            }.bind(this), function(error) {
+               def.reject(error);
+            });
+         }.bind(this));
+      },
+
+      /**
+       * @param {String} key
+       * @param {Object} data
+       * @returns {Deferred|String|Error|boolean} returns or resolves to the key (record id)
+       */
+      update: function(key, data) {
+         return _.Deferred(function(def) {
+            if( data === undefined ) { def.reject('invalid data (undefined)'); }
+            else {
+               this.ref.child(key).set(pushData(this.kf, this.sf, data), function(error) {
+                  if( error ) { def.reject(error); }
+                  else { def.resolve(key, data); }
+               });
+            }
+         }.bind(this));
+      },
+
+      /**
+       * @param {String} key
+       * @returns {Deferred|String} returns or resolves to the key (record id)
+       */
+      'delete': function(key) {
+         return _.Deferred(function(def) {
+            this.ref.child(key).remove(function(error) {
+               if( error ) { def.reject(error); }
+               else { def.resolve(key); }
+            });
+         }.bind(this));
+      },
+
+      /**
+       * @param {String} event  space delimited list of events to monitor
+       * @param {String} [key]
+       * @param {Function} callback
+       */
+      on: function(event, key, callback) {
+         if( arguments.length === 3 ) {
+            return this._disp(listenRec(this.ref.child(key), this.kf, this.sf, callback));
+         }
+         else {
+            callback = key;
+            return this._disp(listenAll(this.pull, event.split(' '), this.kf, this.sf, callback));
+         }
+      },
+
+      dispose: function() {
+         _.each(this.subs, function(s) {s.dispose()});
+         this.ref = null;
+         this.pull = null;
+         this.subs = [];
+      },
+
+      _disp: function(cb) {
+         this.subs.push(cb);
+         return cb;
+      },
+
+      _applyOpts: function(opts) {
+         _.each(['limit', 'endAt', 'startAt'], function(o, k) {
+            if(_.has(opts, k)) { this.pull = this.pull[k](o); }
+         }.bind(this));
+      },
+
+      _initRef: function() {
+         // must prime ref by downloading children first, otherwise, if someone is listening only for
+         // delete events and hasn't first added a create listener, notifications will not arrive
+         this.pull.on('child_added', function() {});
+      }
+   });
+
+   function pullData(keyField, sortField, id, data, pri) {
+      if( data === null ) { return data; }
+      var out = _.extend({}, data);
+      out[keyField] = id;
+      if( sortField ) {
+         out[sortField] = pri;
+      }
+      return out;
+   }
+
+   function pushData(keyField, sortField, data) {
+      var out = _.extend({}, data);
+      if( sortField && sortField !== '.priority' ) {
+         out['.priority'] = out[sortField] === undefined? null : out[sortField];
+         delete out[sortField];
+      }
+      delete out[keyField];
+      return out;
+   }
+
+   function mapEvent(event) {
+      switch(event) {
+         case 'create':
+            return 'child_added';
+         case 'update':
+            return 'child_changed';
+         case 'delete':
+            return 'child_removed';
+         default:
+            throw new Error('Invalid event type: '+event);
+      }
+   }
+
+   function listenRec(ref, keyField, sortField, callback) {
+      var fn = ref.on('value', function(ss) {
+         var data = pullData(keyField, sortField, ss.name(), ss.val(), ss.getPriority());
+         callback(ss.name(), data, 'update');
+      });
+      return {
+         dispose: function() {
+            ref.off('value', fn);
+         }
+      }
+   }
+
+   function listenAll(ref, events, keyField, sortField, callback) {
+      var subs = [];
+      _.each(events, function(e) {
+         var mappedEvent = mapEvent(e);
+         var fn = ref.on(mappedEvent, function(ss, prevId) {
+            callback(ss.name(), pullData(keyField, sortField, ss.name(), ss.val(), ss.getPriority()), e, prevId);
+         });
+         subs.push(function() {
+            ref.off(mappedEvent, fn);
+         })
+      }.bind(this));
+      return {
+         dispose: function() {
+            _.each(subs, function(sub) { sub(); });
+         }
+      };
+   }
+})();

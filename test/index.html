@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <title>Knockout-sync unit tests</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <link rel="stylesheet" href="lib/qunit.css" type="text/css"/>
 
@@ -8,8 +9,6 @@
         ---------------------------------------------------------------->
     <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.js"></script>
     <script type="text/javascript" src="http://static.firebase.com/v0/firebase.js"></script>
-    <script type="text/javascript" src="lib/underscore.js"></script>
-    <script type="text/javascript" src="lib/normalizeconsole.js"></script>
     <script type="text/javascript" src="lib/moment.js"></script>
     <script type="text/javascript" src="lib/knockout.js"></script>
     <script type="text/javascript" src="lib/qunit.js"></script>
@@ -23,16 +22,19 @@
 
     <!-- TEST LIBS (must include after knockout-sync)
         ----------------------------------------------------------------->
+    <script type="text/javascript" src="lib/underscore.js"></script> <!-- must be after knockout-sync and before test.utils -->
+    <script type="text/javascript" src="lib/underscore.deferred.js"></script> <!-- must be after knockout-sync and before test.utils -->
     <script type="text/javascript" src="lib/test.utils.js"></script>
     <script type="text/javascript" src="lib/StoreTester.js"></script>
     <script type="text/javascript" src="lib/store.TestStore.js"></script>
 
     <!-- TEST UNITS
         ---------------------------------------------------------------->
+    <script type="text/javascript" src="testunit/ko.sync.test.js"></script>
     <script type="text/javascript" src="testunit/Crud.test.js"></script>
     <script type="text/javascript" src="testunit/CrudArray.test.js"></script>
     <script type="text/javascript" src="testunit/TestStore.test.js"></script>
-    <script type="text/javascript" src="testunit/ko.sync.test.js"></script>
+    <script type="text/javascript" src="testunit/FirebaseStore.test.js"></script>
 
 </head>
 <body>

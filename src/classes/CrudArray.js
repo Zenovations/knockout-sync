@@ -2,13 +2,22 @@
  *************************************/
 (function (ko) {
    "use strict";
+   var undefined;
 
+   /**
+    * @param {ko.observableArray} observableArray
+    * @param {ko.sync.Store} store
+    * @param {ko.sync.Factory} [factory]
+    * @constructor
+    */
    ko.sync.CrudArray = function(observableArray, store, factory) {
       this.obs = observableArray;
       this.store = store;
       this._map = new ko.sync.KeyMap(store, observableArray);
       this.factory = factory || new ko.sync.Factory(store);
       this.ready = _.Deferred().resolve();
+      this._synced = false;
+      this.subs = [];
    };
 
    ko.utils.extend(ko.sync.CrudArray.prototype, {
@@ -24,29 +33,33 @@
       },
 
       read: function() {
-         return this._then(function() {
-            var def = _.Deferred(), loading = whenLoaded(def);
+         if( this._synced ) {
+            return this.ready;
+         }
+         else {
+            return this._then(function() {
+               var def = _.Deferred(), loading = whenLoaded(def);
 
-            // watch remote changes
-            this.store.on('create', function() {
-               this._create.apply(this, ko.utils.makeArray(arguments));
-               loading();
-            }.bind(this));
+               // watch remote changes
+               this.store.on('create', function(key, val, evt, prevId) {
+                  this._create(key, val, prevId);
+                  loading();
+               }.bind(this));
 
-            this.store.on('update', this._update.bind(this));
-            this.store.on('delete', this._delete.bind(this));
+               this.store.on('update', this._update.bind(this));
+               this.store.on('delete', this._delete.bind(this));
 
-            // watch local changes
-            this.obs.watchChanges(this.store, this._local.bind(this));
+               // watch local changes
+               this.obs.watchChanges(this.store, this._local.bind(this));
 
-            return def;
-         });
+               return def;
+            });
+         }
       },
 
       update: function(key, data) {
          return this._then(function() {
             if( this._update(key, data) >= 0 ) {
-               console.log('CrudArray:update', key); //debug
                return key;
             }
             else {
@@ -68,11 +81,21 @@
          });
       },
 
-      _create: function(key, data) {
-         //todo prevId
-         var i = this._map.indexOf(key);
+      dispose: function() {
+         _.each(this.subs, function(s) {s.dispose()});
+      },
+
+      _create: function(key, data, prevId) {
+         var i = this._map.indexOf(key), prev = this._map.indexOf(prevId);
          if( i < 0 ) {
-            return this.obs.push(this.factory.make(key, data));
+            var rec = this.factory.make(key, data);
+            if( prevId === null || prev >= 0 ){
+               this.obs.splice(prev + 1, 0, rec);
+               return prev+1;
+            }
+            else {
+               return this.obs.push(rec);
+            }
          }
          else {
             this._update(key, data);
@@ -84,12 +107,13 @@
          var i = this._map.indexOf(key), rec;
          if( i >= 0 ) {
             rec = this.obs()[i];
-            if( hasChanges(rec, data) ){
+            if( hasChanges(this.store.getFieldNames(), rec, data) ){
                // must make a copy otherwise observableArray.fn.watchChanges will fail to find
                // the change, since we will be modifying the original data (causing it to appear
-               // to be the same after the update; fortunately, applyUpdates takes care of this
+               // to be the same after the update), fortunately, applyUpdates takes care of this
                var updatedRec = ko.sync.applyUpdates(rec, data);
-               this.obs.splice(i, 1, updatedRec);
+               // if the record isn't itself an observable, then we force an update by calling splice
+               ko.isObservable(updatedRec) || this.obs.splice(i, 1, updatedRec);
             }
          }
          return i;
@@ -134,33 +158,25 @@
 
    });
 
-   function hasChanges(orig, newData) {
+   function hasChanges(fields, orig, newData) {
       if( !newData ) { return false; }
-      orig = ko.sync.unwrapAll(orig);
-      var key;
-      for (key in newData) {
-         if (newData.hasOwnProperty(key) && !_.isEqual(orig[key], newData[key])) {
-            console.log('change found', key, orig[key], newData[key]); //debug
-            return true;
-         }
-      }
-      return false;
+      return !ko.sync.isEqual(fields, orig, newData);
    }
 
    function whenLoaded(def) {
       var to = setTimeout(def.resolve, 1000);
       var fn = _.debounce(def.resolve, 100);
       var unresolved = true;
-      def.always(function() {
-         console.log('resolved'); //debug
-      });
+//      def.always(function() {
+//         console.log('resolved'); //debug
+//      });
+
       return function() {
          if( to ) {
             clearTimeout(to);
             to = null;
          }
          if( unresolved ) {
-            console.log('unresolved'); //debug
             fn();
             unresolved = def.state() === 'pending';
          }

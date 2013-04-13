@@ -61,11 +61,12 @@
       },
 
       /**
-       * Fetch a record from the Store. If it doesn't exist, return null.
+       * Fetch a record from the Store. If it doesn't exist, return null. If this method is called without a key,
+       * then the store should load all records and invoke child_added events for them.
        *
        * Reject or return Error for operational errors.
        *
-       * @param {String} key
+       * @param {String} [key]
        * @returns {Deferred|Object|null} returns or resolves to the record data
        */
       read: function(key) {
@@ -100,21 +101,24 @@
 
       /**
        * Listens for push events from the Store. The possible events are create, update, delete. The callback
-       * will always be passed {String}key, {Object}data, and {String}event for every event.
+       * will always be passed {String}key, {Object}data, and {String}event for every event. An optional
+       * {String}prevId may be included with create events.
        *
        * Example:
        * <pre><code>
        *    // monitor both create and delete ops
-       *    store.on('create delete', function(key, data, event) {
-       *       alert('record ' + key + ' was deleted');
+       *    store.on('create delete', function(key, data, event, prevId) {
+       *       alert('record ' + key);
        *    });
        * </code></pre>
        *
-       * It is also possible to monitor events for a specific record by passing a key as the second argument:
+       * It is also possible to monitor events for a specific record by passing a key as the second argument. The only
+       * valid event for monitoring a record is "update"
+       *
        * Example:
        * <pre><code>
        *    // listen to one record only
-       *    store.on('update delete', 'record123', function(key, data) {
+       *    store.on('update', 'record123', function(key, data) {
        *       // note that the key is still passed to the callback
        *       alert('this record changed');
        *    });
@@ -124,12 +128,11 @@
        * all records (or in the case that key was passed exactly one record) from the data Store.
        *
        * @param {String} event  space delimited list of events to monitor
-       * @param {String} [key]
+       * @param {String} [key] if provided, event defaults to "update"
        * @param {Function} callback
        * @return {Object} with a dispose function that can be invoked to cancel the listener
        */
       on: function(event, key, callback) {
-         //todo prevId
          throw new Error('Implementations must declare on events for add, remove, and change');
       },
 

@@ -1,15 +1,20 @@
 /*! FirebaseStore.js
  *************************************/
-(function ($) {
+(function () {
    "use strict";
+   var undefined;
+
    ko.sync.stores.FirebaseStore = ko.sync.Store.extend({
-      initialize: function(firebaseRef, fieldNames, opts) {
-         opts = _.extend({keyField: '_id'}, opts);
+      init: function(firebaseRef, fieldNames, opts) {
+         opts = _.extend({keyField: '_id', sortField: '.priority'}, opts);
          this.fieldNames = fieldNames;
          this.ref  = firebaseRef;
          this.pull = firebaseRef;
          this.kf = opts.keyField;
-         opts && this._applyOpts(opts||{});
+         this.sf = opts.sortField;
+         this.subs = [];
+         opts && this._applyOpts(opts);
+         this._initRef();
       },
 
       /**
@@ -17,7 +22,7 @@
        * @returns {String}
        */
       getKey: function(data) {
-         return data && data[this.kf];
+         return data && data[this.kf]? data[this.kf] : null;
       },
 
       /**
@@ -32,12 +37,16 @@
        * @returns {Deferred|String} returns or resolves to the new record id (key)
        */
       create: function(data) {
-         var kf = this.kf;
          return _.Deferred(function(def) {
-            var id = this.ref.push(dropId(kf, data), function(error) {
-               if( error ) { def.reject(error); }
-               else { def.resolve(id, data); }
-            }).name();
+            if( data === undefined ) {
+               def.reject('invalid data (undefined)');
+            }
+            else {
+               var id = this.ref.push(pushData(this.kf, this.sf, data), function(error) {
+                  if( error ) { def.reject(error); }
+                  else { def.resolve(id, data); }
+               }).name();
+            }
          }.bind(this));
       },
 
@@ -48,9 +57,11 @@
       read: function(key) {
          return _.Deferred(function(def) {
             this.ref.child(key).once('value', function(ss) {
-               def.resolve(ss.val());
-            }.bind(this));
-         });
+               def.resolve(pullData(this.kf, this.sf, ss.name(), ss.val(), ss.getPriority()));
+            }.bind(this), function(error) {
+               def.reject(error);
+            });
+         }.bind(this));
       },
 
       /**
@@ -60,10 +71,13 @@
        */
       update: function(key, data) {
          return _.Deferred(function(def) {
-            this.ref.child(key).set(dropId(this.kf, data), function(error) {
-               if( error ) { def.reject(error); }
-               else { def.resolve(key, data); }
-            });
+            if( data === undefined ) { def.reject('invalid data (undefined)'); }
+            else {
+               this.ref.child(key).set(pushData(this.kf, this.sf, data), function(error) {
+                  if( error ) { def.reject(error); }
+                  else { def.resolve(key, data); }
+               });
+            }
          }.bind(this));
       },
 
@@ -86,12 +100,12 @@
        * @param {Function} callback
        */
       on: function(event, key, callback) {
-         var events = event.split(' ');
-         if( key ) {
-            listenRec(this.ref.child(key), events, this.kf, callback);
+         if( arguments.length === 3 ) {
+            return this._disp(listenRec(this.ref.child(key), this.kf, this.sf, callback));
          }
          else {
-            listenAll(this.pull, events, this.kf, callback);
+            callback = key;
+            return this._disp(listenAll(this.pull, event.split(' '), this.kf, this.sf, callback));
          }
       },
 
@@ -99,7 +113,7 @@
          _.each(this.subs, function(s) {s.dispose()});
          this.ref = null;
          this.pull = null;
-         this.subs = null;
+         this.subs = [];
       },
 
       _disp: function(cb) {
@@ -111,18 +125,33 @@
          _.each(['limit', 'endAt', 'startAt'], function(o, k) {
             if(_.has(opts, k)) { this.pull = this.pull[k](o); }
          }.bind(this));
+      },
+
+      _initRef: function() {
+         // must prime ref by downloading children first, otherwise, if someone is listening only for
+         // delete events and hasn't first added a create listener, notifications will not arrive
+         this.pull.on('child_added', function() {});
       }
    });
 
-   function dropId(keyField, data) {
+   function pullData(keyField, sortField, id, data, pri) {
+      if( data === null ) { return data; }
       var out = _.extend({}, data);
-      delete out[keyField];
+      out[keyField] = id;
+      if( sortField ) {
+         out[sortField] = pri;
+      }
       return out;
    }
 
-   function addId(keyField, id, data) {
-      data[keyField] = id;
-      return data;
+   function pushData(keyField, sortField, data) {
+      var out = _.extend({}, data);
+      if( sortField && sortField !== '.priority' ) {
+         out['.priority'] = out[sortField] === undefined? null : out[sortField];
+         delete out[sortField];
+      }
+      delete out[keyField];
+      return out;
    }
 
    function mapEvent(event) {
@@ -138,22 +167,10 @@
       }
    }
 
-   function listenRec(ref, events, keyField, callback) {
-      var first = true;
-      var hasCreate = ko.sync.arrayIndexOf(events, 'create') > 0;
-      var hasUpdate = ko.sync.arrayIndexOf(events, 'update') > 0;
-      var hasDelete = ko.sync.arrayIndexOf(events, 'delete') > 0;
+   function listenRec(ref, keyField, sortField, callback) {
       var fn = ref.on('value', function(ss) {
-         var v = ss.val(), id = ss.name(), data = addId(keyField, id, v);
-         if( v === null ) {
-            hasDelete && callback(id, v, 'delete');
-         }
-         else if( first ) {
-            hasCreate && callback(id, data, 'create');
-         }
-         else {
-            hasUpdate && callback(id, data, 'update');
-         }
+         var data = pullData(keyField, sortField, ss.name(), ss.val(), ss.getPriority());
+         callback(ss.name(), data, 'update');
       });
       return {
          dispose: function() {
@@ -162,13 +179,13 @@
       }
    }
 
-   function listenAll(ref, events, keyField, callback) {
+   function listenAll(ref, events, keyField, sortField, callback) {
       var subs = [];
       _.each(events, function(e) {
          var mappedEvent = mapEvent(e);
-         var fn = ref.on(mappedEvent, function(ss) {
-            callback(ss.name(), addId(keyField, ss.name(), ss.val()), e);
-         }.bind(this));
+         var fn = ref.on(mappedEvent, function(ss, prevId) {
+            callback(ss.name(), pullData(keyField, sortField, ss.name(), ss.val(), ss.getPriority()), e, prevId);
+         });
          subs.push(function() {
             ref.off(mappedEvent, fn);
          })
@@ -179,4 +196,4 @@
          }
       };
    }
-})(jQuery);
+})();

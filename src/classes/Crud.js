@@ -70,7 +70,9 @@
 //      },
 
       _change: function(k, v) {
-         ko.sync.applyUpdates(this.observable, v);
+         if( !ko.sync.isEqual(this.store.getFieldNames(), this.observable, v) ) {
+            ko.sync.applyUpdates(this.observable, v);
+         }
       },
 
       _local: function(v) {

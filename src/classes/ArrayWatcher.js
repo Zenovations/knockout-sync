@@ -3,29 +3,63 @@
 (function () {
    "use strict";
    ko.sync.ArrayWatcher = function(obsArray, store) {
-      var rootSub, preSub, oldValue, subs = [];
+      var rootSub, preSub, oldValue, subs = [], recSubs = {};
 
       preSub = obsArray.subscribe(function(prevValue) {
          oldValue = ko.sync.unwrapAll(prevValue);
       }, undefined, 'beforeChange');
 
-      // watch for replacement of the entire object
-      rootSub = obsArray.subscribe(function(newValue) {
-         var changes = findChanges(store, oldValue, newValue);
-         // invoke the callback
+      var notify = function(changes) {
          _.each(subs, function(fn) {
             fn(changes);
          });
+      };
+
+      var watch = function(rec) {
+         recSubs[store.getKey(rec)] = ko.sync.watchRecord(store, rec, function(changedRec) {
+            var out = {};
+            out[store.getKey(changedRec)] = {status: 'update', data: changedRec};
+            notify(out);
+         });
+      };
+
+      // watch for replacement of the entire object
+      rootSub = obsArray.subscribe(function(newValue) {
+         var changes = findChanges(store, oldValue, newValue);
+         // update listeners for any nested callbacks
+         _.each(changes, function(c, k) {
+            switch(c.status) {
+               case 'create':
+                  // watch for changes to this record
+                  watch(c.data);
+                  break;
+               case 'delete':
+                  // stop watching this record
+                  if( recSubs[k] ) {
+                     recSubs[k].dispose();
+                     delete recSubs[k];
+                  }
+                  break;
+               default: // leave it alone
+            }
+         });
+         // invoke the callbacks
+         !_.isEmpty(changes) && notify(changes);
       });
+
+      // watch pre-existing elements of the array
+      _.each(obsArray()||[], watch);
 
       this.dispose = function() {
          rootSub && rootSub.dispose();
          preSub && preSub.dispose();
+         _.each(recSubs, function(s) {s.dispose()});
       };
 
       this.add = function(fn) {
          subs.push(fn);
-      }
+         return this;
+      }.bind(this);
    };
 
 /**
@@ -42,9 +76,9 @@
  * @return {object}
  */
 function findChanges(store, a, b) {
-   var out = {}, prevKey = null, i = 0;
+   var out = {}, prevKey = null, i = 0, fieldNames = store.getFieldNames();
    compareArrays(store, a, b, function(key, newVal, oldVal, oldIdx) {
-      if( !_.isEqual(oldVal, newVal) ) {
+      if( !ko.sync.isEqual(fieldNames, oldVal, newVal) ) {
          if( oldVal === undefined ) {
             out[key] = { status: 'create', data: newVal, prevId: prevKey, idx: i };
          }
@@ -62,7 +96,7 @@ function findChanges(store, a, b) {
          i++;
          prevKey = key;
       }
-      if( out[key] ) { console.log('changed', key, out[key].status, out[key].idx); }//debug
+//      if( out[key] ) { console.log('changed', key, out[key].status, out[key].idx); }//debug
    });
    return out;
 }

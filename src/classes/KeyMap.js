@@ -1,6 +1,6 @@
 /*! Index.js
  *************************************/
-(function ($) {
+(function () {
    "use strict";
    ko.sync.KeyMap = function(store, observableArray) {
       this._subs = [];
@@ -10,7 +10,7 @@
 
    ko.utils.extend(ko.sync.KeyMap.prototype, {
       indexOf: function(key) {
-         return this.hasKey(key)? this._idx[key] : -1;
+         return key && this.hasKey(key)? this._idx[key] : -1;
       },
 
       hasKey: function(key) {
@@ -48,4 +48,4 @@
          this._subs = null;
       }
    });
-})(jQuery);
+})();

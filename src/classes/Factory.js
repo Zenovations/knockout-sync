@@ -1,6 +1,6 @@
 /*! Factory.js
  *************************************/
-(function ($) {
+(function () {
    "use strict";
    ko.sync.Factory = Class.extend({
       init: function(store, opts) {
@@ -9,12 +9,12 @@
       },
       make: function(key, data) {
          var dat = _.pick(data, this.store.getFieldNames());
-         if( this.opts.observedFields ) {
-            ko.utils.arrayForEach(this.opts.observedFields, function(f) {
-               dat[f] = _.isArray(dat[f]? ko.observableArray(f) : ko.observable(f));
+         if( this.opts.observeFields ) {
+            ko.utils.arrayForEach(this.opts.observeFields, function(f) {
+               dat[f] = _.isArray(dat[f])? ko.observableArray(dat[f]) : ko.observable(dat[f]);
             });
          }
-         if( this.opts.isObservable ) {
+         if( this.opts.observe ) {
             return ko.observable(dat);
          }
          else {
@@ -22,4 +22,4 @@
          }
       }
    });
-})(jQuery);
+})();

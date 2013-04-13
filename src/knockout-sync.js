@@ -69,6 +69,44 @@
             }
          }
          return observable;
+      },
+
+      /**
+       * If the object contains any observable fields, then they are monitored. If the object itself is an observable,
+       * it is also monitored.
+       */
+      watchRecord: function(store, rec, callback) {
+         if( ko.isObservable(rec) ) {
+            return rec.watchChanges(store, callback);
+         }
+         else {
+            return ko.sync.watchFields(store, rec, callback);
+         }
+      },
+
+      watchFields: function(store, rec, callback) {
+         var subs = [], unwrappedRec = ko.utils.unwrapObservable(rec)||{};
+         _.each(store.getFieldNames(), function(f) {
+            var v = unwrappedRec[f];
+            if( v && ko.isObservable(v) ) {
+               if( ko.sync.isObservableArray(v) ) {
+                  subs.push(v.subscribe(callback.bind(null, rec)));
+               }
+               else {
+                  subs.push(v.subscribe(callback.bind(null, rec)));
+               }
+            }
+         });
+         return {
+            dispose: function() {
+               _.each(subs, function(s) {s.dispose()});
+            }
+         }
+      },
+
+      isEqual: function(fields, recA, recB) {
+         if( !recA || !recB ) { return recA === recB; }
+         return recA === recB || _.isEqual(_.pick(ko.sync.unwrapAll(recA), fields), _.pick(ko.sync.unwrapAll(recB), fields));
       }
    };
 
@@ -120,7 +158,7 @@
     * @returns {{dispose: Function}}
     */
    ko.observable.fn.watchChanges = function(store, callback) {
-      var rootSub, preSub, oldValue = null;
+      var rootSub, preSub, oldValue = null, fieldSubs;
 
       preSub = this.subscribe(function(prevValue) {
          oldValue = ko.sync.unwrapAll(prevValue);
@@ -128,18 +166,20 @@
 
       // watch for replacement of the entire object
       rootSub = this.subscribe(function(newValue) {
-         newValue = ko.sync.unwrapAll(newValue);
-         if( !_.isEqual(newValue, oldValue) ) {
+         var newUnwrapped = ko.sync.unwrapAll(newValue);
+         if( !ko.sync.isEqual(store.getFieldNames(), newUnwrapped, oldValue) ) {
             // invoke the callback
             callback(newValue);
          }
-//         oldValue = newValue;
       });
+
+      fieldSubs = ko.sync.watchFields(store, this, callback);
 
       return {
          dispose: function() {
             rootSub && rootSub.dispose();
             preSub && preSub.dispose();
+            fieldSubs && fieldSubs.dispose();
          }
       };
    };
@@ -162,7 +202,7 @@
          this.watcher = new ko.sync.ArrayWatcher(this, store);
          this.watcher.add(callback);
       }
-      return this;
+      return this.watcher;
    }
 
 })(window.ko);
