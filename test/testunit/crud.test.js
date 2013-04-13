@@ -105,8 +105,10 @@
          });
          return def;
       })
-      .fail(ok.bind(null, false)).always(ko.sync.test.done);
+         .fail(ok.bind(null, false)).always(ko.sync.test.done);
    });
+
+   asyncTest('synchronization: observed field', start);
 
 })();
 

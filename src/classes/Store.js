@@ -11,7 +11,7 @@
     * To create a Store, simply extend ko.sync.Store and implement all the methods below. We're using John Resig's
     * Class inheritance () so put your constructor in the `init` method.
     *
-    * For a quick example of a Store, see plugins/LocalStore.js
+    * For a quick example of a Store, see stores/LocalStore.js
     *
     * All the CRUD methods in Store have the option of returning a value, returning an Error, or returning
     * a Promise (a Deferred object for async lookups). Knockout-sync does all the dirty work, so that if
@@ -126,6 +126,7 @@
        * @param {String} event  space delimited list of events to monitor
        * @param {String} [key]
        * @param {Function} callback
+       * @return {Object} with a dispose function that can be invoked to cancel the listener
        */
       on: function(event, key, callback) {
          //todo prevId
