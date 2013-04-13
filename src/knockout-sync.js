@@ -51,7 +51,8 @@
        */
       applyUpdates: function(observable, data) {
          if( data ) {
-            var isObs = ko.isObservable(observable), out = ko.utils.unwrapObservable(observable)||{};
+            var isObs = ko.isObservable(observable);
+            var out = ko.utils.extend({}, ko.utils.unwrapObservable(observable)||{});
             _.each(data, function(v, k) {
                if( ko.isObservable(out[k]) ) {
                   out[k](v);
@@ -63,8 +64,10 @@
             if( isObs ) {
                observable(out);
             }
+            else {
+               observable = out;
+            }
          }
-         console.log('applyUpdates', observable); //debug
          return observable;
       }
    };
@@ -81,6 +84,7 @@
     * The opts object:
     *   {ko.sync.Store} store - required
     *   {String} key - optional (observable only) immediately fetches record from Store and synchronizes
+    *   {ko.sync.Factory} factory - used to generate the objects in the array, if none specified, they are plain objects
     *
     * @param {ko.observable|ko.observableArray} target
     * @param {Object} opts

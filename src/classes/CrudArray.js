@@ -45,7 +45,7 @@
 
       update: function(key, data) {
          return this._then(function() {
-            if( this._update(key, data) ) {
+            if( this._update(key, data) >= 0 ) {
                console.log('CrudArray:update', key); //debug
                return key;
             }
@@ -84,8 +84,13 @@
          var i = this._map.indexOf(key), rec;
          if( i >= 0 ) {
             rec = this.obs()[i];
-            console.log('_update', i, hasChanges(rec, data), key, ko.sync.applyUpdates(rec, data)); //debug
-            hasChanges(rec, data) && this.obs.splice(i, 1, ko.sync.applyUpdates(rec, data));
+            if( hasChanges(rec, data) ){
+               // must make a copy otherwise observableArray.fn.watchChanges will fail to find
+               // the change, since we will be modifying the original data (causing it to appear
+               // to be the same after the update; fortunately, applyUpdates takes care of this
+               var updatedRec = ko.sync.applyUpdates(rec, data);
+               this.obs.splice(i, 1, updatedRec);
+            }
          }
          return i;
       },
@@ -104,7 +109,6 @@
                   this.store.create(ko.sync.prepStoreData(change.data, this.store));
                   break;
                case 'update':
-                  console.log('store update', key); //debug
                   this.store.update(key, ko.sync.prepStoreData(change.data, this.store));
                   break;
                case 'delete':

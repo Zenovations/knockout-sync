@@ -170,10 +170,8 @@
 
       deleteEvent: function(key) {
          // create some data to delete
-         var dat = this.validData();
-         key && (dat._key = key);
-         this.store.data[dat._key] = dat;
-         this.store.delete(dat._key);
+         key || (key = 'four');
+         this.store.delete(key);
       },
 
       updateEvent: function(key) {

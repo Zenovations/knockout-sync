@@ -99,7 +99,7 @@
       },
 
       /**
-       * Listens for push events from the Store. The possible events are create, update, and delete. The callback
+       * Listens for push events from the Store. The possible events are create, update, delete. The callback
        * will always be passed {String}key, {Object}data, and {String}event for every event.
        *
        * Example:

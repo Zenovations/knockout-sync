@@ -1022,7 +1022,8 @@
        */
       applyUpdates: function(observable, data) {
          if( data ) {
-            var isObs = ko.isObservable(observable), out = ko.utils.unwrapObservable(observable)||{};
+            var isObs = ko.isObservable(observable);
+            var out = ko.utils.extend({}, ko.utils.unwrapObservable(observable)||{});
             _.each(data, function(v, k) {
                if( ko.isObservable(out[k]) ) {
                   out[k](v);
@@ -1034,8 +1035,10 @@
             if( isObs ) {
                observable(out);
             }
+            else {
+               observable = out;
+            }
          }
-         console.log('applyUpdates', observable); //debug
          return observable;
       }
    };
@@ -1052,6 +1055,7 @@
     * The opts object:
     *   {ko.sync.Store} store - required
     *   {String} key - optional (observable only) immediately fetches record from Store and synchronizes
+    *   {ko.sync.Factory} factory - used to generate the objects in the array, if none specified, they are plain objects
     *
     * @param {ko.observable|ko.observableArray} target
     * @param {Object} opts
@@ -1135,7 +1139,7 @@
 })(window.ko);
 /*! ArrayWatcher.js
  *************************************/
-(function ($) {
+(function () {
    "use strict";
    ko.sync.ArrayWatcher = function(obsArray, store) {
       var rootSub, preSub, oldValue, subs = [];
@@ -1177,44 +1181,49 @@
  * @return {object}
  */
 function findChanges(store, a, b) {
-   var out = {};
-   compareArrays(store, a, b, function(key, aVal, bVal, aPrev, bPrev, i) {
-      if( !_.isEqual(aVal, bVal) ) {
-         if( aVal === undefined ) {
-            out[key] = { status: 'create', data: bVal, prevId: bPrev, idx: i };
+   var out = {}, prevKey = null, i = 0;
+   compareArrays(store, a, b, function(key, newVal, oldVal, oldIdx) {
+      if( !_.isEqual(oldVal, newVal) ) {
+         if( oldVal === undefined ) {
+            out[key] = { status: 'create', data: newVal, prevId: prevKey, idx: i };
          }
-         else if( bVal === undefined ) {
+         else if( newVal === undefined ) {
             out[key] = { status: 'delete' };
          }
          else {
-            out[key] = { status: 'update', data: bVal, prevId: bPrev, idx: i };
+            out[key] = { status: 'update', data: newVal, prevId: prevKey, idx: i };
          }
       }
-      else if( !_.isEqual(aPrev, bPrev) ) {
-         out[key] = { status: 'move', prevId: bPrev, idx: i };
+      else if( oldIdx !== i ) {
+         out[key] = { status: 'move', prevId: prevKey, idx: i };
       }
+      if( newVal !== undefined ) {
+         i++;
+         prevKey = key;
+      }
+      if( out[key] ) { console.log('changed', key, out[key].status, out[key].idx); }//debug
    });
    return out;
 }
 
 /**
  * @param {ko.sync.Store} store
- * @param data
- * @param {Array} otherData
+ * @param {Array} oldData
+ * @param {Array} newData
  * @param {Function} fn
  */
-function compareArrays(store, data, otherData, fn) {
+function compareArrays(store, oldData, newData, fn) {
    // we index otherData but not the original data, this means we only iterate
    // each set exactly once (plus one iteration of all the added elmeents in otherData)
-   var prevKey = null, bSet = indexArray(store, otherData), ct = 0;
-   _.each(data||[], function(av) {
-      var k = store.getKey(av), bv = bSet[k];
-      fn(k, av, bv && bv.value, prevKey, bv && bv.prevKey, ct++);
+   var prevKey = null, newIndex = indexArray(store, newData), i = 0;
+   _.each(oldData||[], function(oldVal) {
+      var k = store.getKey(oldVal), newRec = newIndex[k] || {};
+      fn(k, newRec.value, oldVal, i++);
       prevKey = k;
-      delete bSet[k];
+      delete newIndex[k];
    });
-   _.each(bSet, function(v,k) {
-      fn(k, undefined, v.value, undefined, v.prevKey, ct++);
+   _.each(newIndex, function(v,k) {
+      fn(k, v.value, undefined, -1);
    });
 }
 
@@ -1227,7 +1236,7 @@ function indexArray(store, data) {
    });
    return out;
 }
-})(jQuery);
+})();
 /*! Crud.js
  *************************************/
 (function (ko) {
@@ -1366,7 +1375,7 @@ function indexArray(store, data) {
 
       update: function(key, data) {
          return this._then(function() {
-            if( this._update(key, data) ) {
+            if( this._update(key, data) >= 0 ) {
                console.log('CrudArray:update', key); //debug
                return key;
             }
@@ -1405,8 +1414,13 @@ function indexArray(store, data) {
          var i = this._map.indexOf(key), rec;
          if( i >= 0 ) {
             rec = this.obs()[i];
-            console.log('_update', i, hasChanges(rec, data), key, ko.sync.applyUpdates(rec, data)); //debug
-            hasChanges(rec, data) && this.obs.splice(i, 1, ko.sync.applyUpdates(rec, data));
+            if( hasChanges(rec, data) ){
+               // must make a copy otherwise observableArray.fn.watchChanges will fail to find
+               // the change, since we will be modifying the original data (causing it to appear
+               // to be the same after the update; fortunately, applyUpdates takes care of this
+               var updatedRec = ko.sync.applyUpdates(rec, data);
+               this.obs.splice(i, 1, updatedRec);
+            }
          }
          return i;
       },
@@ -1425,7 +1439,6 @@ function indexArray(store, data) {
                   this.store.create(ko.sync.prepStoreData(change.data, this.store));
                   break;
                case 'update':
-                  console.log('store update', key); //debug
                   this.store.update(key, ko.sync.prepStoreData(change.data, this.store));
                   break;
                case 'delete':
@@ -1490,11 +1503,23 @@ function indexArray(store, data) {
 (function ($) {
    "use strict";
    ko.sync.Factory = Class.extend({
-      init: function(store) {
+      init: function(store, opts) {
          this.store = store;
+         this.opts = opts || {};
       },
       make: function(key, data) {
-         return _.pick(data, this.store.getFieldNames());
+         var dat = _.pick(data, this.store.getFieldNames());
+         if( this.opts.observedFields ) {
+            ko.utils.arrayForEach(this.opts.observedFields, function(f) {
+               dat[f] = _.isArray(dat[f]? ko.observableArray(f) : ko.observable(f));
+            });
+         }
+         if( this.opts.isObservable ) {
+            return ko.observable(dat);
+         }
+         else {
+            return dat;
+         }
       }
    });
 })(jQuery);
@@ -1650,7 +1675,7 @@ function indexArray(store, data) {
       },
 
       /**
-       * Listens for push events from the Store. The possible events are create, update, and delete. The callback
+       * Listens for push events from the Store. The possible events are create, update, delete. The callback
        * will always be passed {String}key, {Object}data, and {String}event for every event.
        *
        * Example:
