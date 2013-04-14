@@ -8,12 +8,11 @@
     <link href="http://netdna.bootstrapcdn.com/font-awesome/3.0/css/font-awesome.css" rel="stylesheet">
     <link href='http://fonts.googleapis.com/css?family=Gentium+Book+Basic:400italic' rel='stylesheet' type='text/css' />
     <link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,800' rel='stylesheet' type='text/css' />
-    <link rel="stylesheet" href="font-awesome.css"/>
-    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="lib/app.css" />
 
     <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
     <!--[if lt IE 9]>
-        <script src="html5shiv.js"></script>
+    <script src="lib/html5shiv.js"></script>
     <![endif]-->
 </head>
 <body>
@@ -25,10 +24,22 @@
         <h3>Knockout/Firebase</h3>
         <article class="span6">
             <h6>Knockout</h6>
-            <div class="content"></div>
+            <ul class="unstyled content" data-bind="foreach: messages">
+                <li data-bind="css: {me: u == $parent.name()}"><mark class="name" data-bind="text: u"></mark>: <span data-bind="text: m"></span></li>
+            </ul>
+            <div class="input-prepend input-append">
+                <form id="chat-form" data-bind="submit: addMessage">
+                    <button id="chat-name" class="btn" type="button" data-bind="text: name,click: changeName">name</button>
+                    <input name="msg" type="text">
+                    <button class="btn btn-primary" type="submit">Send</button>
+                </form>
+            </div>
         </article>
         <article class="span6">
-            <h6>Firebase</h6>
+            <h6>Firebase
+                <button class="btn btn-mini btn-primary pull-right" data-bind="click: reset">reset</button>
+                <a class="pull-right" href="https://github.com/katowulf/knockout-sync/blob/master/example/example.firebase.js">source</a>
+            </h6>
             <pre class="content"></pre>
         </article>
     </section>
@@ -40,7 +51,10 @@
             <div class="content"></div>
         </article>
         <article class="span6">
-            <h6>Model</h6>
+            <h6>Model
+                <button class="btn btn-mini btn-primary pull-right" data-target="#model">reset</button>
+                <a class="pull-right" href="https://github.com/katowulf/knockout-sync/blob/master/example/example.model.js">source</a>
+            </h6>
             <pre class="content"></pre>
         </article>
     </section>
@@ -52,7 +66,10 @@
             <div class="content"></div>
         </article>
         <article class="span6">
-            <h6>Collection</h6>
+            <h6>Collection
+                <button class="btn btn-mini btn-primary pull-right" data-target="#collection">reset</button>
+                <a class="pull-right" href="https://github.com/katowulf/knockout-sync/blob/master/example/example.collection.js">source</a>
+            </h6>
             <pre class="content"></pre>
         </article>
     </section>
@@ -64,7 +81,10 @@
             <div class="content"></div>
         </article>
         <article class="span6">
-            <h6>localStorage</h6>
+            <h6>localStorage
+                <button class="btn btn-mini btn-primary pull-right" data-target="#localStorage">reset</button>
+                <a class="pull-right" href="https://github.com/katowulf/knockout-sync/blob/master/example/example.local.js">source</a>
+            </h6>
             <pre class="content"></pre>
         </article>
     </section>
@@ -77,8 +97,10 @@
 <script src="http://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.2/js/bootstrap.min.js"></script>
 <script type="text/javascript" src="http://static.firebase.com/v0/firebase.js"></script>
 <script type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/knockout/2.2.0/knockout-min.js"></script>
+
 <script type="text/javascript" src="../dist/knockout-sync.dev.js"></script>
 
+<script type="text/javascript" src="lib/utils.js"></script>
 <script type="text/javascript" src="example.firebase.js"></script>
 <script type="text/javascript" src="example.model.js"></script>
 <script type="text/javascript" src="example.collection.js"></script>

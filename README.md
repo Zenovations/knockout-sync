@@ -82,7 +82,7 @@ You can find some example stores in the stores/ folder
 
 ```javascript
     // create a Firebase Store
-    var store = new ko.sync.stores.FirebaseStore('http://XXXXX.firebaseio.com/users', {limit: 50});
+    var store = new ko.sync.stores.Firebase('http://XXXXX.firebaseio.com/users', ['name', 'email'], {limit: 50});
 ```
 
 ### Synchronizing observables

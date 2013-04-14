@@ -4,7 +4,7 @@
    "use strict";
    var undefined;
 
-   ko.sync.stores.FirebaseStore = ko.sync.Store.extend({
+   ko.sync.stores.Firebase = ko.sync.Store.extend({
       init: function(firebaseRef, fieldNames, opts) {
          opts = _.extend({keyField: '_id', sortField: '.priority'}, opts);
          this.fieldNames = fieldNames;
@@ -42,10 +42,17 @@
                def.reject('invalid data (undefined)');
             }
             else {
-               var id = this.ref.push(pushData(this.kf, this.sf, data), function(error) {
-                  if( error ) { def.reject(error); }
-                  else { def.resolve(id, data); }
-               }).name();
+               var key = this.getKey(data);
+               if( key ) {
+                  this.update(key, data).done(def.resolve).fail(def.reject);
+               }
+               else {
+                  console.log('Firebase::create', pushData(this.kf, this.sf, data)); //debug
+                  var id = this.ref.push(pushData(this.kf, this.sf, data), function(error) {
+                     if( error ) { def.reject(error); }
+                     else { def.resolve(id, data); }
+                  }).name();
+               }
             }
          }.bind(this));
       },
@@ -56,6 +63,7 @@
        */
       read: function(key) {
          return _.Deferred(function(def) {
+            console.log('Firebase::read', key); //debug
             this.ref.child(key).once('value', function(ss) {
                def.resolve(pullData(this.kf, this.sf, ss.name(), ss.val(), ss.getPriority()));
             }.bind(this), function(error) {
@@ -122,6 +130,9 @@
       },
 
       _applyOpts: function(opts) {
+         if( opts.limit && !_.has(opts, 'endAt') && !_.has(opts, 'startAt') ) {
+            this.pull = this.pull.endAt();
+         }
          _.each(['limit', 'endAt', 'startAt'], function(o, k) {
             if(_.has(opts, k)) { this.pull = this.pull[k](o); }
          }.bind(this));

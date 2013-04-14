@@ -94,6 +94,43 @@ article .content {
    margin: 0 10px 10px;
 }
 
-article h6 {
-   margin: 20px;
+article > * {
+   margin: 10px;
+}
+
+article .content, article pre {
+   max-height: 200px;
+   overflow: auto;
+   font-size: 14px;
+   line-height: 18px;
+}
+
+article .content li {
+   margin: 2px 0;
+   padding: 0;
+}
+
+article .content li.me {
+   color: #000099;
+}
+
+article .content li mark {
+   display: inline-block;
+   margin-right: 5px;
+   color: inherit;
+   background: none;
+}
+
+form {
+   display: inline;
+}
+
+#firebase input[name="chat-name"] {
+   float: left;
+}
+
+article h6 a.pull-right {
+   margin-right: 10px;
+   font-size: 12px;
+   font-weight: normal;
 }

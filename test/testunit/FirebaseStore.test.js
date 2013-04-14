@@ -11,7 +11,7 @@
          this.dispose();
          var ref = this.ref = new Firebase('https://aniqi1tmal1.firebaseio-demo.com/'+keyName(testName));
          this.fields = ['user', 'email'];
-         var store = this.store = new ko.sync.stores.FirebaseStore(ref, this.fields);
+         var store = this.store = new ko.sync.stores.Firebase(ref, this.fields);
          ref.onDisconnect().remove();
          return expires(function(def) {
             ref.set({
@@ -106,5 +106,5 @@
       else { def.resolve(); }
    }
 
-   ko.sync.test.StoreTester.testStore('FirebaseStore', new Tester());
+   ko.sync.test.StoreTester.testStore('Firebase', new Tester());
 })();

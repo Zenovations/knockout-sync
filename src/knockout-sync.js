@@ -125,10 +125,10 @@
     *   {ko.sync.Factory} factory - used to generate the objects in the array, if none specified, they are plain objects
     *
     * @param {ko.observable|ko.observableArray} target
-    * @param {Object} opts
+    * @param {Object|ko.sync.Store} opts
     */
    ko.extenders.sync = function(target, opts) {
-      opts = ko.utils.extend({}, opts);
+      opts = ko.utils.extend({}, opts instanceof ko.sync.Store? {store: opts} : opts);
       var store = opts.store;
       if( !(store instanceof ko.sync.Store) ) {
          throw new Error('Must declare a store to sync any observable');
