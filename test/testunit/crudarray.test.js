@@ -9,17 +9,17 @@
    asyncTest('#create', function() {
       expect(3);
       ko.sync.test.disposable(storeTester);
-      _.when(storeTester.rebuild({noData: true})).then(function(store) {
+      _u.when(storeTester.rebuild({noData: true})).then(function(store) {
          return ko.sync.test.def(function(def) {
             var newRecs = [storeTester.validData(), storeTester.validData()];
-            var keys    = _.map(newRecs, function(r) { return r._key; });
+            var keys    = _u.map(newRecs, function(r) { return r._key; });
             var obs     = ko.observableArray(), recsCreated = 0;
             var crud    = new CrudArray(obs, store).read();
             var done    = ko.sync.test.afterDone(def);
             ko.sync.test.disposable(store.on('create', function(key) {
                // we don't count the records until the initial load is completed
                recsCreated++;
-               ok(_.contains(keys, key), 'created with key from our test data');
+               ok(_u.contains(keys, key), 'created with key from our test data');
                done();
             }));
             recsCreated = 0;
@@ -36,14 +36,13 @@
    asyncTest('#read', function() {
       expect(1);
       ko.sync.test.disposable(storeTester);
-      _.when(storeTester.rebuild()).then(function(store) {
+      _u.when(storeTester.rebuild()).then(function(store) {
          return ko.sync.test.def(function(def) {
             var obs     = ko.observableArray(), recsLoaded = 0;
             var loading = ko.sync.test.afterDone(def);
             new CrudArray(obs, store).read();
 
-            ko.sync.test.disposable(store.on('create', function(key) {
-               // we don't count the records until the initial load is completed
+            ko.sync.test.disposable(store.on('create', function() {
                recsLoaded++;
                loading();
             }));
@@ -61,7 +60,7 @@
    asyncTest('#update', function() {
       expect(3);
       ko.sync.test.disposable(storeTester);
-      _.when(storeTester.rebuild()).then(function(store) {
+      _u.when(storeTester.rebuild()).then(function(store) {
          return ko.sync.test.def(function(def) {
             var exp = 0;
             var keys     = ['one', 'four'];
@@ -71,14 +70,14 @@
             ko.sync.test.disposable(store.on('update', function(key) {
                // we don't count the records until the initial load is completed
                recsUpdated++;
-               ok(_.contains(keys, key), key + ' matches a key in our test data');
+               ok(_u.contains(keys, key), key + ' matches a key in our test data');
                updating();
             }));
 
             // wait for read() to complete
             crud.read().ready.done(function() {
-               _.delay(function() {
-                  _.each(keys, function(k) {
+               _u.delay(function() {
+                  _u.each(keys, function(k) {
                      exp++;
                      var v = storeTester.updateData(k);
                      crud.update(k, v).ready.fail(def.reject);
@@ -99,7 +98,7 @@
    asyncTest('#delete', function() {
       expect(3);
       ko.sync.test.disposable(storeTester);
-      _.when(storeTester.rebuild()).then(function(store) {
+      _u.when(storeTester.rebuild()).then(function(store) {
          return ko.sync.test.def(function(def) {
             var keys    = ['one', 'four'];
             var obs     = ko.observableArray(), recsDeleted = 0;
@@ -108,13 +107,13 @@
             ko.sync.test.disposable(store.on('delete', function(key) {
                // we don't count the records until the initial load is completed
                recsDeleted++;
-               ok(_.contains(keys, key), key + ' matches a key in our set of deletes');
+               ok(_u.contains(keys, key), key + ' matches a key in our set of deletes');
                updating();
             }));
 
             // wait for load
             var exp = 0;
-            _.each(keys, function(k) {
+            _u.each(keys, function(k) {
                exp++;
                crud.delete(k).ready.fail(def.reject);
             });
@@ -132,7 +131,7 @@
    asyncTest('sync: local changes', function() {
       expect(4);
       ko.sync.test.disposable(storeTester);
-      _.when(storeTester.rebuild()).then(function(store) {
+      _u.when(storeTester.rebuild()).then(function(store) {
          return ko.sync.test.def(function(def) {
             var obs     = ko.observableArray();
             var createKey;
@@ -182,7 +181,7 @@
    asyncTest('sync: remote changes', function() {
       expect(2);
       ko.sync.test.disposable(storeTester);
-      _.when(storeTester.rebuild()).then(function(store) {
+      _u.when(storeTester.rebuild()).then(function(store) {
          return ko.sync.test.def(function(def) {
             var obs     = ko.observableArray();
             var events = [], updateCount = 0;
@@ -193,12 +192,11 @@
             var expect = 0;
             crud.ready.done(function() {
                obs.watchChanges(store, function(changeList) {
-                  console.log('changeList', changeList); //debug
-                  _.each(changeList, function(c) { events.push(c.status); });
+                  _u.each(changeList, function(c) { events.push(c.status); });
                   updating();
                   expect++;
                });
-               obs.subscribe(function(v) { updateCount++; });
+               obs.subscribe(function() { updateCount++; });
                storeTester.updateEvent();
                storeTester.deleteEvent();
                storeTester.createEvent();
@@ -215,9 +213,72 @@
          .always(ko.sync.test.done);
    });
 
-   asyncTest('synchronization: observed record', start);
+   asyncTest('synchronization: observed record', function() {
+      expect(3);
+      ko.sync.test.disposable(storeTester);
+      _u.when(storeTester.rebuild()).then(function(store) {
+         return ko.sync.test.def(function(def) {
+            var obs     = ko.observableArray();
+            var factory = new ko.sync.Factory(store, {observe: true});
+            var crud    = new CrudArray(obs, store, factory).read();
+            var updating = ko.sync.test.afterDone(def);
+            var recsChanged = 0;
 
-   asyncTest('synchronization: observed field', start);
+            ko.sync.test.disposable(store.on('update', function(key, v, event) {
+               recsChanged++;
+               strictEqual(event, 'update');
+               deepEqual(ko.sync.unwrapAll(v), ko.sync.unwrapAll(obs()[0]));
+               updating();
+            }));
+
+            // wait for load
+            crud.ready.done(function() {
+               obs()[0](storeTester.updateData('one'));
+            });
+
+            // create callbacks have ceased
+            def.done(function() {
+               strictEqual(recsChanged, 1, 'correct number of records changed');
+            });
+         });
+      })
+         .fail(ok.bind(null, false))
+         .always(ko.sync.test.done);
+   });
+
+   asyncTest('synchronization: observed field', function() {
+      expect(3);
+      ko.sync.test.disposable(storeTester);
+      _u.when(storeTester.rebuild()).then(function(store) {
+         return ko.sync.test.def(function(def) {
+            var obs     = ko.observableArray();
+            var factory = new ko.sync.Factory(store, {observeFields: ['name']});
+            var crud    = new CrudArray(obs, store, factory).read();
+            var updating = ko.sync.test.afterDone(def);
+            var recsChanged = 0;
+
+            ko.sync.test.disposable(store.on('update', function(key, v, event) {
+               recsChanged++;
+               strictEqual(event, 'update');
+               deepEqual(ko.sync.unwrapAll(v), ko.sync.unwrapAll(obs()[0]));
+               updating();
+            }));
+
+
+            // wait for load
+            crud.ready.done(function() {
+               obs()[0].name('Rei');
+            });
+
+            // create callbacks have ceased
+            def.done(function() {
+               strictEqual(recsChanged, 1, 'correct number of records changed');
+            });
+         });
+      })
+         .fail(ok.bind(null, false))
+         .always(ko.sync.test.done);
+   });
 
 })();
 

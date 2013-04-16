@@ -1175,10 +1175,10 @@
     *   {ko.sync.Factory} factory - used to generate the objects in the array, if none specified, they are plain objects
     *
     * @param {ko.observable|ko.observableArray} target
-    * @param {Object} opts
+    * @param {Object|ko.sync.Store} opts
     */
    ko.extenders.sync = function(target, opts) {
-      opts = ko.utils.extend({}, opts);
+      opts = ko.utils.extend({}, opts instanceof ko.sync.Store? {store: opts} : opts);
       var store = opts.store;
       if( !(store instanceof ko.sync.Store) ) {
          throw new Error('Must declare a store to sync any observable');
@@ -1900,7 +1900,7 @@ function indexArray(store, data) {
    "use strict";
    var undefined;
 
-   ko.sync.stores.FirebaseStore = ko.sync.Store.extend({
+   ko.sync.stores.Firebase = ko.sync.Store.extend({
       init: function(firebaseRef, fieldNames, opts) {
          opts = _.extend({keyField: '_id', sortField: '.priority'}, opts);
          this.fieldNames = fieldNames;
@@ -1938,10 +1938,17 @@ function indexArray(store, data) {
                def.reject('invalid data (undefined)');
             }
             else {
-               var id = this.ref.push(pushData(this.kf, this.sf, data), function(error) {
-                  if( error ) { def.reject(error); }
-                  else { def.resolve(id, data); }
-               }).name();
+               var key = this.getKey(data);
+               if( key ) {
+                  this.update(key, data).done(def.resolve).fail(def.reject);
+               }
+               else {
+                  console.log('Firebase::create', pushData(this.kf, this.sf, data)); //debug
+                  var id = this.ref.push(pushData(this.kf, this.sf, data), function(error) {
+                     if( error ) { def.reject(error); }
+                     else { def.resolve(id, data); }
+                  }).name();
+               }
             }
          }.bind(this));
       },
@@ -1952,6 +1959,7 @@ function indexArray(store, data) {
        */
       read: function(key) {
          return _.Deferred(function(def) {
+            console.log('Firebase::read', key); //debug
             this.ref.child(key).once('value', function(ss) {
                def.resolve(pullData(this.kf, this.sf, ss.name(), ss.val(), ss.getPriority()));
             }.bind(this), function(error) {
@@ -2018,6 +2026,9 @@ function indexArray(store, data) {
       },
 
       _applyOpts: function(opts) {
+         if( opts.limit && !_.has(opts, 'endAt') && !_.has(opts, 'startAt') ) {
+            this.pull = this.pull.endAt();
+         }
          _.each(['limit', 'endAt', 'startAt'], function(o, k) {
             if(_.has(opts, k)) { this.pull = this.pull[k](o); }
          }.bind(this));

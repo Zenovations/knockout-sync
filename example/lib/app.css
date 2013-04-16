@@ -134,3 +134,7 @@ article h6 a.pull-right {
    font-size: 12px;
    font-weight: normal;
 }
+
+.error {
+   color: red;
+}

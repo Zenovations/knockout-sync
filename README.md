@@ -1,7 +1,7 @@
 
 # KnockoutSync
 
-<span style="color: red">**This is alpha software (unstable)**</span>
+<span style="color: red">**This is alpha software (full of bugs) and won't be live for a few more weeks**</span>
 
 KnockoutSync is a persistence library that connects Knockout.js with a data layer.
 
