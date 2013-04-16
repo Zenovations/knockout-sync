@@ -3,7 +3,7 @@
   "title": "Knockout Sync",
   "description": "Validation, persistence, and server synchronization for knockout",
   "version": "0.1.0",
-  "homepage": "https://github.com/katowulf/knockout-sync",
+  "homepage": "https://github.com/Zenovations/knockout-sync",
   "author": {
     "name": "Michael \"Kato\" Wulf",
     "email": "katowulf@gmail.com",
@@ -11,19 +11,19 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/katowulf/knockout-sync.git"
+    "url": "https://github.com/Zenovations/knockout-sync.git"
   },
   "bugs": {
-    "url": "https://github.com/katowulf/knockout-sync/issues"
+    "url": "https://github.com/Zenovations/knockout-sync/issues"
   },
   "licenses": [
     {
       "type": "MIT",
-      "url": "https://github.com/katowulf/knockout-sync/blob/master/LICENSE-MIT"
+      "url": "https://github.com/Zenovations/knockout-sync/blob/master/LICENSE-MIT"
     },
     {
       "type": "GPL",
-      "url": "https://github.com/katowulf/knockout-sync/blob/master/LICENSE-GPL"
+      "url": "https://github.com/Zenovations/knockout-sync/blob/master/LICENSE-GPL"
     }
   ],
   "dependencies": {
