@@ -9,9 +9,13 @@ When updates occur on the server, observed fields are automatically updated and 
 
 This library does not use the [mapping plugin][mplug]; it's superfluous to the functionality provided here.
 
+[mplug]: http://knockoutjs.com/documentation/plugins-mapping.html
+
 ## Examples
 
-### <a target="_blank" href="http://zenovations.github.com/knockout-sync">See some live examples here</a>.
+### [See some live examples here][demo].
+
+[demo]: http://zenovations.github.io/knockout-sync
 
 ### Sync observable to an existing record
 
