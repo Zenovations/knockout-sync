@@ -3,7 +3,7 @@
 
 <span style="color: red">**This is alpha software (full of bugs) and won't be live for a few more weeks**</span>
 
-KnockoutSync is a persistence library that connects Knockout.js with a data layer.
+KnockoutSync is a persistence library that connects [Knockout.js][ko] with a data layer.
 
 When updates occur on the server, observed fields are automatically updated and knockout bindings are triggered. When knockout updates variables, they automatically update the server. Nested observable fields and records are handled with elegance.
 
@@ -56,7 +56,7 @@ This library does not use the [mapping plugin][mplug]; it's superfluous to the f
       email: 'i@heart.rei'
    }).extend({sync: store});
 
-   // this will not destroy the observable on name, but will change its value
+   // this also works and will not destroy the nested observable
    nestedRec.crud.ready('recordXYZ');
 ```
 
@@ -66,7 +66,7 @@ Download the [production version][min] or the [development version][max] of knoc
 [min]: https://raw.github.com/zenovations/knockout-sync/master/dist/knockout-sync.js
 [max]: https://raw.github.com/zenovations/knockout-sync/master/dist/knockout-sync.dev.js
 
-In your web page, you need to have [Knockout.js][3], and Knockout-sync. Underscore is optional, but makes
+In your web page, you need to have [Knockout.js][ko], and Knockout-sync. Underscore is optional, but makes
 things a bit more stable and performant.
 
 ```html
@@ -136,7 +136,7 @@ used to perform standard CRUD operations:
     model.crud.read( 'recordXYZ' );
 
     // update and sync
-    model.crud.update( {name: 'Dr. Evil'} );
+    model.crud.update( {name: 'Dr. Evil', email: 'way@cooler.phd'} );
 
     // delete the record, we are no longer synced
     model.crud.delete();
@@ -256,3 +256,5 @@ Browse to test/index.html and enjoy the pretty colors (hopefully they are green)
 # Contributing
 
 Use the pull request feature in GitHub to contribute changes. Please provide or modify unit tests in test/testunit as needed
+
+[ko]: http://www.knockoutjs.com

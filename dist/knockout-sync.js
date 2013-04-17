@@ -1,4 +1,4 @@
-/*! Knockout Sync - v0.1.0 - 2013-04-13
+/*! Knockout Sync - v0.1.0 - 2013-04-16
 * https://github.com/katowulf/knockout-sync
 * Copyright (c) 2013 Michael "Kato" Wulf; Licensed MIT, GPL */
 
